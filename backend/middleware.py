@@ -1,0 +1,177 @@
+"""JWT validation, subscription tier gates, and usage limits."""
+
+from datetime import datetime
+from typing import Annotated, Optional
+
+import jwt
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
+
+from config import get_settings
+from database import Organization, SessionLocal, User, get_db
+
+settings = get_settings()
+security = HTTPBearer(auto_error=False)
+
+CONSUMER_EMAIL_DOMAINS = {
+    "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
+    "icloud.com", "aol.com", "protonmail.com", "mail.com",
+}
+
+TIER_LIMITS = {
+    "free": {
+        "max_columns": 3,
+        "historical": False,
+        "current_year_only": True,
+    },
+    "professional": {
+        "max_columns": 8,
+        "historical": True,
+        "current_year_only": False,
+    },
+}
+
+
+class AuthContext:
+    def __init__(
+        self,
+        user: Optional[User] = None,
+        organization: Optional[Organization] = None,
+        tier: str = "free",
+        is_authenticated: bool = False,
+    ):
+        self.user = user
+        self.organization = organization
+        self.tier = tier
+        self.is_authenticated = is_authenticated
+
+    @property
+    def limits(self) -> dict:
+        return TIER_LIMITS.get(self.tier, TIER_LIMITS["free"])
+
+
+def decode_jwt(token: str) -> dict:
+    if not settings.supabase_jwt_secret:
+        raise HTTPException(status_code=500, detail="Auth not configured")
+    try:
+        payload = jwt.decode(
+            token,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "TOKEN_EXPIRED", "message": "Session expired. Please sign in again."},
+        )
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "INVALID_TOKEN", "message": str(exc)},
+        )
+
+
+def get_or_create_user(db: Session, email: str) -> tuple[User, Organization]:
+    user = db.query(User).filter(User.email == email).first()
+    if user and user.organization:
+        return user, user.organization
+
+    org = Organization(name=email.split("@")[0].title(), subscription_tier="free")
+    db.add(org)
+    db.flush()
+
+    if user:
+        user.organization_id = org.id
+    else:
+        user = User(email=email, organization_id=org.id, role="owner")
+        db.add(user)
+
+    db.commit()
+    db.refresh(user)
+    db.refresh(org)
+    return user, org
+
+
+async def get_auth_context(
+    request: Request,
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)] = None,
+    db: Session = Depends(get_db),
+) -> AuthContext:
+    if not credentials:
+        return AuthContext(tier="free", is_authenticated=False)
+
+    payload = decode_jwt(credentials.credentials)
+    email = payload.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    user, org = get_or_create_user(db, email)
+    db.info["current_org_id"] = org.id
+
+    tier = org.subscription_tier or "free"
+    if tier not in TIER_LIMITS:
+        tier = "free"
+
+    return AuthContext(user=user, organization=org, tier=tier, is_authenticated=True)
+
+
+async def require_auth(auth: Annotated[AuthContext, Depends(get_auth_context)]) -> AuthContext:
+    if not auth.is_authenticated:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return auth
+
+
+def validate_corporate_email(email: str) -> None:
+    domain = email.split("@")[-1].lower()
+    if domain in CONSUMER_EMAIL_DOMAINS:
+        raise HTTPException(
+            status_code=400,
+            detail="Professional tier requires a corporate email address.",
+        )
+
+
+def check_parse_access(
+    auth: AuthContext,
+    ticker_count: int,
+    fiscal_year: Optional[int] = None,
+) -> None:
+    limits = auth.limits
+    current_year = datetime.now().year
+
+    if ticker_count > limits["max_columns"]:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "PAYWALL",
+                "reason": "column_limit",
+                "message": f"Free tier supports up to {limits['max_columns']} tickers. Upgrade to Professional for up to 8.",
+                "max_columns": limits["max_columns"],
+                "requested": ticker_count,
+            },
+        )
+
+    if fiscal_year and fiscal_year < current_year and not limits["historical"]:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "PAYWALL",
+                "reason": "historical_data",
+                "message": "Historical filings require a Professional subscription.",
+                "requested_year": fiscal_year,
+            },
+        )
+
+
+def check_professional_access(auth: AuthContext) -> None:
+    if auth.tier != "professional":
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "PAYWALL",
+                "reason": "subscription_required",
+                "message": "This feature requires a Professional subscription.",
+            },
+        )

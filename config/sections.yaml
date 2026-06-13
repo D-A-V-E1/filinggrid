@@ -1,0 +1,18 @@
+# Standard SEC disclosure section taxonomy
+# Used by section_extractor.py for pattern matching
+
+sections:
+  - id: business
+    label: "Item 1 — Business"
+  - id: risk-factors
+    label: "Item 1A — Risk Factors"
+  - id: mda
+    label: "Item 7 — MD&A"
+  - id: market-risk
+    label: "Item 7A — Market Risk"
+  - id: financial-statements
+    label: "Item 8 — Financial Statements"
+  - id: note-revenue
+    label: "Note — Revenue Recognition"
+  - id: note-software
+    label: "Note — Software & Capitalization"

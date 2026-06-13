@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}
+
+@layer components {
+  .filing-content table {
+    @apply w-full border-collapse overflow-x-auto text-xs;
+  }
+
+  .filing-content td,
+  .filing-content th {
+    @apply border border-slate-200 px-2 py-1;
+  }
+
+  .filing-content p {
+    @apply mb-3 leading-relaxed;
+  }
+}
