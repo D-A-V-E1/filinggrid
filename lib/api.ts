@@ -31,6 +31,8 @@ export interface FilingColumn {
   filing_date: string | null;
   report_date: string | null;
   fiscal_year: number | null;
+  primary_document?: string | null;
+  filing_url?: string | null;
   sections: FilingSection[];
   error: string | null;
   cache_key?: string | null;

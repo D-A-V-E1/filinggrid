@@ -3,18 +3,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchSectionHtml,
-  fetchSectionText,
   type FinancialsXbrl,
   type FilingSection,
   type NoteSectionXbrl,
 } from "@/lib/api";
-import {
-  loadSectionHtml,
-  loadSectionText,
-  saveSectionHtml,
-  saveSectionText,
-} from "@/lib/parse-cache";
+import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
 import { isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
+import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
   ticker: string;
@@ -23,6 +18,7 @@ interface FilingColumnProps {
   filingDate: string | null;
   fiscalYear: number | null;
   cacheKey: string | null;
+  filingUrl: string | null;
   sections: FilingSection[];
   activeSection: string | null;
   sectionLabel: string | null;
@@ -162,24 +158,6 @@ function HtmlExcerpt({ html }: { html: string }) {
   );
 }
 
-function NarrativeText({ text }: { text: string }) {
-  return (
-    <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-      <div className="narrative-content">{text}</div>
-    </article>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-      <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
-      <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
-      <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
-    </div>
-  );
-}
-
 function FilingColumn({
   ticker,
   companyName,
@@ -187,6 +165,7 @@ function FilingColumn({
   filingDate,
   fiscalYear,
   cacheKey,
+  filingUrl,
   sections,
   activeSection,
   sectionLabel,
@@ -194,9 +173,7 @@ function FilingColumn({
   financialsXbrl,
 }: FilingColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [sectionText, setSectionText] = useState<string | null>(null);
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
-  const [loadingText, setLoadingText] = useState(false);
   const [loadingHtml, setLoadingHtml] = useState(false);
   const [showHtmlExcerpt, setShowHtmlExcerpt] = useState(false);
   const [sectionError, setSectionError] = useState("");
@@ -218,8 +195,11 @@ function FilingColumn({
   }, [financialsXbrl, activeSection]);
 
   const xbrlOnly = Boolean(activeSection && isXbrlBackedSection(activeSection) && hasXbrlData);
-  const wantsText =
-    Boolean(activeSection && section && (isNarrativeSection(activeSection) || (isXbrlBackedSection(activeSection) && !hasXbrlData)));
+  const showSecViewer = Boolean(
+    activeSection &&
+      section &&
+      (isNarrativeSection(activeSection) || (isXbrlBackedSection(activeSection) && !hasXbrlData))
+  );
 
   const xbrlPanel = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return null;
@@ -256,49 +236,8 @@ function FilingColumn({
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
     setShowHtmlExcerpt(false);
     setSectionHtml(null);
-    setSectionText(null);
     setSectionError("");
   }, [activeSection, ticker]);
-
-  useEffect(() => {
-    if (!wantsText || !activeSection || !section) {
-      setSectionText(null);
-      setLoadingText(false);
-      return;
-    }
-
-    if (cacheKey) {
-      const cached = loadSectionText(cacheKey, activeSection);
-      if (cached) {
-        setSectionText(cached);
-        setLoadingText(false);
-        return;
-      }
-    }
-
-    let cancelled = false;
-    setLoadingText(true);
-    setSectionError("");
-    setSectionText(null);
-
-    fetchSectionText(ticker, activeSection, fiscalYear)
-      .then((text) => {
-        if (cancelled) return;
-        if (cacheKey && text) saveSectionText(cacheKey, activeSection, text);
-        setSectionText(text);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setSectionError(err instanceof Error ? err.message : "Failed to load section");
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingText(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [wantsText, activeSection, section, ticker, fiscalYear, cacheKey]);
 
   const loadHtmlExcerpt = useCallback(() => {
     if (!activeSection || loadingHtml) return;
@@ -332,8 +271,6 @@ function FilingColumn({
       .finally(() => setLoadingHtml(false));
   }, [activeSection, loadingHtml, sectionHtml, cacheKey, ticker, fiscalYear]);
 
-  const excerptLabel = xbrlOnly ? "View SEC filing excerpt" : "View formatted excerpt";
-
   if (error) {
     return (
       <div className="compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-white">
@@ -344,11 +281,6 @@ function FilingColumn({
       </div>
     );
   }
-
-  const showTextContent = wantsText && sectionText && sectionText.length > 0;
-  const showPreviewFallback =
-    wantsText && !loadingText && !showTextContent && !sectionError && section?.text_preview;
-  const canRequestExcerpt = Boolean(section && (xbrlOnly || wantsText));
 
   return (
     <div className="compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-slate-50/50 last:border-r-0">
@@ -382,29 +314,19 @@ function FilingColumn({
                 {ticker} did not include this disclosure in the selected period.
               </p>
             </div>
-          ) : loadingText && !showTextContent && !xbrlPanel ? (
-            <LoadingSkeleton />
-          ) : sectionError && !xbrlPanel && !showTextContent ? (
-            <div className="rounded-lg border border-red-200 bg-white px-4 py-6 text-center">
-              <p className="text-sm text-red-600">{sectionError}</p>
-            </div>
+          ) : showSecViewer ? (
+            filingUrl ? (
+              <FilingViewer filingUrl={filingUrl} sectionLabel={displayLabel} ticker={ticker} />
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+                <p className="text-sm text-amber-800">SEC filing link unavailable for this column.</p>
+              </div>
+            )
           ) : (
             <>
-              {showTextContent && <NarrativeText text={sectionText!} />}
-
-              {showPreviewFallback && !showTextContent && (
-                <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-                  <p className="text-sm leading-relaxed text-slate-600">{section.text_preview}</p>
-                </article>
-              )}
-
-              {loadingText && xbrlPanel && !showTextContent && (
-                <LoadingSkeleton />
-              )}
-
-              {canRequestExcerpt && !showHtmlExcerpt && (
+              {xbrlOnly && !showHtmlExcerpt && (
                 <ExcerptToggleButton
-                  label={excerptLabel}
+                  label="View SEC filing excerpt"
                   loading={loadingHtml}
                   onClick={loadHtmlExcerpt}
                 />
@@ -419,8 +341,12 @@ function FilingColumn({
                 </>
               )}
 
-              {sectionError && (xbrlPanel || showTextContent) && (
+              {sectionError && (
                 <p className="mt-2 text-xs text-red-600">{sectionError}</p>
+              )}
+
+              {xbrlOnly && !xbrlPanel && !showHtmlExcerpt && (
+                <p className="text-sm text-slate-500">No XBRL metrics available for this section.</p>
               )}
             </>
           )}

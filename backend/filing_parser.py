@@ -21,6 +21,7 @@ from parse_cache import (
     store_section_html,
 )
 from sec.client import (
+    build_filing_url,
     fetch_filing_html,
     fetch_submissions,
     fetch_ticker_map,
@@ -49,6 +50,8 @@ class ColumnResult(BaseModel):
     filing_date: str | None = None
     report_date: str | None = None
     fiscal_year: int | None = None
+    primary_document: str | None = None
+    filing_url: str | None = None
     sections: list[dict[str, Any]] = []
     error: str | None = None
     cache_key: str | None = None
@@ -95,6 +98,12 @@ def _build_column_result(
     col_dict["sections"] = _sections_for_response(sections, include_html=has_inline_html)
     col_dict["cache_key"] = cache_key
     col_dict["from_cache"] = from_cache
+    col_dict["filing_url"] = _resolve_filing_url(
+        col_dict.get("cik", ""),
+        cache_key,
+        primary_document=col_dict.get("primary_document"),
+        filing_url=col_dict.get("filing_url"),
+    )
     if not from_cache:
         store_parsed_column(cache_key, {k: v for k, v in col_dict.items() if k != "sections"}, sections)
     return ColumnResult(**col_dict)
@@ -128,17 +137,26 @@ async def _parse_single_ticker(
         fiscal_year = filing.get("fiscal_year")
         cache_key = make_cache_key(ticker, fiscal_year, accession)
 
+        primary_document = filing.get("primary_document")
+        filing_url = build_filing_url(resolved["cik"], accession, primary_document)
+
         cached = load_parsed_column(cache_key)
         if cached:
             col_meta, sections = cached
+            cik = col_meta.get("cik", resolved["cik"])
+            primary = col_meta.get("primary_document", primary_document)
             column = ColumnResult(
                 ticker=col_meta.get("ticker", ticker),
                 company_name=col_meta.get("company_name", resolved["company_name"]),
-                cik=col_meta.get("cik", resolved["cik"]),
+                cik=cik,
                 form=col_meta.get("form", filing.get("form")),
                 filing_date=col_meta.get("filing_date", filing.get("filing_date")),
                 report_date=col_meta.get("report_date", filing.get("report_date")),
                 fiscal_year=col_meta.get("fiscal_year", fiscal_year),
+                primary_document=primary,
+                filing_url=_resolve_filing_url(
+                    cik, cache_key, primary_document=primary, filing_url=col_meta.get("filing_url")
+                ),
                 sections=sections,
             )
             return column, sections, cache_key, True
@@ -162,6 +180,8 @@ async def _parse_single_ticker(
             filing_date=filing.get("filing_date"),
             report_date=filing.get("report_date"),
             fiscal_year=fiscal_year,
+            primary_document=primary_document,
+            filing_url=filing_url,
             sections=sections,
         )
         return column, sections, cache_key, False
@@ -274,6 +294,23 @@ async def get_section_html(
 def _accession_from_cache_key(cache_key: str) -> str:
     parts = cache_key.split(":", 2)
     return parts[2] if len(parts) >= 3 else ""
+
+
+def _resolve_filing_url(
+    cik: str,
+    cache_key: str | None,
+    *,
+    primary_document: str | None = None,
+    filing_url: str | None = None,
+) -> str | None:
+    if filing_url:
+        return filing_url
+    if not cik or not cache_key:
+        return None
+    accession = _accession_from_cache_key(cache_key)
+    if not accession:
+        return None
+    return build_filing_url(cik, accession, primary_document)
 
 
 async def _extract_and_cache_section(

@@ -11,6 +11,7 @@ import {
   type ParseResponse,
 } from "@/lib/api";
 import { getComparableSectionIds } from "@/lib/sections";
+import { resolveFilingUrl } from "@/lib/sec-url";
 import { hasRenderableSections, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
 import FilingColumnComponent from "./FilingColumn";
 import SectionNav from "./SectionNav";
@@ -269,6 +270,7 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
                         filingDate={col.filing_date}
                         fiscalYear={col.fiscal_year}
                         cacheKey={col.cache_key ?? null}
+                        filingUrl={resolveFilingUrl(col)}
                         sections={col.sections}
                         activeSection={activeSection}
                         sectionLabel={activeSectionLabel}
