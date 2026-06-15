@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from typing import Annotated, Optional
 
@@ -14,10 +17,24 @@ from config import get_settings
 from database import SavedPeerGroup, get_db, init_db
 from sqlalchemy.orm import Session
 from middleware import AuthContext, check_parse_access, get_auth_context, require_auth
-from filing_parser import ParseRequest, ParseResponse, parse_filings
+from filing_parser import ParseRequest, ParseResponse, SectionHtmlResponse, get_section_html, parse_filings, parse_filings_stream
 from sec.client import fetch_ticker_map
 
 settings = get_settings()
+
+
+class GZipExceptStreamMiddleware:
+    """GZip responses except NDJSON streaming (compression buffers the whole stream)."""
+
+    def __init__(self, app: ASGIApp, minimum_size: int = 1000) -> None:
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("path") == "/parse/stream":
+            await self.app(scope, receive, send)
+            return
+        await self.gzip(scope, receive, send)
 
 
 @asynccontextmanager
@@ -27,7 +44,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"[WARN] Database not available: {exc}")
         print("[WARN] SEC parsing will work; auth/billing need PostgreSQL.")
+    try:
+        await fetch_ticker_map()
+    except Exception as exc:
+        print(f"[WARN] Ticker map pre-warm failed: {exc}")
     yield
+    from sec.client import close_http_client
+    await close_http_client()
 
 
 app = FastAPI(
@@ -37,6 +60,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(GZipExceptStreamMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -117,6 +141,38 @@ async def parse_endpoint(
 ):
     check_parse_access(auth, len(request.tickers), request.fiscal_year)
     return await parse_filings(request)
+
+
+@app.post("/parse/stream")
+async def parse_stream_endpoint(
+    request: ParseRequest,
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+):
+    check_parse_access(auth, len(request.tickers), request.fiscal_year)
+
+    async def event_stream():
+        async for line in parse_filings_stream(request):
+            yield line
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/parse/section", response_model=SectionHtmlResponse)
+async def parse_section_endpoint(
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+    ticker: str = Query(..., min_length=1, max_length=10),
+    section_id: str = Query(..., min_length=1, max_length=64),
+    fiscal_year: int | None = Query(None),
+):
+    check_parse_access(auth, 1, fiscal_year)
+    try:
+        return await get_section_html(ticker, section_id, fiscal_year)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/peer-groups", response_model=list[SavedPeerGroupResponse])

@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL =
+  typeof window !== "undefined"
+    ? "/api/backend"
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface AuthMe {
   email: string | null;
@@ -16,7 +19,7 @@ export interface FilingSection {
   id: string;
   label: string;
   heading: string;
-  html: string;
+  html?: string;
   text_preview: string;
 }
 
@@ -30,6 +33,8 @@ export interface FilingColumn {
   fiscal_year: number | null;
   sections: FilingSection[];
   error: string | null;
+  cache_key?: string | null;
+  from_cache?: boolean;
 }
 
 export interface ParseResponse {
@@ -37,6 +42,13 @@ export interface ParseResponse {
   section_catalog: { id: string; label: string }[];
   parsed_at: string;
   stateless: boolean;
+}
+
+export interface SectionHtmlResponse {
+  ticker: string;
+  section_id: string;
+  html: string;
+  cache_key?: string | null;
 }
 
 export interface PaywallError {
@@ -97,6 +109,93 @@ export async function apiFetch<T>(
   }
 
   return res.json();
+}
+
+export interface ParseStreamCallbacks {
+  onCatalog: (catalog: { id: string; label: string }[], parsedAt: string) => void;
+  onColumn: (column: FilingColumn) => void;
+  onDone: (parsedAt: string) => void;
+  onError?: (error: Error) => void;
+}
+
+export async function parseFilingsStream(
+  tickers: string[],
+  fiscalYear: number | undefined,
+  callbacks: ParseStreamCallbacks
+): Promise<void> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/x-ndjson",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}/parse/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ tickers, fiscal_year: fiscalYear ?? null }),
+  });
+
+  if (!res.ok) {
+    let detail: PaywallError | string | Record<string, unknown> = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? body;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, detail);
+  }
+
+  if (!res.body) {
+    throw new Error("Streaming response not supported");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as {
+        type: string;
+        section_catalog?: { id: string; label: string }[];
+        column?: FilingColumn;
+        parsed_at?: string;
+      };
+
+      if (event.type === "catalog" && event.section_catalog) {
+        callbacks.onCatalog(event.section_catalog, event.parsed_at ?? new Date().toISOString());
+      } else if (event.type === "column" && event.column) {
+        callbacks.onColumn(event.column);
+      } else if (event.type === "done") {
+        callbacks.onDone(event.parsed_at ?? new Date().toISOString());
+      }
+    }
+  }
+}
+
+export async function fetchSectionHtml(
+  ticker: string,
+  sectionId: string,
+  fiscalYear?: number | null
+): Promise<string> {
+  const params = new URLSearchParams({
+    ticker: ticker.toUpperCase(),
+    section_id: sectionId,
+  });
+  if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+
+  const result = await apiFetch<SectionHtmlResponse>(`/parse/section?${params}`);
+  return result.html;
 }
 
 export async function parseFilings(

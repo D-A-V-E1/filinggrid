@@ -31,14 +31,27 @@ export function isCorporateEmail(email: string): boolean {
 }
 
 export const SECTION_EVENT = "filinggrid:section-select";
+export const SCROLL_SYNC_EVENT = "filinggrid:scroll-sync";
 
 export interface SectionSelectDetail {
   sectionId: string;
+}
+
+export interface ScrollSyncDetail {
+  scrollTop: number;
+  sourceId: string;
 }
 
 export function broadcastSectionSelect(sectionId: string) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent<SectionSelectDetail>(SECTION_EVENT, { detail: { sectionId } })
+  );
+}
+
+export function broadcastScrollSync(scrollTop: number, sourceId: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<ScrollSyncDetail>(SCROLL_SYNC_EVENT, { detail: { scrollTop, sourceId } })
   );
 }

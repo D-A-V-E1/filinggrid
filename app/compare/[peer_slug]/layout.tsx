@@ -8,14 +8,17 @@ interface Props {
 async function fetchSeoSummary(tickers: string[]) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   try {
-    const res = await fetch(`${apiUrl}/parse`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tickers }),
+    const res = await fetch(`${apiUrl}/tickers/search?q=${encodeURIComponent(tickers[0] || "")}&limit=8`, {
       next: { revalidate: 86400 },
     });
     if (!res.ok) return null;
-    return res.json();
+    const results = (await res.json()) as { ticker: string; company_name: string }[];
+    return {
+      columns: tickers.map((ticker) => {
+        const match = results.find((r) => r.ticker === ticker.toUpperCase());
+        return { ticker: ticker.toUpperCase(), company_name: match?.company_name ?? ticker };
+      }),
+    };
   } catch {
     return null;
   }
@@ -86,23 +89,11 @@ export default async function CompareLayout({
           SEC Filing Comparison: {tickers.join(" vs ")}
         </h1>
         {data?.columns?.map(
-          (col: {
-            ticker: string;
-            company_name: string;
-            form: string;
-            fiscal_year: number;
-            sections: { label: string; text_preview: string }[];
-          }) => (
+          (col: { ticker: string; company_name: string }) => (
             <article key={col.ticker}>
               <h2>
-                {col.company_name} ({col.ticker}) — {col.form} FY{col.fiscal_year}
+                {col.company_name} ({col.ticker})
               </h2>
-              {col.sections?.slice(0, 3).map((s) => (
-                <div key={s.label}>
-                  <h3>{s.label}</h3>
-                  <p>{s.text_preview}</p>
-                </div>
-              ))}
             </article>
           )
         )}

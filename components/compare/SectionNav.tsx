@@ -1,41 +1,49 @@
 "use client";
 
-import { broadcastSectionSelect } from "@/lib/utils";
+import { useEffect, useRef } from "react";
+import { NAV_GROUPS } from "@/lib/sections";
 
 interface SectionNavProps {
-  sections: { id: string; label: string }[];
+  /** Section IDs that exist in at least one loaded filing. */
+  availableSectionIds: Set<string>;
+  sectionCatalog: { id: string; label: string }[];
   activeSection: string | null;
+  onSectionSelect: (sectionId: string) => void;
 }
 
-export default function SectionNav({ sections, activeSection }: SectionNavProps) {
-  const groups = [
-    { title: "Business & Risk", ids: ["business", "risk-factors", "unresolved-staff", "properties", "legal-proceedings"] },
-    { title: "Analysis", ids: ["mda", "market-risk"] },
-    { title: "Financials", ids: ["financial-statements", "controls", "other-info"] },
-    {
-      title: "Footnotes",
-      ids: [
-        "note-revenue", "note-segments", "note-debt", "note-leases",
-        "note-income-tax", "note-stock-comp", "note-software", "note-contingencies",
-      ],
-    },
-  ];
+export default function SectionNav({
+  availableSectionIds,
+  sectionCatalog,
+  activeSection,
+  onSectionSelect,
+}: SectionNavProps) {
+  const navScrollRef = useRef<HTMLDivElement>(null);
+  const activeButtonRef = useRef<HTMLButtonElement>(null);
+  const sectionMap = new Map(sectionCatalog.map((s) => [s.id, s]));
 
-  const sectionMap = new Map(sections.map((s) => [s.id, s]));
+  useEffect(() => {
+    if (activeButtonRef.current && navScrollRef.current) {
+      activeButtonRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [activeSection]);
 
   return (
     <nav
-      className="flex h-full w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50"
+      className="z-20 flex h-full w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50"
       aria-label="SEC disclosure sections"
     >
-      <div className="border-b border-slate-200 px-4 py-3">
+      <div className="shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
           Sections
         </p>
+        {availableSectionIds.size === 0 && (
+          <p className="mt-1 text-[10px] text-slate-400">Waiting for filings…</p>
+        )}
       </div>
-      <div className="flex-1 overflow-y-auto py-2">
-        {groups.map((group) => {
+      <div ref={navScrollRef} className="min-h-0 flex-1 overflow-y-auto py-2">
+        {NAV_GROUPS.map((group) => {
           const groupSections = group.ids
+            .filter((id) => availableSectionIds.has(id))
             .map((id) => sectionMap.get(id))
             .filter(Boolean) as { id: string; label: string }[];
 
@@ -50,15 +58,16 @@ export default function SectionNav({ sections, activeSection }: SectionNavProps)
                 {groupSections.map((section) => (
                   <li key={section.id}>
                     <button
+                      ref={activeSection === section.id ? activeButtonRef : undefined}
                       type="button"
-                      onClick={() => broadcastSectionSelect(section.id)}
+                      onClick={() => onSectionSelect(section.id)}
                       className={`w-full px-4 py-1.5 text-left text-xs leading-snug transition ${
                         activeSection === section.id
                           ? "border-l-2 border-brand-600 bg-white font-medium text-brand-700"
                           : "border-l-2 border-transparent text-slate-600 hover:bg-white hover:text-slate-900"
                       }`}
                     >
-                      {section.label.replace(/^Item \d+[A-Z]? — /, "")}
+                      {section.label.replace(/^Item \d+[A-Z]? — /, "").replace(/^Note — /, "")}
                     </button>
                   </li>
                 ))}

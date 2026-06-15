@@ -20,14 +20,39 @@ _last_request_time = 0.0
 _request_lock = asyncio.Lock()
 MIN_INTERVAL = 0.11  # ~9 req/sec to stay under SEC 10 req/sec limit
 
+_ticker_map_cache: dict[str, dict[str, Any]] | None = None
+_ticker_map_cached_at = 0.0
+TICKER_MAP_TTL = 3600.0  # 1 hour
 
-async def _rate_limited_get(client: httpx.AsyncClient, url: str) -> httpx.Response:
+_http_client: httpx.AsyncClient | None = None
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(120.0, connect=15.0),
+            headers=_headers(),
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+    return _http_client
+
+
+async def close_http_client() -> None:
+    global _http_client
+    if _http_client and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
+
+
+async def _rate_limited_get(client: httpx.AsyncClient, url: str, *, data_api: bool = False) -> httpx.Response:
     global _last_request_time
+    headers = _data_headers() if data_api else None
     async with _request_lock:
         elapsed = time.monotonic() - _last_request_time
         if elapsed < MIN_INTERVAL:
             await asyncio.sleep(MIN_INTERVAL - elapsed)
-        response = await client.get(url)
+        response = await client.get(url, headers=headers)
         _last_request_time = time.monotonic()
         return response
 
@@ -47,19 +72,26 @@ def _data_headers() -> dict[str, str]:
 
 
 async def fetch_ticker_map() -> dict[str, dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=30.0, headers=_headers()) as client:
-        resp = await _rate_limited_get(client, TICKERS_URL)
-        resp.raise_for_status()
-        raw = resp.json()
-        result: dict[str, dict[str, Any]] = {}
-        for entry in raw.values():
-            ticker = str(entry.get("ticker", "")).upper()
-            if ticker:
-                result[ticker] = {
-                    "cik": str(entry["cik_str"]).zfill(10),
-                    "title": entry.get("title", ticker),
-                }
-        return result
+    global _ticker_map_cache, _ticker_map_cached_at
+    now = time.monotonic()
+    if _ticker_map_cache and (now - _ticker_map_cached_at) < TICKER_MAP_TTL:
+        return _ticker_map_cache
+
+    client = await get_http_client()
+    resp = await _rate_limited_get(client, TICKERS_URL)
+    resp.raise_for_status()
+    raw = resp.json()
+    result: dict[str, dict[str, Any]] = {}
+    for entry in raw.values():
+        ticker = str(entry.get("ticker", "")).upper()
+        if ticker:
+            result[ticker] = {
+                "cik": str(entry["cik_str"]).zfill(10),
+                "title": entry.get("title", ticker),
+            }
+    _ticker_map_cache = result
+    _ticker_map_cached_at = now
+    return result
 
 
 async def resolve_ticker(ticker: str, ticker_map: dict | None = None) -> dict[str, Any]:
@@ -73,12 +105,20 @@ async def resolve_ticker(ticker: str, ticker_map: dict | None = None) -> dict[st
 
 
 async def fetch_submissions(cik: str) -> dict[str, Any]:
+    from filing_store import load_submissions, save_submissions
+
+    cached = load_submissions(cik)
+    if cached:
+        return cached
+
     cik_padded = str(int(cik)).zfill(10)
     url = SUBMISSIONS_URL.format(cik=cik_padded)
-    async with httpx.AsyncClient(timeout=30.0, headers=_data_headers()) as client:
-        resp = await _rate_limited_get(client, url)
-        resp.raise_for_status()
-        return resp.json()
+    client = await get_http_client()
+    resp = await _rate_limited_get(client, url, data_api=True)
+    resp.raise_for_status()
+    data = resp.json()
+    save_submissions(cik, data)
+    return data
 
 
 def find_filing(
@@ -124,16 +164,20 @@ def find_filing(
 
 
 async def fetch_filing_html(cik: str, filing: dict[str, Any]) -> bytes:
-    """Stream filing HTML into memory — never written to disk."""
+    from filing_store import load_filing_html, save_filing_html
+
     cik_int = str(int(cik))
     accession = filing["accession_no_dash"]
+    cached = load_filing_html(cik, accession)
+    if cached:
+        return cached
+
     primary = filing.get("primary_document") or f"{accession}.htm"
     url = f"{ARCHIVES_BASE}/{cik_int}/{accession}/{primary}"
 
-    async with httpx.AsyncClient(timeout=120.0, headers=_headers()) as client:
-        resp = await _rate_limited_get(client, url)
-        resp.raise_for_status()
-        buffer = bytearray()
-        async for chunk in resp.aiter_bytes(chunk_size=65536):
-            buffer.extend(chunk)
-        return bytes(buffer)
+    client = await get_http_client()
+    resp = await _rate_limited_get(client, url)
+    resp.raise_for_status()
+    html_bytes = await resp.aread()
+    save_filing_html(cik, accession, html_bytes)
+    return html_bytes

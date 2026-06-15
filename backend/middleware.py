@@ -53,7 +53,10 @@ class AuthContext:
 
 def decode_jwt(token: str) -> dict:
     if not settings.supabase_jwt_secret:
-        raise HTTPException(status_code=500, detail="Auth not configured")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "AUTH_NOT_CONFIGURED", "message": "Authentication is not configured."},
+        )
     try:
         payload = jwt.decode(
             token,
@@ -103,12 +106,19 @@ async def get_auth_context(
     if not credentials:
         return AuthContext(tier="free", is_authenticated=False)
 
+    if not settings.supabase_jwt_secret:
+        return AuthContext(tier="free", is_authenticated=False)
+
     payload = decode_jwt(credentials.credentials)
     email = payload.get("email")
     if not email:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
-    user, org = get_or_create_user(db, email)
+    try:
+        user, org = get_or_create_user(db, email)
+    except Exception:
+        return AuthContext(tier="free", is_authenticated=False)
+
     db.info["current_org_id"] = org.id
 
     tier = org.subscription_tier or "free"

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import io
 import re
+import warnings
 from typing import Any
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag, XMLParsedAsHTMLWarning
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # Standard SEC disclosure sections mapped to anchor IDs
 SECTION_DEFINITIONS: list[dict[str, Any]] = [
@@ -22,15 +25,139 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
     {"id": "disagreements", "label": "Item 9 — Disagreements", "patterns": [r"item\s*9[\.\s—–-]*"]},
     {"id": "controls", "label": "Item 9A — Controls & Procedures", "patterns": [r"item\s*9a", r"controls\s*and\s*procedures"]},
     {"id": "other-info", "label": "Item 9B — Other Information", "patterns": [r"item\s*9b"]},
+    {
+        "id": "note-summary-policies",
+        "label": "Note — Summary of Significant Accounting Policies",
+        "patterns": [
+            r"summary\s*of\s*significant\s*accounting",
+            r"significant\s*accounting\s*polic",
+            r"basis\s*of\s*presentation",
+        ],
+    },
     {"id": "note-revenue", "label": "Note — Revenue Recognition", "patterns": [r"revenue\s*recognition", r"note.*revenue"]},
-    {"id": "note-segments", "label": "Note — Segment Information", "patterns": [r"segment\s*information", r"operating\s*segments"]},
-    {"id": "note-debt", "label": "Note — Debt", "patterns": [r"note.*debt", r"long.term\s*debt"]},
-    {"id": "note-leases", "label": "Note — Leases", "patterns": [r"note.*lease", r"^leases$"]},
-    {"id": "note-income-tax", "label": "Note — Income Taxes", "patterns": [r"income\s*tax", r"note.*tax"]},
-    {"id": "note-stock-comp", "label": "Note — Stock-Based Compensation", "patterns": [r"stock.based\s*compensation", r"share.based"]},
+    {"id": "note-segments", "label": "Note — Segment Information", "patterns": [r"segment\s*information", r"operating\s*segments", r"reportable\s*segments"]},
+    {"id": "note-cash", "label": "Note — Cash & Cash Equivalents", "patterns": [r"cash\s*and\s*cash\s*equivalent", r"cash\s*equivalents"]},
+    {
+        "id": "note-investments",
+        "label": "Note — Investments & Marketable Securities",
+        "patterns": [r"marketable\s*securit", r"short.term\s*invest", r"investments?\s*in\s*marketable"],
+    },
+    {
+        "id": "note-fair-value",
+        "label": "Note — Fair Value Measurements",
+        "patterns": [r"fair\s*value\s*measure", r"fair\s*value\s*hierarch"],
+    },
+    {
+        "id": "note-receivables",
+        "label": "Note — Accounts Receivable",
+        "patterns": [r"accounts?\s*receivable", r"trade\s*receivable", r"allowance\s*for\s*doubtful"],
+    },
+    {"id": "note-inventory", "label": "Note — Inventory", "patterns": [r"^inventory$", r"inventor(y|ies)"]},
+    {
+        "id": "note-ppe",
+        "label": "Note — Property, Plant & Equipment",
+        "patterns": [r"property.*plant.*equipment", r"^ppe$", r"fixed\s*assets"],
+    },
+    {
+        "id": "note-goodwill",
+        "label": "Note — Goodwill & Intangible Assets",
+        "patterns": [r"goodwill", r"intangible\s*assets?", r"acquired\s*intangible"],
+    },
+    {"id": "note-leases", "label": "Note — Leases", "patterns": [r"note.*lease", r"^leases$", r"lease\s*accounting"]},
+    {"id": "note-debt", "label": "Note — Debt", "patterns": [r"note.*debt", r"long.term\s*debt", r"borrowings", r"credit\s*facilit"]},
+    {
+        "id": "note-derivatives",
+        "label": "Note — Derivatives & Hedging",
+        "patterns": [r"derivatives?", r"hedging\s*activit", r"hedge\s*accounting"],
+    },
+    {
+        "id": "note-pension",
+        "label": "Note — Pension & Postretirement Benefits",
+        "patterns": [r"pension", r"postretirement", r"defined\s*benefit", r"employee\s*benefit\s*plans?"],
+    },
+    {"id": "note-income-tax", "label": "Note — Income Taxes", "patterns": [r"income\s*tax", r"note.*tax", r"deferred\s*tax"]},
+    {"id": "note-stock-comp", "label": "Note — Stock-Based Compensation", "patterns": [r"stock.based\s*compensation", r"share.based", r"equity.based\s*compensation"]},
+    {
+        "id": "note-equity",
+        "label": "Note — Stockholders' Equity",
+        "patterns": [r"stockholders?.?\s*equity", r"shareholders?.?\s*equity", r"stockholders?.?\s*deficit"],
+    },
+    {"id": "note-eps", "label": "Note — Earnings Per Share", "patterns": [r"earnings\s*per\s*share", r"^eps$", r"diluted\s*eps"]},
+    {
+        "id": "note-aoci",
+        "label": "Note — Accumulated Other Comprehensive Income",
+        "patterns": [r"accumulated\s*other\s*comprehensive", r"other\s*comprehensive\s*income", r"^aoci$"],
+    },
+    {"id": "note-restructuring", "label": "Note — Restructuring", "patterns": [r"restructur", r"severance\s*and\s*restructur"]},
+    {"id": "note-impairment", "label": "Note — Impairment", "patterns": [r"impairment", r"asset\s*impairment"]},
+    {
+        "id": "note-acquisitions",
+        "label": "Note — Business Combinations & Acquisitions",
+        "patterns": [r"business\s*combination", r"acquisition", r"purchase\s*accounting"],
+    },
     {"id": "note-software", "label": "Note — Software & Capitalization", "patterns": [r"software\s*development", r"capitalized\s*software", r"internal.use\s*software"]},
-    {"id": "note-contingencies", "label": "Note — Commitments & Contingencies", "patterns": [r"commitments\s*and\s*contingenc", r"legal\s*proceedings.*note"]},
+    {"id": "note-related-party", "label": "Note — Related Party Transactions", "patterns": [r"related\s*party", r"related.party\s*transaction"]},
+    {"id": "note-contingencies", "label": "Note — Commitments & Contingencies", "patterns": [r"commitments\s*and\s*contingenc", r"contingenc"]},
+    {"id": "note-subsequent-events", "label": "Note — Subsequent Events", "patterns": [r"subsequent\s*events?", r"events?\s*subsequent"]},
+    {
+        "id": "note-recent-standards",
+        "label": "Note — Recent Accounting Pronouncements",
+        "patterns": [
+            r"recent\s*accounting\s*pronouncement",
+            r"recently\s*adopted\s*accounting",
+            r"new\s*accounting\s*standard",
+            r"accounting\s*pronouncement",
+        ],
+    },
 ]
+
+_ITEM_HEADER = re.compile(r"^\s*item\s+(\d+[a-z]?)\b", re.IGNORECASE)
+_NOTE_HEADER = re.compile(r"^\s*note\s+(\d+)\b", re.IGNORECASE)
+_ITEM_IDS = {
+    "1": "business",
+    "1a": "risk-factors",
+    "1b": "unresolved-staff",
+    "2": "properties",
+    "3": "legal-proceedings",
+    "4": "mine-safety",
+    "7": "mda",
+    "7a": "market-risk",
+    "8": "financial-statements",
+    "9": "disagreements",
+    "9a": "controls",
+    "9b": "other-info",
+}
+# Item numbers differ between 10-K and 10-Q; resolve using the subtitle when present.
+_ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"management.s\s*discussion|md&a", re.IGNORECASE), "mda"),
+    (re.compile(r"risk\s*factors", re.IGNORECASE), "risk-factors"),
+    (re.compile(r"financial\s*statements", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"legal\s*proceed", re.IGNORECASE), "legal-proceedings"),
+    (re.compile(r"quantitative.*qualitative.*market|market\s*risk", re.IGNORECASE), "market-risk"),
+    (re.compile(r"controls\s*and\s*procedures", re.IGNORECASE), "controls"),
+    (re.compile(r"unresolved\s*staff", re.IGNORECASE), "unresolved-staff"),
+    (re.compile(r"mine\s*safety", re.IGNORECASE), "mine-safety"),
+    (re.compile(r"\bbusiness\b", re.IGNORECASE), "business"),
+    (re.compile(r"\bproperties\b", re.IGNORECASE), "properties"),
+]
+_MAX_HEADING_CHARS = 220
+
+_MAJOR_SECTION_IDS = frozenset({
+    "business",
+    "risk-factors",
+    "unresolved-staff",
+    "properties",
+    "legal-proceedings",
+    "mine-safety",
+    "mda",
+    "market-risk",
+    "financial-statements",
+    "disagreements",
+    "controls",
+    "other-info",
+})
+
+_BLOCK_TAGS = frozenset({"div", "p", "table", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "td"})
 
 
 def _compile_patterns() -> list[tuple[str, str, re.Pattern]]:
@@ -44,93 +171,322 @@ def _compile_patterns() -> list[tuple[str, str, re.Pattern]]:
 _COMPILED = _compile_patterns()
 
 
+def _normalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip())
+
+
+def _section_label(section_id: str) -> str:
+    return next(s["label"] for s in SECTION_DEFINITIONS if s["id"] == section_id)
+
+
+def _resolve_item_section(item_num: str, head: str) -> tuple[str, str] | None:
+    for pattern, section_id in _ITEM_SUBTITLE_RULES:
+        if pattern.search(head):
+            return section_id, _section_label(section_id)
+    section_id = _ITEM_IDS.get(item_num.lower())
+    if section_id:
+        return section_id, _section_label(section_id)
+    return None
+
+
 def _match_section(text: str) -> tuple[str, str] | None:
-    cleaned = re.sub(r"\s+", " ", text.strip())[:200]
+    cleaned = _normalize_text(text)
     if len(cleaned) < 3:
         return None
+
+    head = cleaned[:_MAX_HEADING_CHARS]
+
+    item_match = _ITEM_HEADER.match(head)
+    if item_match:
+        resolved = _resolve_item_section(item_match.group(1), head)
+        if resolved:
+            return resolved
+
+    note_match = _NOTE_HEADER.match(head)
+    if note_match:
+        for section_id, label, pattern in _COMPILED:
+            if section_id.startswith("note-") and pattern.search(head):
+                return section_id, label
+
+    if len(cleaned) > _MAX_HEADING_CHARS:
+        return None
+
+    if re.match(r"^see\s+accompanying\b", cleaned, re.IGNORECASE):
+        return None
+
     for section_id, label, pattern in _COMPILED:
-        if pattern.search(cleaned):
+        if section_id.startswith("note-"):
+            if pattern.search(head):
+                return section_id, label
+        elif pattern.search(head):
             return section_id, label
     return None
 
 
+def _is_section_heading(text: str) -> bool:
+    cleaned = _normalize_text(text)
+    if len(cleaned) < 3:
+        return False
+    if _ITEM_HEADER.match(cleaned) or _NOTE_HEADER.match(cleaned):
+        return len(cleaned) <= _MAX_HEADING_CHARS
+    return len(cleaned) <= 150
+
+
 def _heading_text(element: Tag) -> str:
-    if element.name in ("h1", "h2", "h3", "h4", "h5", "h6", "b", "strong", "p", "div", "span", "font"):
-        text = element.get_text(" ", strip=True)
-        return text[:300]
+    if element.name in ("h1", "h2", "h3", "h4", "h5", "h6", "b", "strong", "p", "div", "span", "font", "td", "th"):
+        return _normalize_text(element.get_text(" ", strip=True))
     return ""
 
 
-def _find_headings(soup: BeautifulSoup) -> list[tuple[Tag, str]]:
-    headings: list[tuple[Tag, str]] = []
-    for tag in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "b", "strong", "p", "div"]):
-        text = _heading_text(tag)
-        if text and len(text) < 200 and _match_section(text):
-            headings.append((tag, text))
-    return headings
+def _block_ancestor(tag: Tag) -> Tag:
+    block_names = {
+        "p", "div", "td", "th", "li", "h1", "h2", "h3", "h4", "h5", "h6",
+        "table", "section", "article", "tr",
+    }
+    current: Tag | None = tag
+    chosen = tag
+    while current and current.name not in ("body", "html", "[document]"):
+        if current.name in block_names:
+            chosen = current
+            if current.name in ("div", "td", "p", "section", "article", "table"):
+                break
+        current = current.parent  # type: ignore[assignment]
+    return chosen
 
 
-def _extract_between(start: Tag, end: Tag | None, soup: BeautifulSoup) -> str:
+def _build_block_index(root: Tag) -> tuple[list[Tag], dict[int, int]]:
+    blocks = [t for t in root.find_all(_BLOCK_TAGS)]
+    index = {id(t): i for i, t in enumerate(blocks)}
+    return blocks, index
+
+
+_block_start_cache: dict[int, int] = {}
+
+
+def _block_start_index(block: Tag, blocks: list[Tag], block_index: dict[int, int]) -> int:
+    block_id = id(block)
+    cached = _block_start_cache.get(block_id)
+    if cached is not None:
+        return cached
+    if block_id in block_index:
+        _block_start_cache[block_id] = block_index[block_id]
+        return block_index[block_id]
+    for i, candidate in enumerate(blocks):
+        if block is candidate:
+            _block_start_cache[block_id] = i
+            return i
+    _block_start_cache[block_id] = 0
+    return 0
+
+
+def _find_headings(blocks: list[Tag], block_index: dict[int, int]) -> list[tuple[Tag, str, str, str]]:
+    headings: list[tuple[Tag, str, str, str, int]] = []
+    seen_blocks: set[int] = set()
+
+    for block in blocks:
+        text = _heading_text(block)
+        if not text:
+            continue
+        match = _match_section(text)
+        if not match or not _is_section_heading(text):
+            continue
+        section_id, label = match
+        block_id = id(block)
+        if block_id in seen_blocks:
+            continue
+        seen_blocks.add(block_id)
+        order = block_index.get(block_id, 0)
+        headings.append((block, text[:_MAX_HEADING_CHARS], section_id, label, order))
+
+    headings.sort(key=lambda h: h[4])
+    return [(h[0], h[1], h[2], h[3]) for h in headings]
+
+
+def _strip_heavy_markup(soup: BeautifulSoup) -> None:
+    for tag in soup(["script", "style", "noscript", "meta", "link", "svg", "iframe"]):
+        tag.decompose()
+
+
+def _table_row_ancestor(tag: Tag) -> Tag | None:
+    current: Tag | None = tag
+    while current and current.name not in ("body", "html", "[document]"):
+        if current.name == "tr":
+            return current
+        current = current.parent  # type: ignore[assignment]
+    return None
+
+
+def _extract_table_rows(start: Tag, end: Tag | None) -> str | None:
+    start_row = _table_row_ancestor(start)
+    if not start_row:
+        return None
+    end_row = _table_row_ancestor(end) if end else None
+
     parts: list[str] = []
-    current = start
-    while current:
-        if end and current is end:
+    row: Tag | None = start_row
+    while row:
+        if end_row and row is end_row:
             break
-        if isinstance(current, Tag):
-            parts.append(str(current))
-        current = current.next_element
-        if end is None and current and isinstance(current, Tag) and current.name in ("h1", "h2", "h3"):
-            break
-    return "".join(parts)
+        parts.append(str(row))
+        row = row.find_next_sibling("tr")
+    html = "".join(parts)
+    return html if len(re.sub(r"<[^>]+>", " ", html)) > 300 else None
+
+
+def _item_number(text: str) -> str | None:
+    match = _ITEM_HEADER.match(_normalize_text(text))
+    return match.group(1).lower() if match else None
+
+
+def _find_section_end(
+    headings: list[tuple[Tag, str, str, str]],
+    start_i: int,
+    blocks: list[Tag],
+    block_index: dict[int, int],
+) -> Tag | None:
+    """Next real Item/Note boundary — skip in-body false positives between sections."""
+    start_block, start_text, start_id, _ = headings[start_i]
+    start_idx = _block_start_index(start_block, blocks, block_index)
+    start_item = _item_number(start_text)
+
+    for j in range(start_i + 1, len(headings)):
+        end_block, end_text, end_id, _ = headings[j]
+        end_idx = _block_start_index(end_block, blocks, block_index)
+        if end_idx <= start_idx:
+            continue
+        cleaned = _normalize_text(end_text)
+
+        if _ITEM_HEADER.match(cleaned):
+            end_item = _item_number(cleaned)
+            if start_item and end_item == start_item:
+                continue
+            if end_id == start_id:
+                continue
+            return end_block
+
+        if _NOTE_HEADER.match(cleaned):
+            if start_id.startswith("note-") or end_id.startswith("note-"):
+                return end_block
+            continue
+
+        if end_id != start_id and end_id in _MAJOR_SECTION_IDS and end_idx - start_idx > 40:
+            return end_block
+
+    return None
+
+
+def _outermost_blocks(slice_blocks: list[Tag]) -> list[Tag]:
+    if not slice_blocks:
+        return []
+    if len(slice_blocks) == 1:
+        return slice_blocks
+
+    slice_set = set(slice_blocks)
+    outer: list[Tag] = []
+    for block in slice_blocks:
+        if any(parent in slice_set for parent in block.parents):
+            continue
+        outer.append(block)
+    return outer if outer else slice_blocks
+
+
+def _extract_between(
+    start: Tag,
+    end: Tag | None,
+    blocks: list[Tag],
+    block_index: dict[int, int],
+) -> str:
+    table_html = _extract_table_rows(start, end)
+    if table_html:
+        return table_html
+
+    start_i = _block_start_index(start, blocks, block_index)
+    end_i = _block_start_index(end, blocks, block_index) if end else len(blocks)
+    if end_i <= start_i:
+        end_i = len(blocks)
+
+    slice_blocks = blocks[start_i:end_i]
+    if not slice_blocks:
+        return str(start)
+
+    outer = _outermost_blocks(slice_blocks)
+    html = "".join(str(b) for b in outer)
+    return html if html else str(start)
+
+
+def _text_len(html: str) -> int:
+    if len(html) < 8000:
+        return len(BeautifulSoup(html, "lxml").get_text(" ", strip=True))
+    return len(re.sub(r"<[^>]+>", " ", html))
+
+
+def _text_preview(html: str) -> str:
+    if len(html) < 8000:
+        text = BeautifulSoup(html, "lxml").get_text(" ", strip=True)
+    else:
+        text = re.sub(r"<[^>]+>", " ", html)
+    return re.sub(r"\s+", " ", text)[:500]
 
 
 def parse_filing_sections(html_bytes: bytes) -> dict[str, Any]:
-    """Parse filing HTML entirely in memory via streaming byte buffer."""
+    """Parse filing HTML into sections from heading to next heading."""
+    _block_start_cache.clear()
     stream = io.BytesIO(html_bytes)
-    soup = BeautifulSoup(stream, "lxml")
+    soup = BeautifulSoup(stream, "html.parser")
+    _strip_heavy_markup(soup)
+    root = soup.find("body") or soup
 
-    for tag in soup(["script", "style", "noscript", "meta", "link"]):
-        tag.decompose()
+    blocks, block_index = _build_block_index(root)
+    headings = _find_headings(blocks, block_index)
 
-    headings = _find_headings(soup)
-    sections: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
-
-    for i, (tag, heading_text) in enumerate(headings):
-        match = _match_section(heading_text)
-        if not match:
-            continue
-        section_id, label = match
-        if section_id in seen_ids:
-            continue
-        seen_ids.add(section_id)
-        end_tag = headings[i + 1][0] if i + 1 < len(headings) else None
-        html_content = _extract_between(tag, end_tag, soup)
-        clean_soup = BeautifulSoup(html_content, "lxml")
-        for t in clean_soup(["script", "style"]):
-            t.decompose()
-        sections.append(
-            {
-                "id": section_id,
-                "label": label,
-                "heading": heading_text,
-                "html": str(clean_soup),
-                "text_preview": clean_soup.get_text(" ", strip=True)[:500],
-            }
-        )
-
-    if not sections:
-        body = soup.find("body") or soup
+    if not headings:
+        body = root
         text = body.get_text(" ", strip=True)[:5000] if body else ""
-        sections.append(
-            {
+        return {
+            "sections": [{
                 "id": "full-document",
                 "label": "Full Document",
                 "heading": "Full Filing",
                 "html": str(body)[:500000] if body else "",
                 "text_preview": text[:500],
-            }
-        )
+            }],
+            "section_ids": ["full-document"],
+        }
+
+    best_meta: dict[str, tuple[int, int, str, str, int]] = {}
+    section_ends: list[Tag | None] = [
+        _find_section_end(headings, i, blocks, block_index) for i in range(len(headings))
+    ]
+
+    for i, (start_block, heading_text, section_id, label) in enumerate(headings):
+        end_block = section_ends[i]
+        start_i = _block_start_index(start_block, blocks, block_index)
+        end_i = _block_start_index(end_block, blocks, block_index) if end_block else len(blocks)
+        span = max(end_i - start_i, 1)
+        order = start_i
+
+        existing = best_meta.get(section_id)
+        if existing is None or span > existing[0]:
+            best_meta[section_id] = (span, i, heading_text, label, order)
+
+    best_by_id: dict[str, dict[str, Any]] = {}
+    for section_id, (_span, i, heading_text, label, order) in best_meta.items():
+        start_block = headings[i][0]
+        end_block = section_ends[i]
+        html_content = _extract_between(start_block, end_block, blocks, block_index)
+
+        best_by_id[section_id] = {
+            "id": section_id,
+            "label": label,
+            "heading": heading_text,
+            "html": html_content,
+            "text_preview": _text_preview(html_content),
+            "_order": order,
+        }
+
+    sections = sorted(best_by_id.values(), key=lambda s: s["_order"])
+    for s in sections:
+        del s["_order"]
 
     return {
         "sections": sections,

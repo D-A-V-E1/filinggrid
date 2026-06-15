@@ -35,6 +35,9 @@ backend/__pycache__/
 backend/**/__pycache__/
 backend/.venv/
 backend/venv/
+backend/.cache/
+backend/logs/
+.cache/
 *.pyc
 .pytest_cache/
 *.egg-info/

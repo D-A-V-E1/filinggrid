@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     # SEC EDGAR
     sec_user_agent: str = "FilingGrid/1.0 (contact@filinggrid.com)"
+    filing_cache_enabled: bool = True
+    filing_cache_dir: str = ".cache/filings"
 
     # Supabase JWT validation
     supabase_url: str = ""

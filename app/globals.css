@@ -13,16 +13,82 @@
 }
 
 @layer components {
+  .compare-columns-grid > .compare-column {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .section-title-bar {
+    min-height: 3rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .column-header-bar {
+    min-height: 5.5rem;
+  }
+
+  .compare-column-body {
+    min-height: min(100%, 12rem);
+  }
+
   .filing-content table {
-    @apply w-full border-collapse overflow-x-auto text-xs;
+    @apply mb-4 w-full border-collapse text-xs;
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
   }
 
   .filing-content td,
   .filing-content th {
-    @apply border border-slate-200 px-2 py-1;
+    @apply border border-slate-200 px-2 py-1 align-top;
   }
 
   .filing-content p {
     @apply mb-3 leading-relaxed;
+  }
+
+  .filing-content h1,
+  .filing-content h2,
+  .filing-content h3,
+  .filing-content h4 {
+    @apply mb-2 mt-4 font-sans font-semibold text-slate-900;
+  }
+
+  .filing-content ul,
+  .filing-content ol {
+    @apply mb-3 ml-5 list-outside;
+  }
+
+  .filing-content li {
+    @apply mb-1 leading-relaxed;
+  }
+
+  .filing-content img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .filing-column-scroll {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .filing-column-scroll::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .filing-column-scroll::-webkit-scrollbar-track {
+    @apply bg-slate-100;
+  }
+
+  .filing-column-scroll::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300;
+  }
+
+  .filing-column-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
   }
 }
