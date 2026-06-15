@@ -163,17 +163,26 @@ def find_filing(
     return candidates[0]
 
 
+def build_filing_url(
+    cik: str,
+    accession_no_dash: str,
+    primary_document: str | None = None,
+) -> str:
+    """Official SEC EDGAR URL for the filing's primary document."""
+    cik_int = str(int(cik))
+    primary = primary_document or f"{accession_no_dash}.htm"
+    return f"{ARCHIVES_BASE}/{cik_int}/{accession_no_dash}/{primary}"
+
+
 async def fetch_filing_html(cik: str, filing: dict[str, Any]) -> bytes:
     from filing_store import load_filing_html, save_filing_html
 
-    cik_int = str(int(cik))
     accession = filing["accession_no_dash"]
     cached = load_filing_html(cik, accession)
     if cached:
         return cached
 
-    primary = filing.get("primary_document") or f"{accession}.htm"
-    url = f"{ARCHIVES_BASE}/{cik_int}/{accession}/{primary}"
+    url = build_filing_url(cik, accession, filing.get("primary_document"))
 
     client = await get_http_client()
     resp = await _rate_limited_get(client, url)

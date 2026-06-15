@@ -31,6 +31,8 @@ export interface FilingColumn {
   filing_date: string | null;
   report_date: string | null;
   fiscal_year: number | null;
+  primary_document?: string | null;
+  filing_url?: string | null;
   sections: FilingSection[];
   error: string | null;
   cache_key?: string | null;
@@ -48,6 +50,7 @@ export interface SectionHtmlResponse {
   ticker: string;
   section_id: string;
   html: string;
+  text?: string;
   cache_key?: string | null;
 }
 
@@ -246,11 +249,28 @@ export async function fetchSectionHtml(
   const params = new URLSearchParams({
     ticker: ticker.toUpperCase(),
     section_id: sectionId,
+    format: "html",
   });
   if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
 
   const result = await apiFetch<SectionHtmlResponse>(`/parse/section?${params}`);
   return result.html;
+}
+
+export async function fetchSectionText(
+  ticker: string,
+  sectionId: string,
+  fiscalYear?: number | null
+): Promise<string> {
+  const params = new URLSearchParams({
+    ticker: ticker.toUpperCase(),
+    section_id: sectionId,
+    format: "text",
+  });
+  if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+
+  const result = await apiFetch<SectionHtmlResponse>(`/parse/section?${params}`);
+  return result.text ?? "";
 }
 
 export async function parseFilings(

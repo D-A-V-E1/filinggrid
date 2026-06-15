@@ -157,6 +157,9 @@ _MAJOR_SECTION_IDS = frozenset({
     "other-info",
 })
 
+# Major narrative sections (no XBRL fast path) — plain text default in the UI.
+NARRATIVE_SECTION_IDS = _MAJOR_SECTION_IDS - {"financial-statements"}
+
 _BLOCK_TAGS = frozenset({"div", "p", "table", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "td"})
 
 
@@ -428,6 +431,23 @@ def _text_preview(html: str) -> str:
     return re.sub(r"\s+", " ", text)[:500]
 
 
+def _html_to_plain_text(html: str) -> str:
+    """Convert section HTML to readable plain text with paragraph breaks."""
+    if not html:
+        return ""
+    soup = BeautifulSoup(html, "lxml")
+    for br in soup.find_all("br"):
+        br.replace_with("\n")
+    for tag in soup.find_all(["p", "div", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"]):
+        if tag.string or tag.contents:
+            tag.append("\n\n")
+    text = soup.get_text(separator="", strip=False)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def _prepare_filing_structure(html_bytes: bytes) -> dict[str, Any]:
     """Parse HTML once and locate section boundaries (no HTML extraction)."""
     _block_start_cache.clear()
@@ -562,6 +582,25 @@ def extract_section_html(
     start_block = headings[i][0]
     end_block = section_ends[i]
     return _extract_between(start_block, end_block, blocks, block_index)
+
+
+def extract_section_text(
+    html_bytes: bytes,
+    section_id: str,
+    structure: dict[str, Any] | None = None,
+) -> str | None:
+    """Extract plain text for a single section (reuses structure cache)."""
+    if structure is None:
+        structure = _prepare_filing_structure(html_bytes)
+    if structure.get("full_document"):
+        if section_id == "full-document":
+            return structure.get("body_text", "")[:500000]
+        return None
+
+    html = extract_section_html(html_bytes, section_id, structure)
+    if not html:
+        return None
+    return _html_to_plain_text(html)
 
 
 def parse_filing_sections(html_bytes: bytes) -> dict[str, Any]:

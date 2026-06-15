@@ -3,6 +3,7 @@ import { normalizePeerSlug } from "./utils";
 
 const META_PREFIX = "fg:meta:";
 const SECTION_PREFIX = "fg:section:";
+const SECTION_TEXT_PREFIX = "fg:section-text:";
 
 export function parseMetaCacheKey(tickers: string[], fiscalYear?: number): string {
   const slug = normalizePeerSlug(tickers);
@@ -11,6 +12,10 @@ export function parseMetaCacheKey(tickers: string[], fiscalYear?: number): strin
 
 function sectionHtmlCacheKey(cacheKey: string, sectionId: string): string {
   return `${SECTION_PREFIX}${cacheKey}:${sectionId}`;
+}
+
+function sectionTextCacheKey(cacheKey: string, sectionId: string): string {
+  return `${SECTION_TEXT_PREFIX}${cacheKey}:${sectionId}`;
 }
 
 /** True when at least one column has section metadata for navigation. */
@@ -72,6 +77,24 @@ export function saveSectionHtml(cacheKey: string, sectionId: string, html: strin
   if (typeof window === "undefined" || !cacheKey || !html) return;
   try {
     sessionStorage.setItem(sectionHtmlCacheKey(cacheKey, sectionId), html);
+  } catch {
+    /* quota exceeded */
+  }
+}
+
+export function loadSectionText(cacheKey: string, sectionId: string): string | null {
+  if (typeof window === "undefined" || !cacheKey) return null;
+  try {
+    return sessionStorage.getItem(sectionTextCacheKey(cacheKey, sectionId));
+  } catch {
+    return null;
+  }
+}
+
+export function saveSectionText(cacheKey: string, sectionId: string, text: string): void {
+  if (typeof window === "undefined" || !cacheKey || !text) return;
+  try {
+    sessionStorage.setItem(sectionTextCacheKey(cacheKey, sectionId), text);
   } catch {
     /* quota exceeded */
   }

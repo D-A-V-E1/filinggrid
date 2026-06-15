@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { getComparableSectionIds } from "@/lib/sections";
 import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
+import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
 import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
@@ -329,6 +330,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
                         filingDate={col.filing_date}
                         fiscalYear={col.fiscal_year}
                         cacheKey={col.cache_key ?? null}
+                        filingUrl={resolveFilingUrl(col)}
                         sections={col.sections}
                         activeSection={activeSection}
                         sectionLabel={activeSectionLabel}

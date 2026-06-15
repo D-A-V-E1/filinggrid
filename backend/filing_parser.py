@@ -21,6 +21,7 @@ from parse_cache import (
     store_section_html,
 )
 from sec.client import (
+    build_filing_url,
     fetch_filing_html,
     fetch_submissions,
     fetch_ticker_map,
@@ -31,6 +32,7 @@ from sec.section_extractor import (
     _prepare_filing_structure,
     _sections_from_structure,
     extract_section_html,
+    extract_section_text,
     get_section_catalog,
 )
 
@@ -48,6 +50,8 @@ class ColumnResult(BaseModel):
     filing_date: str | None = None
     report_date: str | None = None
     fiscal_year: int | None = None
+    primary_document: str | None = None
+    filing_url: str | None = None
     sections: list[dict[str, Any]] = []
     error: str | None = None
     cache_key: str | None = None
@@ -64,7 +68,8 @@ class ParseResponse(BaseModel):
 class SectionHtmlResponse(BaseModel):
     ticker: str
     section_id: str
-    html: str
+    html: str = ""
+    text: str = ""
     cache_key: str | None = None
 
 
@@ -94,6 +99,12 @@ def _build_column_result(
     col_dict["sections"] = _sections_for_response(sections, include_html=has_inline_html)
     col_dict["cache_key"] = cache_key
     col_dict["from_cache"] = from_cache
+    col_dict["filing_url"] = _resolve_filing_url(
+        col_dict.get("cik", ""),
+        cache_key,
+        primary_document=col_dict.get("primary_document"),
+        filing_url=col_dict.get("filing_url"),
+    )
     if not from_cache:
         store_parsed_column(cache_key, {k: v for k, v in col_dict.items() if k != "sections"}, sections)
     return ColumnResult(**col_dict)
@@ -127,17 +138,26 @@ async def _parse_single_ticker(
         fiscal_year = filing.get("fiscal_year")
         cache_key = make_cache_key(ticker, fiscal_year, accession)
 
+        primary_document = filing.get("primary_document")
+        filing_url = build_filing_url(resolved["cik"], accession, primary_document)
+
         cached = load_parsed_column(cache_key)
         if cached:
             col_meta, sections = cached
+            cik = col_meta.get("cik", resolved["cik"])
+            primary = col_meta.get("primary_document", primary_document)
             column = ColumnResult(
                 ticker=col_meta.get("ticker", ticker),
                 company_name=col_meta.get("company_name", resolved["company_name"]),
-                cik=col_meta.get("cik", resolved["cik"]),
+                cik=cik,
                 form=col_meta.get("form", filing.get("form")),
                 filing_date=col_meta.get("filing_date", filing.get("filing_date")),
                 report_date=col_meta.get("report_date", filing.get("report_date")),
                 fiscal_year=col_meta.get("fiscal_year", fiscal_year),
+                primary_document=primary,
+                filing_url=_resolve_filing_url(
+                    cik, cache_key, primary_document=primary, filing_url=col_meta.get("filing_url")
+                ),
                 sections=sections,
             )
             return column, sections, cache_key, True
@@ -161,6 +181,8 @@ async def _parse_single_ticker(
             filing_date=filing.get("filing_date"),
             report_date=filing.get("report_date"),
             fiscal_year=fiscal_year,
+            primary_document=primary_document,
+            filing_url=filing_url,
             sections=sections,
         )
         return column, sections, cache_key, False
@@ -236,18 +258,40 @@ async def get_section_html(
     ticker: str,
     section_id: str,
     fiscal_year: int | None,
+    *,
+    content_format: str = "html",
 ) -> SectionHtmlResponse:
     ticker = ticker.upper().strip()
-    html = find_section_html(ticker, section_id, fiscal_year)
+    want_html = content_format != "text"
+    want_text = content_format == "text"
+
+    html: str | None = None
+    text: str | None = None
     cache_key = find_cache_key(ticker, fiscal_year)
 
-    if html is None:
-        html, cache_key = await _extract_and_cache_section(ticker, section_id, fiscal_year, cache_key)
+    if want_html:
+        html = find_section_html(ticker, section_id, fiscal_year)
 
-    if html is None:
+    if (want_html and html is None) or want_text:
+        extracted_html, extracted_text, cache_key = await _extract_and_cache_section(
+            ticker, section_id, fiscal_year, cache_key, want_html=want_html, want_text=want_text
+        )
+        if html is None:
+            html = extracted_html
+        text = extracted_text
+
+    if want_html and not html:
+        raise ValueError(f"Section '{section_id}' not found for ticker {ticker}")
+    if want_text and not text:
         raise ValueError(f"Section '{section_id}' not found for ticker {ticker}")
 
-    return SectionHtmlResponse(ticker=ticker, section_id=section_id, html=html, cache_key=cache_key)
+    return SectionHtmlResponse(
+        ticker=ticker,
+        section_id=section_id,
+        html=html or "",
+        text=text or "",
+        cache_key=cache_key,
+    )
 
 
 def _accession_from_cache_key(cache_key: str) -> str:
@@ -255,12 +299,32 @@ def _accession_from_cache_key(cache_key: str) -> str:
     return parts[2] if len(parts) >= 3 else ""
 
 
+def _resolve_filing_url(
+    cik: str,
+    cache_key: str | None,
+    *,
+    primary_document: str | None = None,
+    filing_url: str | None = None,
+) -> str | None:
+    if filing_url:
+        return filing_url
+    if not cik or not cache_key:
+        return None
+    accession = _accession_from_cache_key(cache_key)
+    if not accession:
+        return None
+    return build_filing_url(cik, accession, primary_document)
+
+
 async def _extract_and_cache_section(
     ticker: str,
     section_id: str,
     fiscal_year: int | None,
     cache_key: str | None,
-) -> tuple[str | None, str | None]:
+    *,
+    want_html: bool = True,
+    want_text: bool = False,
+) -> tuple[str | None, str | None, str | None]:
     """Load filing HTML and extract one section; ensure index exists in cache."""
     column_meta: dict[str, Any] | None = None
     if cache_key:
@@ -275,16 +339,16 @@ async def _extract_and_cache_section(
             ticker, ticker_map, target_year, fiscal_year
         )
         if not new_key or not sections:
-            return None, None
+            return None, None, None
         cache_key = new_key
         column_meta = column.model_dump()
         if column.error:
-            return None, cache_key
+            return None, None, cache_key
 
     cik = column_meta.get("cik", "")
     accession = _accession_from_cache_key(cache_key or "")
     if not cik or not accession:
-        return None, cache_key
+        return None, None, cache_key
 
     from filing_store import load_filing_html
 
@@ -295,7 +359,7 @@ async def _extract_and_cache_section(
         submissions = await fetch_submissions(resolved["cik"])
         filing = find_filing(submissions, fiscal_year=fiscal_year or column_meta.get("fiscal_year"))
         if not filing:
-            return None, cache_key
+            return None, None, cache_key
         html_bytes = await fetch_filing_html(resolved["cik"], filing)
 
     structure = get_filing_structure(cache_key) if cache_key else None
@@ -304,7 +368,15 @@ async def _extract_and_cache_section(
         if cache_key:
             store_filing_structure(cache_key, structure)
 
-    html = await asyncio.to_thread(extract_section_html, html_bytes, section_id, structure)
-    if html and cache_key:
-        store_section_html(cache_key, section_id, html)
-    return html, cache_key
+    html: str | None = None
+    text: str | None = None
+
+    if want_html:
+        html = await asyncio.to_thread(extract_section_html, html_bytes, section_id, structure)
+        if html and cache_key:
+            store_section_html(cache_key, section_id, html)
+
+    if want_text:
+        text = await asyncio.to_thread(extract_section_text, html_bytes, section_id, structure)
+
+    return html, text, cache_key

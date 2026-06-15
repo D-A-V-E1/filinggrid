@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchSectionHtml,
   type FinancialsXbrl,
@@ -8,6 +8,8 @@ import {
   type NoteSectionXbrl,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
+import { isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
+import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
   ticker: string;
@@ -16,6 +18,7 @@ interface FilingColumnProps {
   filingDate: string | null;
   fiscalYear: number | null;
   cacheKey: string | null;
+  filingUrl: string | null;
   sections: FilingSection[];
   activeSection: string | null;
   sectionLabel: string | null;
@@ -123,8 +126,36 @@ function XbrlMetricsPanel({ rows, annualSummary, fetchMs, fromCache, subtitle }:
   );
 }
 
-function isXbrlBackedSection(sectionId: string | null): boolean {
-  return sectionId === "financial-statements" || (sectionId?.startsWith("note-") ?? false);
+function ExcerptToggleButton({
+  label,
+  loading,
+  onClick,
+}: {
+  label: string;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className="mb-3 inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 font-sans text-[11px] font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-60"
+    >
+      {loading ? "Loading excerpt…" : label}
+    </button>
+  );
+}
+
+function HtmlExcerpt({ html }: { html: string }) {
+  return (
+    <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+      <div
+        className="filing-content prose prose-sm max-w-none font-serif text-slate-800 prose-headings:font-sans prose-headings:text-slate-900 prose-table:text-xs prose-td:px-2 prose-th:px-2 prose-th:font-semibold"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </article>
+  );
 }
 
 function FilingColumn({
@@ -134,6 +165,7 @@ function FilingColumn({
   filingDate,
   fiscalYear,
   cacheKey,
+  filingUrl,
   sections,
   activeSection,
   sectionLabel,
@@ -142,7 +174,8 @@ function FilingColumn({
 }: FilingColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
-  const [loadingSection, setLoadingSection] = useState(false);
+  const [loadingHtml, setLoadingHtml] = useState(false);
+  const [showHtmlExcerpt, setShowHtmlExcerpt] = useState(false);
   const [sectionError, setSectionError] = useState("");
 
   const section = activeSection ? sections.find((s) => s.id === activeSection) : sections[0];
@@ -151,6 +184,22 @@ function FilingColumn({
     : sectionLabel
       ? formatSectionLabel(sectionLabel)
       : "Select a section";
+
+  const hasXbrlData = useMemo(() => {
+    if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return false;
+    if (activeSection === "financial-statements") {
+      return (financialsXbrl.annual_summary?.length ?? 0) > 0;
+    }
+    const note = financialsXbrl.notes_xbrl?.[activeSection];
+    return Boolean(note?.has_data && note.annual_summary?.length);
+  }, [financialsXbrl, activeSection]);
+
+  const xbrlOnly = Boolean(activeSection && isXbrlBackedSection(activeSection) && hasXbrlData);
+  const showSecViewer = Boolean(
+    activeSection &&
+      section &&
+      (isNarrativeSection(activeSection) || (isXbrlBackedSection(activeSection) && !hasXbrlData))
+  );
 
   const xbrlPanel = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return null;
@@ -164,7 +213,7 @@ function FilingColumn({
           annualSummary={rows}
           fetchMs={financialsXbrl.fetch_ms}
           fromCache={financialsXbrl.from_cache}
-          subtitle="Headline GAAP metrics from SEC companyfacts. Full statement tables still load from HTML when available."
+          subtitle="Headline GAAP metrics from SEC companyfacts."
         />
       );
     }
@@ -178,29 +227,23 @@ function FilingColumn({
         annualSummary={note.annual_summary}
         fetchMs={financialsXbrl.fetch_ms}
         fromCache={financialsXbrl.from_cache}
-        subtitle="Tagged GAAP facts from SEC companyfacts. Full footnote narrative loads from HTML below when available."
+        subtitle="Tagged GAAP facts from SEC companyfacts."
       />
     );
   }, [financialsXbrl, activeSection]);
 
-  const showHtmlFallback = Boolean(sectionHtml && sectionHtml.length > 0);
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    setShowHtmlExcerpt(false);
+    setSectionHtml(null);
+    setSectionError("");
   }, [activeSection, ticker]);
 
-  useEffect(() => {
-    if (!activeSection || !section) {
-      setSectionHtml(null);
-      setLoadingSection(false);
-      setSectionError("");
-      return;
-    }
+  const loadHtmlExcerpt = useCallback(() => {
+    if (!activeSection || loadingHtml) return;
 
-    if (section.html && section.html.length > 0) {
-      setSectionHtml(section.html);
-      setLoadingSection(false);
-      setSectionError("");
+    if (sectionHtml) {
+      setShowHtmlExcerpt(true);
       return;
     }
 
@@ -208,35 +251,25 @@ function FilingColumn({
       const cached = loadSectionHtml(cacheKey, activeSection);
       if (cached) {
         setSectionHtml(cached);
-        setLoadingSection(false);
-        setSectionError("");
+        setShowHtmlExcerpt(true);
         return;
       }
     }
 
-    let cancelled = false;
-    setLoadingSection(true);
+    setLoadingHtml(true);
     setSectionError("");
-    setSectionHtml(null);
 
     fetchSectionHtml(ticker, activeSection, fiscalYear)
       .then((html) => {
-        if (cancelled) return;
-        if (cacheKey) saveSectionHtml(cacheKey, activeSection, html);
+        if (cacheKey && html) saveSectionHtml(cacheKey, activeSection, html);
         setSectionHtml(html);
+        setShowHtmlExcerpt(true);
       })
       .catch((err) => {
-        if (cancelled) return;
-        setSectionError(err instanceof Error ? err.message : "Failed to load section");
+        setSectionError(err instanceof Error ? err.message : "Failed to load excerpt");
       })
-      .finally(() => {
-        if (!cancelled) setLoadingSection(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSection, section, ticker, fiscalYear, cacheKey]);
+      .finally(() => setLoadingHtml(false));
+  }, [activeSection, loadingHtml, sectionHtml, cacheKey, ticker, fiscalYear]);
 
   if (error) {
     return (
@@ -271,6 +304,7 @@ function FilingColumn({
       >
         <div className="compare-column-body px-5 py-5">
           {xbrlPanel}
+
           {!activeSection && sections.length === 0 ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>
           ) : !section ? (
@@ -280,46 +314,41 @@ function FilingColumn({
                 {ticker} did not include this disclosure in the selected period.
               </p>
             </div>
-          ) : loadingSection && !xbrlPanel ? (
-            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
-              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
-              <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
-            </div>
-          ) : sectionError && !xbrlPanel ? (
-            <div className="rounded-lg border border-red-200 bg-white px-4 py-6 text-center">
-              <p className="text-sm text-red-600">{sectionError}</p>
-            </div>
-          ) : showHtmlFallback ? (
-            <>
-              {xbrlPanel && (
-                <p className="mb-3 font-sans text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Filing excerpt
-                </p>
-              )}
-              <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-                <div
-                  className="filing-content prose prose-sm max-w-none font-serif text-slate-800 prose-headings:font-sans prose-headings:text-slate-900 prose-table:text-xs prose-td:px-2 prose-th:px-2 prose-th:font-semibold"
-                  dangerouslySetInnerHTML={{ __html: sectionHtml! }}
-                />
-              </article>
-            </>
-          ) : loadingSection ? (
-            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
-              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
-              <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
-            </div>
-          ) : sectionError ? (
-            <div className="rounded-lg border border-red-200 bg-white px-4 py-6 text-center">
-              <p className="text-sm text-red-600">{sectionError}</p>
-            </div>
+          ) : showSecViewer ? (
+            filingUrl ? (
+              <FilingViewer filingUrl={filingUrl} sectionLabel={displayLabel} ticker={ticker} />
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+                <p className="text-sm text-amber-800">SEC filing link unavailable for this column.</p>
+              </div>
+            )
           ) : (
-            <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-              <p className="text-sm leading-relaxed text-slate-600">
-                {section.text_preview || "No content available."}
-              </p>
-            </article>
+            <>
+              {xbrlOnly && !showHtmlExcerpt && (
+                <ExcerptToggleButton
+                  label="View SEC filing excerpt"
+                  loading={loadingHtml}
+                  onClick={loadHtmlExcerpt}
+                />
+              )}
+
+              {showHtmlExcerpt && sectionHtml && (
+                <>
+                  <p className="mb-3 font-sans text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    SEC filing excerpt
+                  </p>
+                  <HtmlExcerpt html={sectionHtml} />
+                </>
+              )}
+
+              {sectionError && (
+                <p className="mt-2 text-xs text-red-600">{sectionError}</p>
+              )}
+
+              {xbrlOnly && !xbrlPanel && !showHtmlExcerpt && (
+                <p className="text-sm text-slate-500">No XBRL metrics available for this section.</p>
+              )}
+            </>
           )}
         </div>
       </div>

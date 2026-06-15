@@ -91,4 +91,8 @@
   .filing-column-scroll::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-400;
   }
+
+  .narrative-content {
+    @apply max-w-prose whitespace-pre-wrap font-serif text-sm leading-relaxed text-slate-800;
+  }
 }
