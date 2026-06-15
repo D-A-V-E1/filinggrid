@@ -53,6 +53,29 @@ export const NAV_GROUPS: { title: string; ids: string[] }[] = [
   },
 ];
 
+/** Major narrative sections — plain text default (no XBRL fast path). */
+export const NARRATIVE_SECTION_IDS = new Set([
+  "business",
+  "risk-factors",
+  "unresolved-staff",
+  "properties",
+  "legal-proceedings",
+  "mine-safety",
+  "mda",
+  "market-risk",
+  "disagreements",
+  "controls",
+  "other-info",
+]);
+
+export function isXbrlBackedSection(sectionId: string | null): boolean {
+  return sectionId === "financial-statements" || (sectionId?.startsWith("note-") ?? false);
+}
+
+export function isNarrativeSection(sectionId: string | null): boolean {
+  return sectionId != null && NARRATIVE_SECTION_IDS.has(sectionId);
+}
+
 /** Flat catalog order used to align sections across filing columns. */
 export const CATALOG_ORDER: string[] = NAV_GROUPS.flatMap((g) => g.ids);
 

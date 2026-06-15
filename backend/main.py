@@ -10,7 +10,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from billing.stripe_routes import router as billing_router
 from config import get_settings
@@ -178,10 +178,11 @@ async def parse_section_endpoint(
     ticker: str = Query(..., min_length=1, max_length=10),
     section_id: str = Query(..., min_length=1, max_length=64),
     fiscal_year: int | None = Query(None),
+    format: Literal["html", "text"] = Query("html", alias="format"),
 ):
     check_parse_access(auth, 1, fiscal_year)
     try:
-        return await get_section_html(ticker, section_id, fiscal_year)
+        return await get_section_html(ticker, section_id, fiscal_year, content_format=format)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
