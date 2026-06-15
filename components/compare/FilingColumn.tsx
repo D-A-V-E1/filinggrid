@@ -1,7 +1,12 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
-import { fetchSectionHtml, type FinancialsXbrl, type FilingSection } from "@/lib/api";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  fetchSectionHtml,
+  type FinancialsXbrl,
+  type FilingSection,
+  type NoteSectionXbrl,
+} from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
 
 interface FilingColumnProps {
@@ -24,6 +29,9 @@ function formatSectionLabel(label: string): string {
 
 function formatMetricValue(value: number, unit?: string): string {
   if (unit === "USD/shares" || unit === "pure") {
+    if (Math.abs(value) < 1 && Math.abs(value) > 0) {
+      return `${(value * 100).toFixed(1)}%`;
+    }
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   const abs = Math.abs(value);
@@ -33,7 +41,7 @@ function formatMetricValue(value: number, unit?: string): string {
   return `$${value.toLocaleString()}`;
 }
 
-const XBRL_ROW_METRICS: { key: keyof FinancialsXbrl["annual_summary"][0]; label: string; unit?: string }[] = [
+const FINANCIAL_STATEMENT_ROWS: { key: string; label: string; unit?: string }[] = [
   { key: "revenue", label: "Revenue" },
   { key: "net_income", label: "Net income" },
   { key: "operating_income", label: "Operating income" },
@@ -44,9 +52,28 @@ const XBRL_ROW_METRICS: { key: keyof FinancialsXbrl["annual_summary"][0]; label:
   { key: "eps_diluted", label: "EPS (diluted)", unit: "USD/shares" },
 ];
 
-function XbrlMetricsPanel({ data }: { data: FinancialsXbrl }) {
-  const rows = data.annual_summary?.slice(0, 4) ?? [];
-  if (rows.length === 0) return null;
+function buildNoteRowMetrics(note: NoteSectionXbrl): { key: string; label: string; unit?: string }[] {
+  return Object.entries(note.metrics).map(([key, metric]) => ({
+    key,
+    label: metric.label,
+    unit: metric.unit,
+  }));
+}
+
+interface XbrlPanelProps {
+  rows: { key: string; label: string; unit?: string }[];
+  annualSummary: Array<{ fy: number; [key: string]: number | string | undefined }>;
+  fetchMs?: number;
+  fromCache?: boolean;
+  subtitle?: string;
+}
+
+function XbrlMetricsPanel({ rows, annualSummary, fetchMs, fromCache, subtitle }: XbrlPanelProps) {
+  const tableRows = annualSummary.slice(0, 4);
+  if (tableRows.length === 0) return null;
+
+  const visibleRows = rows.filter(({ key }) => tableRows.some((r) => r[key] != null));
+  if (visibleRows.length === 0) return null;
 
   return (
     <article className="mb-4 rounded-lg border border-brand-200 bg-brand-50/40 px-4 py-4 shadow-sm">
@@ -54,9 +81,9 @@ function XbrlMetricsPanel({ data }: { data: FinancialsXbrl }) {
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-brand-800">
           SEC XBRL (fast path)
         </p>
-        {data.fetch_ms != null && (
+        {fetchMs != null && (
           <span className="font-mono text-[10px] text-brand-600/80">
-            {data.fetch_ms}ms{data.from_cache ? " · cached" : ""}
+            {fetchMs}ms{fromCache ? " · cached" : ""}
           </span>
         )}
       </div>
@@ -65,7 +92,7 @@ function XbrlMetricsPanel({ data }: { data: FinancialsXbrl }) {
           <thead>
             <tr className="border-b border-brand-200/80">
               <th className="py-1.5 pr-3 font-medium text-slate-600">Metric</th>
-              {rows.map((r) => (
+              {tableRows.map((r) => (
                 <th key={r.fy} className="py-1.5 px-2 text-right font-mono font-semibold text-slate-700">
                   FY {r.fy}
                 </th>
@@ -73,32 +100,31 @@ function XbrlMetricsPanel({ data }: { data: FinancialsXbrl }) {
             </tr>
           </thead>
           <tbody>
-            {XBRL_ROW_METRICS.map(({ key, label, unit }) => {
-              const hasValues = rows.some((r) => r[key] != null);
-              if (!hasValues) return null;
-              return (
-                <tr key={key} className="border-b border-brand-100/80 last:border-0">
-                  <td className="py-1.5 pr-3 text-slate-600">{label}</td>
-                  {rows.map((r) => {
-                    const val = r[key];
-                    return (
-                      <td key={r.fy} className="py-1.5 px-2 text-right font-mono tabular-nums text-slate-800">
-                        {val != null ? formatMetricValue(val as number, unit) : "—"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+            {visibleRows.map(({ key, label, unit }) => (
+              <tr key={key} className="border-b border-brand-100/80 last:border-0">
+                <td className="py-1.5 pr-3 text-slate-600">{label}</td>
+                {tableRows.map((r) => {
+                  const val = r[key];
+                  return (
+                    <td key={r.fy} className="py-1.5 px-2 text-right font-mono tabular-nums text-slate-800">
+                      {typeof val === "number" ? formatMetricValue(val, unit) : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-        Headline GAAP metrics from SEC companyfacts. Full statement tables still load from HTML when
-        available.
-      </p>
+      {subtitle && (
+        <p className="mt-2 text-[10px] leading-relaxed text-slate-500">{subtitle}</p>
+      )}
     </article>
   );
+}
+
+function isXbrlBackedSection(sectionId: string | null): boolean {
+  return sectionId === "financial-statements" || (sectionId?.startsWith("note-") ?? false);
 }
 
 function FilingColumn({
@@ -125,6 +151,39 @@ function FilingColumn({
     : sectionLabel
       ? formatSectionLabel(sectionLabel)
       : "Select a section";
+
+  const xbrlPanel = useMemo(() => {
+    if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return null;
+
+    if (activeSection === "financial-statements") {
+      const rows = financialsXbrl.annual_summary ?? [];
+      if (rows.length === 0) return null;
+      return (
+        <XbrlMetricsPanel
+          rows={FINANCIAL_STATEMENT_ROWS}
+          annualSummary={rows}
+          fetchMs={financialsXbrl.fetch_ms}
+          fromCache={financialsXbrl.from_cache}
+          subtitle="Headline GAAP metrics from SEC companyfacts. Full statement tables still load from HTML when available."
+        />
+      );
+    }
+
+    const note = financialsXbrl.notes_xbrl?.[activeSection];
+    if (!note?.has_data || !note.annual_summary?.length) return null;
+
+    return (
+      <XbrlMetricsPanel
+        rows={buildNoteRowMetrics(note)}
+        annualSummary={note.annual_summary}
+        fetchMs={financialsXbrl.fetch_ms}
+        fromCache={financialsXbrl.from_cache}
+        subtitle="Tagged GAAP facts from SEC companyfacts. Full footnote narrative loads from HTML below when available."
+      />
+    );
+  }, [financialsXbrl, activeSection]);
+
+  const showHtmlFallback = Boolean(sectionHtml && sectionHtml.length > 0);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -211,9 +270,7 @@ function FilingColumn({
         className="filing-column-scroll min-h-0 flex-1 overflow-y-scroll overscroll-y-contain"
       >
         <div className="compare-column-body px-5 py-5">
-          {activeSection === "financial-statements" && financialsXbrl && (
-            <XbrlMetricsPanel data={financialsXbrl} />
-          )}
+          {xbrlPanel}
           {!activeSection && sections.length === 0 ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>
           ) : !section ? (
@@ -223,6 +280,30 @@ function FilingColumn({
                 {ticker} did not include this disclosure in the selected period.
               </p>
             </div>
+          ) : loadingSection && !xbrlPanel ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+              <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+            </div>
+          ) : sectionError && !xbrlPanel ? (
+            <div className="rounded-lg border border-red-200 bg-white px-4 py-6 text-center">
+              <p className="text-sm text-red-600">{sectionError}</p>
+            </div>
+          ) : showHtmlFallback ? (
+            <>
+              {xbrlPanel && (
+                <p className="mb-3 font-sans text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Filing excerpt
+                </p>
+              )}
+              <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                <div
+                  className="filing-content prose prose-sm max-w-none font-serif text-slate-800 prose-headings:font-sans prose-headings:text-slate-900 prose-table:text-xs prose-td:px-2 prose-th:px-2 prose-th:font-semibold"
+                  dangerouslySetInnerHTML={{ __html: sectionHtml! }}
+                />
+              </article>
+            </>
           ) : loadingSection ? (
             <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
               <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
@@ -233,13 +314,6 @@ function FilingColumn({
             <div className="rounded-lg border border-red-200 bg-white px-4 py-6 text-center">
               <p className="text-sm text-red-600">{sectionError}</p>
             </div>
-          ) : sectionHtml && sectionHtml.length > 0 ? (
-            <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-              <div
-                className="filing-content prose prose-sm max-w-none font-serif text-slate-800 prose-headings:font-sans prose-headings:text-slate-900 prose-table:text-xs prose-td:px-2 prose-th:px-2 prose-th:font-semibold"
-                dangerouslySetInnerHTML={{ __html: sectionHtml }}
-              />
-            </article>
           ) : (
             <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
               <p className="text-sm leading-relaxed text-slate-600">

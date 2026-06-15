@@ -51,6 +51,25 @@ export interface SectionHtmlResponse {
   cache_key?: string | null;
 }
 
+export interface XbrlMetricSeries {
+  label: string;
+  concept?: string;
+  unit?: string;
+  annual?: Array<{ fy?: number; value?: number; end?: string }>;
+  quarterly?: Array<{ fy?: number; fp?: string; value?: number; end?: string }>;
+}
+
+export interface NoteSectionXbrl {
+  section_id: string;
+  label: string;
+  has_data: boolean;
+  metrics: Record<string, XbrlMetricSeries>;
+  annual_summary: Array<{
+    fy: number;
+    [key: string]: number | string | undefined;
+  }>;
+}
+
 export interface FinancialsXbrl {
   ticker: string;
   cik: string;
@@ -71,7 +90,8 @@ export interface FinancialsXbrl {
     eps_diluted?: number;
     [key: string]: number | string | undefined;
   }>;
-  metrics?: Record<string, unknown>;
+  metrics?: Record<string, XbrlMetricSeries>;
+  notes_xbrl?: Record<string, NoteSectionXbrl>;
 }
 
 export interface PaywallError {

@@ -67,6 +67,475 @@ METRIC_LABELS: dict[str, str] = {
 MAX_ANNUAL_PERIODS = 5
 MAX_QUARTERLY_PERIODS = 8
 
+# Note section id -> metric definitions (key, label, candidate us-gaap concepts)
+NOTE_SECTION_METRICS: dict[str, list[dict[str, Any]]] = {
+    "note-summary-policies": [
+        {
+            "key": "cash",
+            "label": "Cash & equivalents",
+            "concepts": [
+                "CashAndCashEquivalentsAtCarryingValue",
+                "CashCashEquivalentsAndShortTermInvestments",
+            ],
+        },
+        {
+            "key": "total_assets",
+            "label": "Total assets",
+            "concepts": ["Assets"],
+        },
+    ],
+    "note-revenue": [
+        {
+            "key": "revenue",
+            "label": "Revenue",
+            "concepts": [
+                "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "Revenues",
+                "SalesRevenueNet",
+            ],
+        },
+        {
+            "key": "deferred_revenue",
+            "label": "Deferred revenue",
+            "concepts": [
+                "ContractWithCustomerLiability",
+                "DeferredRevenueCurrent",
+                "DeferredRevenueNoncurrent",
+            ],
+        },
+        {
+            "key": "unbilled_receivables",
+            "label": "Unbilled receivables",
+            "concepts": [
+                "ContractWithCustomerAssetNet",
+                "ContractWithCustomerAssetNetCurrent",
+            ],
+        },
+    ],
+    "note-segments": [
+        {
+            "key": "segment_assets",
+            "label": "Segment assets",
+            "concepts": ["SegmentReportingSegmentAssets"],
+        },
+        {
+            "key": "segment_operating_income",
+            "label": "Segment operating income",
+            "concepts": ["SegmentReportingInformationOperatingIncomeLoss"],
+        },
+        {
+            "key": "revenue",
+            "label": "Total revenue",
+            "concepts": [
+                "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "Revenues",
+            ],
+        },
+    ],
+    "note-cash": [
+        {
+            "key": "cash",
+            "label": "Cash & equivalents",
+            "concepts": [
+                "CashAndCashEquivalentsAtCarryingValue",
+                "CashCashEquivalentsAndShortTermInvestments",
+            ],
+        },
+        {
+            "key": "restricted_cash",
+            "label": "Restricted cash",
+            "concepts": [
+                "RestrictedCashAndCashEquivalentsAtCarryingValue",
+                "RestrictedCash",
+                "RestrictedCashAndCashEquivalentsNoncurrent",
+            ],
+        },
+    ],
+    "note-investments": [
+        {
+            "key": "marketable_securities",
+            "label": "Marketable securities",
+            "concepts": [
+                "MarketableSecuritiesCurrent",
+                "AvailableForSaleSecuritiesDebtSecurities",
+                "ShortTermInvestments",
+            ],
+        },
+        {
+            "key": "afs_fair_value",
+            "label": "AFS securities (fair value)",
+            "concepts": ["AvailableForSaleSecuritiesFairValueDisclosure"],
+        },
+        {
+            "key": "equity_investments",
+            "label": "Equity investments",
+            "concepts": [
+                "EquitySecuritiesFvNi",
+                "EquitySecuritiesWithoutReadilyDeterminableFairValueAmount",
+            ],
+        },
+    ],
+    "note-fair-value": [
+        {
+            "key": "afs_fair_value",
+            "label": "AFS securities (fair value)",
+            "concepts": ["AvailableForSaleSecuritiesFairValueDisclosure"],
+        },
+        {
+            "key": "derivative_assets",
+            "label": "Derivative assets",
+            "concepts": ["DerivativeAssets", "DerivativeFairValueOfDerivativeAsset"],
+        },
+        {
+            "key": "derivative_liabilities",
+            "label": "Derivative liabilities",
+            "concepts": ["DerivativeLiabilities", "DerivativeFairValueOfDerivativeLiability"],
+        },
+    ],
+    "note-receivables": [
+        {
+            "key": "accounts_receivable",
+            "label": "Accounts receivable, net",
+            "concepts": [
+                "AccountsReceivableNetCurrent",
+                "ReceivablesNetCurrent",
+            ],
+        },
+        {
+            "key": "allowance_doubtful",
+            "label": "Allowance for doubtful accounts",
+            "concepts": ["AllowanceForDoubtfulAccountsReceivableCurrent"],
+        },
+    ],
+    "note-inventory": [
+        {
+            "key": "inventory",
+            "label": "Inventory, net",
+            "concepts": ["InventoryNet", "InventoryFinishedGoods", "InventoryGross"],
+        },
+    ],
+    "note-ppe": [
+        {
+            "key": "ppe_net",
+            "label": "PP&E, net",
+            "concepts": ["PropertyPlantAndEquipmentNet"],
+        },
+        {
+            "key": "ppe_gross",
+            "label": "PP&E, gross",
+            "concepts": ["PropertyPlantAndEquipmentGross"],
+        },
+        {
+            "key": "accumulated_depreciation",
+            "label": "Accumulated depreciation",
+            "concepts": [
+                "AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment",
+            ],
+        },
+    ],
+    "note-goodwill": [
+        {
+            "key": "goodwill",
+            "label": "Goodwill",
+            "concepts": ["Goodwill"],
+        },
+        {
+            "key": "intangibles_net",
+            "label": "Intangible assets, net",
+            "concepts": [
+                "IntangibleAssetsNetExcludingGoodwill",
+                "FiniteLivedIntangibleAssetsNet",
+            ],
+        },
+        {
+            "key": "goodwill_impairment",
+            "label": "Goodwill impairment",
+            "concepts": ["GoodwillImpairmentLoss"],
+        },
+    ],
+    "note-leases": [
+        {
+            "key": "operating_lease_liability",
+            "label": "Operating lease liability",
+            "concepts": [
+                "OperatingLeaseLiability",
+                "OperatingLeaseLiabilityNoncurrent",
+            ],
+        },
+        {
+            "key": "finance_lease_liability",
+            "label": "Finance lease liability",
+            "concepts": ["FinanceLeaseLiability"],
+        },
+        {
+            "key": "operating_rou_asset",
+            "label": "Operating lease ROU asset",
+            "concepts": ["OperatingLeaseRightOfUseAsset"],
+        },
+        {
+            "key": "finance_rou_asset",
+            "label": "Finance lease ROU asset",
+            "concepts": ["FinanceLeaseRightOfUseAsset"],
+        },
+    ],
+    "note-debt": [
+        {
+            "key": "long_term_debt",
+            "label": "Long-term debt",
+            "concepts": [
+                "LongTermDebt",
+                "LongTermDebtNoncurrent",
+                "DebtInstrumentCarryingAmount",
+            ],
+        },
+        {
+            "key": "short_term_debt",
+            "label": "Short-term debt",
+            "concepts": [
+                "ShortTermBorrowings",
+                "LongTermDebtCurrent",
+                "CommercialPaper",
+            ],
+        },
+        {
+            "key": "total_debt",
+            "label": "Total debt",
+            "concepts": ["DebtAndCapitalLeaseObligations", "DebtCurrent"],
+        },
+    ],
+    "note-derivatives": [
+        {
+            "key": "derivative_assets",
+            "label": "Derivative assets",
+            "concepts": ["DerivativeAssets", "DerivativeFairValueOfDerivativeAsset"],
+        },
+        {
+            "key": "derivative_liabilities",
+            "label": "Derivative liabilities",
+            "concepts": ["DerivativeLiabilities", "DerivativeFairValueOfDerivativeLiability"],
+        },
+    ],
+    "note-pension": [
+        {
+            "key": "benefit_obligation",
+            "label": "Benefit obligation",
+            "concepts": [
+                "DefinedBenefitPlanBenefitObligation",
+                "PensionPlansDefinedBenefitPlanObligationBenefitObligation",
+            ],
+        },
+        {
+            "key": "plan_assets",
+            "label": "Plan assets (fair value)",
+            "concepts": [
+                "DefinedBenefitPlanFairValueOfPlanAssets",
+                "PensionPlansDefinedBenefitPlanFairValueOfPlanAssets",
+            ],
+        },
+    ],
+    "note-income-tax": [
+        {
+            "key": "income_tax_expense",
+            "label": "Income tax expense",
+            "concepts": ["IncomeTaxExpenseBenefit"],
+        },
+        {
+            "key": "deferred_tax_assets",
+            "label": "Deferred tax assets, net",
+            "concepts": ["DeferredIncomeTaxAssetsNet"],
+        },
+        {
+            "key": "deferred_tax_liabilities",
+            "label": "Deferred tax liabilities, net",
+            "concepts": ["DeferredIncomeTaxLiabilitiesNet"],
+        },
+        {
+            "key": "effective_tax_rate",
+            "label": "Effective tax rate",
+            "concepts": ["EffectiveIncomeTaxRateContinuingOperations"],
+        },
+    ],
+    "note-stock-comp": [
+        {
+            "key": "share_based_comp",
+            "label": "Share-based compensation",
+            "concepts": [
+                "ShareBasedCompensation",
+                "AllocatedShareBasedCompensationExpense",
+            ],
+        },
+        {
+            "key": "unrecognized_comp",
+            "label": "Unrecognized compensation cost",
+            "concepts": [
+                "EmployeeServiceShareBasedCompensationNonvestedAwardsTotalCompensationCostNotYetRecognized",
+            ],
+        },
+    ],
+    "note-equity": [
+        {
+            "key": "stockholders_equity",
+            "label": "Stockholders' equity",
+            "concepts": [
+                "StockholdersEquity",
+                "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+            ],
+        },
+        {
+            "key": "retained_earnings",
+            "label": "Retained earnings",
+            "concepts": ["RetainedEarningsAccumulatedDeficit"],
+        },
+        {
+            "key": "treasury_stock",
+            "label": "Treasury stock",
+            "concepts": ["TreasuryStockValue", "TreasuryStockValueAcquiredCostMethod"],
+        },
+        {
+            "key": "common_shares_outstanding",
+            "label": "Common shares outstanding",
+            "concepts": ["CommonStockSharesOutstanding"],
+        },
+    ],
+    "note-eps": [
+        {
+            "key": "eps_basic",
+            "label": "EPS (basic)",
+            "concepts": ["EarningsPerShareBasic"],
+        },
+        {
+            "key": "eps_diluted",
+            "label": "EPS (diluted)",
+            "concepts": ["EarningsPerShareDiluted"],
+        },
+        {
+            "key": "shares_basic",
+            "label": "Weighted avg shares (basic)",
+            "concepts": ["WeightedAverageNumberOfSharesOutstandingBasic"],
+        },
+        {
+            "key": "shares_diluted",
+            "label": "Weighted avg shares (diluted)",
+            "concepts": ["WeightedAverageNumberOfDilutedSharesOutstanding"],
+        },
+    ],
+    "note-aoci": [
+        {
+            "key": "aoci",
+            "label": "AOCI, net of tax",
+            "concepts": ["AccumulatedOtherComprehensiveIncomeLossNetOfTax"],
+        },
+        {
+            "key": "aoci_foreign_currency",
+            "label": "Foreign currency translation",
+            "concepts": [
+                "AccumulatedOtherComprehensiveIncomeLossForeignCurrencyTranslationAdjustmentNetOfTax",
+            ],
+        },
+        {
+            "key": "aoci_unrealized_gains",
+            "label": "Unrealized gains/losses on securities",
+            "concepts": [
+                "AccumulatedOtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+            ],
+        },
+    ],
+    "note-restructuring": [
+        {
+            "key": "restructuring_charges",
+            "label": "Restructuring charges",
+            "concepts": ["RestructuringCharges", "RestructuringCosts"],
+        },
+        {
+            "key": "restructuring_reserve",
+            "label": "Restructuring reserve",
+            "concepts": ["RestructuringReserve", "RestructuringReserveCurrent"],
+        },
+    ],
+    "note-impairment": [
+        {
+            "key": "asset_impairment",
+            "label": "Asset impairment charges",
+            "concepts": ["AssetImpairmentCharges"],
+        },
+        {
+            "key": "goodwill_impairment",
+            "label": "Goodwill impairment",
+            "concepts": ["GoodwillImpairmentLoss"],
+        },
+        {
+            "key": "intangible_impairment",
+            "label": "Intangible impairment",
+            "concepts": [
+                "ImpairmentOfIntangibleAssetsExcludingGoodwill",
+                "ImpairmentOfIntangibleAssetsIndefinitelivedExcludingGoodwill",
+            ],
+        },
+    ],
+    "note-acquisitions": [
+        {
+            "key": "acquisition_payments",
+            "label": "Acquisition payments (net of cash)",
+            "concepts": ["PaymentsToAcquireBusinessesNetOfCashAcquired"],
+        },
+        {
+            "key": "goodwill_from_acquisition",
+            "label": "Goodwill from acquisitions",
+            "concepts": ["BusinessAcquisitionPurchasePriceAllocationGoodwillAmount"],
+        },
+        {
+            "key": "intangibles_from_acquisition",
+            "label": "Acquired intangibles",
+            "concepts": [
+                "BusinessAcquisitionPurchasePriceAllocationAmortizableIntangibleAssets",
+            ],
+        },
+    ],
+    "note-software": [
+        {
+            "key": "capitalized_software",
+            "label": "Capitalized software, net",
+            "concepts": [
+                "CapitalizedComputerSoftwareNet",
+                "CapitalizedComputerSoftwareGross",
+            ],
+        },
+        {
+            "key": "software_amortization",
+            "label": "Software amortization",
+            "concepts": ["CapitalizedComputerSoftwareAmortization"],
+        },
+    ],
+    "note-related-party": [
+        {
+            "key": "related_party_expenses",
+            "label": "Related party expenses",
+            "concepts": [
+                "RelatedPartyTransactionExpensesFromTransactionsWithRelatedParty",
+            ],
+        },
+        {
+            "key": "related_party_revenue",
+            "label": "Related party revenue",
+            "concepts": [
+                "RelatedPartyTransactionRevenuesFromTransactionsWithRelatedParty",
+            ],
+        },
+    ],
+    "note-contingencies": [
+        {
+            "key": "loss_contingency",
+            "label": "Loss contingency accrual",
+            "concepts": ["LossContingencyAccrualCarryingValueCurrent"],
+        },
+        {
+            "key": "purchase_obligations",
+            "label": "Purchase obligations",
+            "concepts": ["PurchaseObligation"],
+        },
+    ],
+}
+
 
 async def fetch_company_facts(cik: str) -> tuple[dict[str, Any], bool]:
     """Fetch raw companyfacts JSON; returns (data, from_cache)."""
@@ -170,33 +639,7 @@ def _obs_to_period(obs: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def extract_financial_metrics(
-    facts: dict[str, Any],
-    *,
-    fiscal_year: int | None = None,
-) -> dict[str, Any]:
-    """Map raw companyfacts payload to compare-friendly metrics."""
-    gaap = (facts.get("facts") or {}).get("us-gaap") or {}
-    metrics: dict[str, Any] = {}
-
-    for key, concepts in METRIC_CONCEPTS.items():
-        concept = _pick_concept(gaap, concepts)
-        if not concept:
-            continue
-        unit, entries = _unit_entries(concept)
-        annual = _filter_annual(entries, fiscal_year)
-        quarterly = _filter_quarterly(entries, fiscal_year)
-        if not annual and not quarterly:
-            continue
-        metrics[key] = {
-            "label": METRIC_LABELS.get(key, concept.get("label", key)),
-            "concept": concept.get("label"),
-            "unit": unit,
-            "annual": [_obs_to_period(o) for o in annual],
-            "quarterly": [_obs_to_period(o) for o in quarterly],
-        }
-
-    # Pivot annual metrics by fiscal year for side-by-side compare rows
+def _build_annual_summary(metrics: dict[str, Any]) -> list[dict[str, Any]]:
     years: set[int] = set()
     for m in metrics.values():
         for p in m.get("annual", []):
@@ -211,6 +654,66 @@ def extract_financial_metrics(
                 row[key] = match["value"]
                 row[f"{key}_end"] = match.get("end")
         annual_summary.append(row)
+    return annual_summary
+
+
+def _extract_metrics_from_defs(
+    gaap: dict[str, Any],
+    metric_defs: list[dict[str, Any]],
+    *,
+    fiscal_year: int | None = None,
+) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    for defn in metric_defs:
+        key = defn["key"]
+        concepts = defn["concepts"]
+        concept = _pick_concept(gaap, concepts)
+        if not concept:
+            continue
+        unit, entries = _unit_entries(concept)
+        annual = _filter_annual(entries, fiscal_year)
+        quarterly = _filter_quarterly(entries, fiscal_year)
+        if not annual and not quarterly:
+            continue
+        metrics[key] = {
+            "label": defn.get("label", concept.get("label", key)),
+            "concept": concept.get("label"),
+            "unit": unit,
+            "annual": [_obs_to_period(o) for o in annual],
+            "quarterly": [_obs_to_period(o) for o in quarterly],
+        }
+    return metrics
+
+
+def _metric_defs_from_concepts(
+    concepts_map: dict[str, list[str]],
+    labels_map: dict[str, str],
+) -> list[dict[str, Any]]:
+    return [
+        {"key": key, "label": labels_map.get(key, key), "concepts": concepts}
+        for key, concepts in concepts_map.items()
+    ]
+
+
+def _note_section_label(section_id: str) -> str:
+    from sec.section_extractor import SECTION_DEFINITIONS
+
+    for section in SECTION_DEFINITIONS:
+        if section["id"] == section_id:
+            return str(section["label"])
+    return section_id.replace("-", " ").title()
+
+
+def extract_financial_metrics(
+    facts: dict[str, Any],
+    *,
+    fiscal_year: int | None = None,
+) -> dict[str, Any]:
+    """Map raw companyfacts payload to compare-friendly metrics."""
+    gaap = (facts.get("facts") or {}).get("us-gaap") or {}
+    metric_defs = _metric_defs_from_concepts(METRIC_CONCEPTS, METRIC_LABELS)
+    metrics = _extract_metrics_from_defs(gaap, metric_defs, fiscal_year=fiscal_year)
+    annual_summary = _build_annual_summary(metrics)
 
     return {
         "entity_name": facts.get("entityName"),
@@ -218,6 +721,31 @@ def extract_financial_metrics(
         "metrics": metrics,
         "annual_summary": annual_summary,
     }
+
+
+def extract_note_sections(
+    facts: dict[str, Any],
+    *,
+    fiscal_year: int | None = None,
+) -> dict[str, Any]:
+    """Map companyfacts to footnote section metrics keyed by note-* section id."""
+    gaap = (facts.get("facts") or {}).get("us-gaap") or {}
+    notes: dict[str, Any] = {}
+
+    for section_id, metric_defs in NOTE_SECTION_METRICS.items():
+        metrics = _extract_metrics_from_defs(gaap, metric_defs, fiscal_year=fiscal_year)
+        if not metrics:
+            continue
+        annual_summary = _build_annual_summary(metrics)
+        notes[section_id] = {
+            "section_id": section_id,
+            "label": _note_section_label(section_id),
+            "metrics": metrics,
+            "annual_summary": annual_summary,
+            "has_data": True,
+        }
+
+    return notes
 
 
 async def fetch_ticker_financials(
@@ -231,6 +759,7 @@ async def fetch_ticker_financials(
     resolved = await resolve_ticker(ticker, ticker_map)
     facts, from_cache = await fetch_company_facts(resolved["cik"])
     extracted = extract_financial_metrics(facts, fiscal_year=fiscal_year)
+    notes_xbrl = extract_note_sections(facts, fiscal_year=fiscal_year)
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
 
     cik_padded = str(int(resolved["cik"])).zfill(10)
@@ -243,5 +772,6 @@ async def fetch_ticker_financials(
         "api_url": COMPANYFACTS_URL.format(cik=cik_padded),
         "from_cache": from_cache,
         "fetch_ms": elapsed_ms,
+        "notes_xbrl": notes_xbrl,
         **{k: v for k, v in extracted.items() if k not in ("entity_name", "cik")},
     }
