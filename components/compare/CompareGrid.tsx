@@ -3,24 +3,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
-  getAuthMe,
+  checkApiHealth,
   parseFilingsStream,
   type FilingColumn,
   type ParseResponse,
 } from "@/lib/api";
 import { getComparableSectionIds } from "@/lib/sections";
-import { hasRenderableSections, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
+import { hasParsedColumns, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
+import { useAuth } from "@/hooks/useAuth";
+import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
 import SectionNav from "./SectionNav";
+import YearPicker from "./YearPicker";
+import PeerGroupsMenu from "./PeerGroupsMenu";
 import PaywallModal from "../billing/PaywallModal";
 import TickerSearchBar from "../TickerSearchBar";
 
 interface CompareGridProps {
   tickers: string[];
   fiscalYear?: number;
+  slugError?: string | null;
 }
 
-export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
+export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareGridProps) {
   const cacheKey = useMemo(() => parseMetaCacheKey(tickers, fiscalYear), [tickers, fiscalYear]);
   const [data, setData] = useState<ParseResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,7 +38,26 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
     message: "",
   });
   const [tier, setTier] = useState("free");
+  const { auth } = useAuth();
+  const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
   const loadIdRef = useRef(0);
+
+  const columnMinWidth = 300;
+
+  useEffect(() => {
+    if (auth?.tier) setTier(auth.tier);
+  }, [auth?.tier]);
+
+  useEffect(() => {
+    checkApiHealth().then(setApiHealthy);
+  }, []);
+
+  useEffect(() => {
+    if (!slugError) return;
+    setLoading(false);
+    setError("");
+  }, [slugError]);
 
   const availableSectionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -51,21 +75,14 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
     setError("");
 
     const cached = loadParseMeta(cacheKey);
-    if (cached && hasRenderableSections(cached)) {
+    if (cached && hasParsedColumns(cached)) {
       setData(cached);
       setLoading(false);
       setLoadingTickers([]);
       const navigable = getComparableSectionIds(cached.columns);
       setActiveSection((prev) => prev ?? navigable[0] ?? null);
-      getAuthMe()
-        .then((auth) => setTier(auth.tier))
-        .catch(() => null);
       return;
     }
-
-    getAuthMe()
-      .then((auth) => setTier(auth.tier))
-      .catch(() => null);
 
     let catalog: ParseResponse["section_catalog"] = [];
     let parsedAt = new Date().toISOString();
@@ -85,6 +102,9 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
           else columns.push(column);
 
           setLoadingTickers((pending) => pending.filter((t) => t !== column.ticker));
+          if (column.sections.length > 0) {
+            setLoading(false);
+          }
           setData({
             columns: [...columns],
             section_catalog: catalog,
@@ -131,11 +151,16 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
   }, [cacheKey, tickers, fiscalYear]);
 
   useEffect(() => {
+    if (slugError) return;
     loadFilings();
-  }, [loadFilings]);
+  }, [loadFilings, slugError]);
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
+  }, []);
+
+  const handlePaywall = useCallback((reason: string, message: string) => {
+    setPaywall({ open: true, reason, message });
   }, []);
 
   const activeSectionLabel = useMemo(() => {
@@ -146,10 +171,27 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
   const showWorkspace = data && data.columns.length > 0 && !loading;
   const showPartialWorkspace = data && data.columns.length > 0 && loading;
 
+  if (slugError) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center px-4 text-center">
+        <p className="text-sm font-medium text-slate-800">Invalid comparison URL</p>
+        <p className="mt-2 max-w-md text-sm text-slate-600">{slugError}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 py-2">
-        <TickerSearchBar initialTickers={tickers} compact />
+      <ApiHealthBanner healthy={apiHealthy} />
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
+        <TickerSearchBar initialTickers={tickers} compact fiscalYear={fiscalYear} />
+        <YearPicker fiscalYear={fiscalYear} tier={tier} onPaywall={handlePaywall} />
+        <PeerGroupsMenu
+          tickers={tickers}
+          fiscalYear={fiscalYear}
+          tier={tier}
+          onPaywall={handlePaywall}
+        />
         <div className="ml-auto flex items-center gap-3">
           {tier === "professional" && (
             <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
@@ -190,8 +232,17 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
         )}
 
         {error && !data && (
-          <div className="flex flex-1 items-center justify-center">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="flex flex-1 items-center justify-center p-6">
+            <div className="max-w-md text-center">
+              <p className="text-sm font-medium text-red-700">Could not load filings</p>
+              <p className="mt-2 text-sm text-red-600">{error}</p>
+              {apiHealthy === false && (
+                <p className="mt-3 text-xs text-slate-500">
+                  The API at port 8000 is not responding. Run <code className="font-mono">start.bat</code>{" "}
+                  and try again.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -215,14 +266,23 @@ export default function CompareGrid({ tickers, fiscalYear }: CompareGridProps) {
               sectionCatalog={data.section_catalog}
               activeSection={activeSection}
               onSectionSelect={handleSectionSelect}
+              mobileOpen={navOpen}
+              onMobileClose={() => setNavOpen(false)}
             />
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setNavOpen(true)}
+                className="absolute bottom-4 left-4 z-10 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-md md:hidden"
+              >
+                Sections
+              </button>
               <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
                 <div
                   className="compare-columns-grid grid h-full min-h-0"
                   style={{
-                    gridTemplateColumns: `repeat(${tickers.length}, minmax(360px, 1fr))`,
-                    minWidth: `${tickers.length * 360}px`,
+                    gridTemplateColumns: `repeat(${tickers.length}, minmax(${columnMinWidth}px, 1fr))`,
+                    minWidth: `${tickers.length * columnMinWidth}px`,
                   }}
                 >
                   {tickers.map((ticker) => {

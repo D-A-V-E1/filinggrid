@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { createCheckout, createPortal, getAuthMe, type AuthMe } from "@/lib/api";
-import { isCorporateEmail } from "@/lib/utils";
+import { usePathname, useSearchParams } from "next/navigation";
+import MagicLinkForm from "@/components/auth/MagicLinkForm";
+import { createCheckout, createPortal } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PaywallModalProps {
   open: boolean;
@@ -13,52 +14,42 @@ interface PaywallModalProps {
 }
 
 export default function PaywallModal({ open, reason, message, onClose }: PaywallModalProps) {
-  const [email, setEmail] = useState("");
-  const [step, setStep] = useState<"email" | "magic-link" | "checkout">("email");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnPath =
+    pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
+
+  const { auth, isSignedIn, refresh } = useAuth();
+  const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [auth, setAuth] = useState<AuthMe | null>(null);
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     if (open) {
-      getAuthMe()
-        .then((me) => {
-          setAuth(me);
-          if (me.is_authenticated) setStep("checkout");
-        })
-        .catch(() => setAuth(null));
+      refresh();
+      setShowCheckout(false);
+      setError("");
+      setFormKey((k) => k + 1);
     }
-  }, [open]);
+  }, [open, refresh]);
+
+  useEffect(() => {
+    if (open && isSignedIn) {
+      setShowCheckout(true);
+    }
+  }, [open, isSignedIn]);
 
   if (!open) return null;
-
-  async function handleMagicLink() {
-    setError("");
-    if (!isCorporateEmail(email)) {
-      setError("Professional tier requires a corporate email address.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-      });
-      if (authError) throw authError;
-      setStep("magic-link");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send magic link");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleCheckout() {
     setLoading(true);
     setError("");
     try {
-      const { checkout_url } = await createCheckout(email || auth?.email || undefined);
+      const { checkout_url } = await createCheckout({
+        email: auth?.email || undefined,
+        returnPath,
+      });
       window.location.href = checkout_url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Checkout failed");
@@ -69,7 +60,7 @@ export default function PaywallModal({ open, reason, message, onClose }: Paywall
   async function handlePortal() {
     setLoading(true);
     try {
-      const { portal_url } = await createPortal();
+      const { portal_url } = await createPortal(returnPath);
       window.location.href = portal_url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Portal unavailable");
@@ -127,35 +118,20 @@ export default function PaywallModal({ open, reason, message, onClose }: Paywall
           </li>
         </ul>
 
-        {step === "email" && !auth?.is_authenticated && (
-          <div className="space-y-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        {!showCheckout ? (
+          <div key={formKey}>
+            <MagicLinkForm
+              returnPath={returnPath}
+              requireCorporateEmail
+              submitLabel="Send magic link to continue"
+              onComplete={() => {
+                refresh().then(() => setShowCheckout(true));
+              }}
             />
-            <button
-              type="button"
-              onClick={handleMagicLink}
-              disabled={loading || !email}
-              className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              {loading ? "Sending…" : "Send magic link"}
-            </button>
           </div>
-        )}
-
-        {step === "magic-link" && (
-          <div className="rounded-lg bg-brand-50 p-4 text-sm text-brand-800">
-            Check your inbox for a sign-in link. After signing in, return here to complete checkout.
-          </div>
-        )}
-
-        {(auth?.is_authenticated || step === "checkout") && (
+        ) : (
           <div className="space-y-3">
-            {auth?.is_authenticated && (
+            {auth?.email && (
               <p className="text-sm text-slate-600">
                 Signed in as <span className="font-medium">{auth.email}</span>
               </p>

@@ -1,7 +1,7 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
-import type { FilingSection } from "@/lib/api";
+import { memo, useEffect, useRef, useState } from "react";
+import { fetchSectionHtml, type FilingSection } from "@/lib/api";
 
 interface FilingColumnProps {
   ticker: string;
@@ -31,16 +31,60 @@ function FilingColumn({
   error,
 }: FilingColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [loadedHtml, setLoadedHtml] = useState<Record<string, string>>({});
+  const [loadingSection, setLoadingSection] = useState(false);
+  const [sectionError, setSectionError] = useState("");
+
   const section = activeSection ? sections.find((s) => s.id === activeSection) : sections[0];
+  const sectionId = section?.id ?? activeSection;
   const displayLabel = section
     ? formatSectionLabel(section.label)
     : sectionLabel
       ? formatSectionLabel(sectionLabel)
       : "Select a section";
 
+  const html =
+    (section?.html && section.html.length > 0
+      ? section.html
+      : sectionId
+        ? loadedHtml[sectionId]
+        : undefined) ?? "";
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [activeSection, ticker]);
+
+  useEffect(() => {
+    if (!sectionId || !section) {
+      setLoadingSection(false);
+      return;
+    }
+    if (section.html && section.html.length > 0) return;
+    if (loadedHtml[sectionId]) return;
+
+    let cancelled = false;
+    setLoadingSection(true);
+    setSectionError("");
+
+    fetchSectionHtml(ticker, sectionId, fiscalYear)
+      .then((fetched) => {
+        if (!cancelled) {
+          setLoadedHtml((prev) => ({ ...prev, [sectionId]: fetched }));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setSectionError(err instanceof Error ? err.message : "Failed to load section");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSection(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sectionId, section, ticker, fiscalYear, loadedHtml]);
 
   if (error) {
     return (
@@ -83,12 +127,25 @@ function FilingColumn({
                 {ticker} did not include this disclosure in the selected period.
               </p>
             </div>
-          ) : section.html && section.html.length > 0 ? (
+          ) : sectionError ? (
+            <article className="rounded-lg border border-red-200 bg-white px-5 py-5 shadow-sm">
+              <p className="text-sm text-red-600">{sectionError}</p>
+            </article>
+          ) : html.length > 0 ? (
             <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
               <div
                 className="filing-content prose prose-sm max-w-none font-serif text-slate-800 prose-headings:font-sans prose-headings:text-slate-900 prose-table:text-xs prose-td:px-2 prose-th:px-2 prose-th:font-semibold"
-                dangerouslySetInnerHTML={{ __html: section.html }}
+                dangerouslySetInnerHTML={{ __html: html }}
               />
+            </article>
+          ) : loadingSection ? (
+            <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 w-3/4 rounded bg-slate-200" />
+                <div className="h-4 w-full rounded bg-slate-100" />
+                <div className="h-4 w-5/6 rounded bg-slate-100" />
+                <div className="h-4 w-2/3 rounded bg-slate-100" />
+              </div>
             </article>
           ) : (
             <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">

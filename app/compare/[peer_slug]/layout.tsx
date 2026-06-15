@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const names = data?.columns?.map((c: { company_name: string }) => c.company_name) ?? tickers;
 
   const title = `${tickerStr} SEC Filing Comparison — ${year} 10-K Footnotes & MD&A`;
-  const description = `Side-by-side SEC filing footnote and MD&A comparison between ${names.join(", ")}. Stateless, private ${year} 10-K and 10-Q disclosure workspace powered by FilingGrid.`;
+  const description = `Side-by-side SEC filing footnote and MD&A comparison between ${names.join(", ")}. Fast, private ${year} 10-K and 10-Q disclosure workspace powered by FilingGrid.`;
 
   return {
     title,

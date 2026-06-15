@@ -54,17 +54,23 @@ class SectionHtmlResponse(BaseModel):
     cache_key: str | None = None
 
 
-def _sections_for_response(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {
+def _sections_for_response(
+    sections: list[dict[str, Any]],
+    *,
+    include_html: bool = True,
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for s in sections:
+        entry: dict[str, Any] = {
             "id": s["id"],
             "label": s["label"],
             "heading": s.get("heading", ""),
-            "html": s.get("html", ""),
             "text_preview": s.get("text_preview", ""),
         }
-        for s in sections
-    ]
+        if include_html:
+            entry["html"] = s.get("html", "")
+        result.append(entry)
+    return result
 
 
 def _build_column_result(
@@ -73,9 +79,10 @@ def _build_column_result(
     cache_key: str,
     *,
     from_cache: bool,
+    include_html: bool = True,
 ) -> ColumnResult:
     col_dict = column.model_dump()
-    col_dict["sections"] = _sections_for_response(sections_full)
+    col_dict["sections"] = _sections_for_response(sections_full, include_html=include_html)
     col_dict["cache_key"] = cache_key
     col_dict["from_cache"] = from_cache
     if not from_cache:
@@ -199,7 +206,9 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
     for task in asyncio.as_completed(tasks):
         column, sections_full, cache_key, from_cache = await task
         if cache_key and sections_full:
-            payload = _build_column_result(column, sections_full, cache_key, from_cache=from_cache)
+            payload = _build_column_result(
+                column, sections_full, cache_key, from_cache=from_cache, include_html=False
+            )
         else:
             payload = column
         yield json.dumps({"type": "column", "column": payload.model_dump()}) + "\n"
@@ -216,8 +225,13 @@ async def get_section_html(
     html = find_section_html(ticker, section_id, fiscal_year)
 
     if html is None:
-        request = ParseRequest(tickers=[ticker], fiscal_year=fiscal_year)
-        await parse_filings(request)
+        target_year = fiscal_year or datetime.now().year
+        ticker_map = await fetch_ticker_map()
+        column, sections_full, cache_key, from_cache = await _parse_single_ticker(
+            ticker, ticker_map, target_year, fiscal_year
+        )
+        if cache_key and sections_full:
+            _build_column_result(column, sections_full, cache_key, from_cache=from_cache, include_html=False)
         html = find_section_html(ticker, section_id, fiscal_year)
 
     if html is None:

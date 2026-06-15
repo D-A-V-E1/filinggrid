@@ -14,3 +14,5 @@ pydantic[email]==2.10.2
 pydantic-settings==2.6.1
 email-validator==2.2.0
 eval-type-backport==0.2.2
+alembic==1.14.0
+pytest==8.3.4

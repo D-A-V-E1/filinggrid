@@ -15,12 +15,36 @@ from middleware import AuthContext, get_auth_context, require_auth, validate_cor
 settings = get_settings()
 router = APIRouter(prefix="/billing", tags=["billing"])
 
+DEFAULT_COMPARE_PATH = "/compare/aapl-vs-msft"
+
+
+def _sanitize_return_path(path: str | None, fallback: str = DEFAULT_COMPARE_PATH) -> str:
+    if not path or not path.startswith("/") or path.startswith("//"):
+        return fallback
+    if path == "/compare":
+        return DEFAULT_COMPARE_PATH
+    if path.startswith("/compare?"):
+        return f"{DEFAULT_COMPARE_PATH}{path[len('/compare'):]}"
+    if path.startswith("/auth/"):
+        return fallback
+    return path
+
+
+def _append_query(path: str, key: str, value: str) -> str:
+    separator = "&" if "?" in path else "?"
+    return f"{path}{separator}{key}={value}"
+
 if settings.stripe_secret_key:
     stripe.api_key = settings.stripe_secret_key
 
 
 class CheckoutRequest(BaseModel):
     email: Optional[EmailStr] = None
+    return_path: Optional[str] = None
+
+
+class PortalRequest(BaseModel):
+    return_path: Optional[str] = None
 
 
 class CheckoutResponse(BaseModel):
@@ -66,11 +90,14 @@ async def create_checkout(
         org.stripe_customer_id = customer.id
         db.commit()
 
+    return_path = _sanitize_return_path(body.return_path)
+    success_path = _append_query(return_path, "checkout", "success")
+
     session = stripe.checkout.Session.create(
         customer=org.stripe_customer_id,
         mode="subscription",
         line_items=[{"price": settings.stripe_price_professional, "quantity": 1}],
-        success_url=f"{settings.app_url}/compare?checkout=success",
+        success_url=f"{settings.app_url}{success_path}",
         cancel_url=f"{settings.app_url}/pricing?checkout=cancelled",
         metadata={"organization_id": org.id},
         allow_promotion_codes=True,
@@ -91,6 +118,7 @@ async def create_checkout(
 async def create_portal(
     auth: Annotated[AuthContext, Depends(require_auth)],
     db: Session = Depends(get_db),
+    body: PortalRequest | None = None,
 ):
     _ensure_stripe_configured()
     org = auth.organization
@@ -99,9 +127,10 @@ async def create_portal(
     if not org.stripe_customer_id:
         raise HTTPException(status_code=400, detail="No billing account found")
 
+    return_path = _sanitize_return_path(body.return_path if body else None)
     session = stripe.billing_portal.Session.create(
         customer=org.stripe_customer_id,
-        return_url=f"{settings.app_url}/compare",
+        return_url=f"{settings.app_url}{return_path}",
     )
     return PortalResponse(portal_url=session.url)
 

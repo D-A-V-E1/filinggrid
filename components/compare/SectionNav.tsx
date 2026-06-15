@@ -4,11 +4,12 @@ import { useEffect, useRef } from "react";
 import { NAV_GROUPS } from "@/lib/sections";
 
 interface SectionNavProps {
-  /** Section IDs that exist in at least one loaded filing. */
   availableSectionIds: Set<string>;
   sectionCatalog: { id: string; label: string }[];
   activeSection: string | null;
   onSectionSelect: (sectionId: string) => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 export default function SectionNav({
@@ -16,6 +17,8 @@ export default function SectionNav({
   sectionCatalog,
   activeSection,
   onSectionSelect,
+  mobileOpen = false,
+  onMobileClose,
 }: SectionNavProps) {
   const navScrollRef = useRef<HTMLDivElement>(null);
   const activeButtonRef = useRef<HTMLButtonElement>(null);
@@ -27,17 +30,32 @@ export default function SectionNav({
     }
   }, [activeSection]);
 
-  return (
+  function handleSelect(sectionId: string) {
+    onSectionSelect(sectionId);
+    onMobileClose?.();
+  }
+
+  const navContent = (
     <nav
-      className="z-20 flex h-full w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50"
+      className="flex h-full w-60 max-w-[85vw] shrink-0 flex-col border-r border-slate-200 bg-slate-50"
       aria-label="SEC disclosure sections"
     >
-      <div className="shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-          Sections
-        </p>
-        {availableSectionIds.size === 0 && (
-          <p className="mt-1 text-[10px] text-slate-400">Waiting for filings…</p>
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Sections</p>
+          {availableSectionIds.size === 0 && (
+            <p className="mt-1 text-[10px] text-slate-400">Waiting for filings…</p>
+          )}
+        </div>
+        {onMobileClose && (
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700 md:hidden"
+            aria-label="Close section menu"
+          >
+            ×
+          </button>
         )}
       </div>
       <div ref={navScrollRef} className="min-h-0 flex-1 overflow-y-auto py-2">
@@ -60,7 +78,7 @@ export default function SectionNav({
                     <button
                       ref={activeSection === section.id ? activeButtonRef : undefined}
                       type="button"
-                      onClick={() => onSectionSelect(section.id)}
+                      onClick={() => handleSelect(section.id)}
                       className={`w-full px-4 py-1.5 text-left text-xs leading-snug transition ${
                         activeSection === section.id
                           ? "border-l-2 border-brand-600 bg-white font-medium text-brand-700"
@@ -77,5 +95,20 @@ export default function SectionNav({
         })}
       </div>
     </nav>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <div className="hidden h-full shrink-0 md:flex">{navContent}</div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={onMobileClose} aria-hidden="true" />
+          <div className="absolute inset-y-0 left-0 flex shadow-xl">{navContent}</div>
+        </div>
+      )}
+    </>
   );
 }

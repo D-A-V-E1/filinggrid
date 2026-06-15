@@ -20,6 +20,25 @@ export function normalizePeerSlug(tickers: string[]): string {
   return [...tickers].sort().map((t) => t.toLowerCase()).join("-vs-");
 }
 
+/** SEC ticker symbols are typically 1–5 letters; allow dots/hyphens for share classes. */
+export function isValidTicker(ticker: string): boolean {
+  return /^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker.toUpperCase());
+}
+
+export function validateCompareTickers(tickers: string[]): string | null {
+  if (tickers.length === 0) {
+    return "This comparison URL has no tickers. Use the search bar to build a valid compare link.";
+  }
+  if (tickers.length > 8) {
+    return "This comparison URL has too many tickers (maximum 8).";
+  }
+  const invalid = tickers.find((t) => !isValidTicker(t));
+  if (invalid) {
+    return `"${invalid}" does not look like a valid ticker symbol.`;
+  }
+  return null;
+}
+
 export const CONSUMER_DOMAINS = [
   "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
   "icloud.com", "aol.com", "protonmail.com",

@@ -8,8 +8,9 @@ const FEATURES = [
     description: "Compare up to 8 peer filers simultaneously with synchronized section navigation.",
   },
   {
-    title: "Stateless execution",
-    description: "Filings parsed in RAM and destroyed on session end. Zero filing persistence.",
+    title: "Smart local caching",
+    description:
+      "Public SEC filings are cached on the server after first fetch so repeat views load faster — without re-downloading from EDGAR each time.",
   },
   {
     title: "Institutional typography",
@@ -34,12 +35,13 @@ export default function HomePage() {
           </p>
           <h1 className="mx-auto max-w-2xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
             Compare SEC filings
-            <span className="block text-slate-400">side by side, in memory only</span>
+            <span className="block text-slate-400">side by side, without the wait</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-600">
             FilingGrid streams 10-K and 10-Q disclosures from EDGAR, splits them into
-            standard sections, and renders a synchronized multi-column workspace — with
-            zero filing content stored on our servers.
+            standard sections, and renders a synchronized multi-column workspace. Public
+            filings are cached locally for faster repeat access — only account and billing
+            data are stored in our database.
           </p>
           <div className="mx-auto mt-10">
             <TickerSearchBar />

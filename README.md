@@ -1,8 +1,8 @@
 # FilingGrid
 
-**Stateless, multi-column SEC filing and disclosure comparison workspace.**
+**Multi-column SEC filing and disclosure comparison workspace.**
 
-FilingGrid streams 10-K and 10-Q filings from SEC EDGAR, parses them into standard disclosure sections entirely in RAM, and renders a synchronized side-by-side comparison workspace. Filing content is never written to disk or stored in the database — only account, billing, and preference metadata are persisted.
+FilingGrid streams 10-K and 10-Q filings from SEC EDGAR, parses them into standard disclosure sections, and renders a synchronized side-by-side comparison workspace. Public filings are cached on the server for faster repeat access. Account, billing, and preference metadata are stored in PostgreSQL — filing content is not stored in your account database.
 
 ---
 
@@ -12,14 +12,16 @@ FilingGrid streams 10-K and 10-Q filings from SEC EDGAR, parses them into standa
 |---|---|---|
 | Frontend | Next.js 14 (App Router), Tailwind CSS | Compare workspace, SEO, paywall UI |
 | Backend | Python FastAPI | SEC parsing pipeline, auth gates, Stripe billing |
+| Filing cache | Disk + in-memory (`backend/.cache/filings`) | Speed up repeat SEC fetches |
 | Database | PostgreSQL + SQLAlchemy RLS | Users, orgs, subscriptions, peer groups |
 | Auth | Supabase (magic link) | Passwordless corporate email sign-in |
 | Billing | Stripe Checkout + Customer Portal | $29/mo Professional tier |
 
 ### Privacy model
 
-- **Persisted:** email, organization, subscription tier, Stripe customer ID, saved ticker lists
-- **Never persisted:** parsed filing HTML, footnote text, financial figures, session comparison data
+- **Persisted in database:** email, organization, subscription tier, Stripe customer ID, saved peer groups
+- **Cached on server (not in DB):** public SEC filing HTML and parsed sections for performance
+- **Browser session:** lightweight comparison metadata in `sessionStorage` (not full filing HTML)
 - **No localStorage** for filing content (auth uses HTTP-only session cookies via Supabase)
 
 ---
@@ -400,11 +402,16 @@ filinggrid/
 ├── backend/
 │   ├── main.py                   # FastAPI entry point
 │   ├── database.py               # SQLAlchemy schema + RLS
-│   ├── parser.py                 # Stateless SEC parsing pipeline
+│   ├── filing_parser.py          # SEC parsing + disk cache
+│   ├── filing_store.py           # Persistent filing cache
 │   ├── middleware.py             # JWT + tier gates
 │   ├── billing/stripe_routes.py  # Checkout, Portal, webhooks
+│   ├── alembic/                  # Database migrations
 │   └── sec/                      # EDGAR client + section extractor
-├── docker-compose.yml            # PostgreSQL
+├── docker-compose.yml            # PostgreSQL (+ optional API via --profile full)
+├── backend/Dockerfile            # Containerized FastAPI
+├── .github/workflows/ci.yml      # Build + smoke tests
+├── vercel.json                   # Frontend deploy config
 ├── .env.example
 └── README.md
 ```
@@ -413,13 +420,47 @@ filinggrid/
 
 ## Production deployment notes
 
+### Frontend (Vercel)
+
+- Connect the repo to Vercel; `vercel.json` is included
+- Set `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_API_URL`, Supabase, and Stripe publishable env vars
+- The `/api/backend/*` rewrite proxies to your hosted API URL
+
+### Backend (Docker)
+
+```bash
+docker compose --profile full up -d --build
+```
+
+This starts PostgreSQL and the FastAPI container on port 8000. Filing cache persists in the `filinggrid_cache` volume.
+
+Or build manually:
+
+```bash
+docker build -t filinggrid-api ./backend
+docker run -p 8000:8000 --env-file backend/.env filinggrid-api
+```
+
+### Database migrations
+
+For production, prefer Alembic over `init_db()`:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+`init_db()` (used by `start.bat` on first run) still works for local dev but calls `create_all()`.
+
+### Checklist
+
 - Set `NEXT_PUBLIC_APP_URL` and `APP_URL` to your production domain
 - Use a managed PostgreSQL instance (Supabase DB, RDS, etc.)
-- Run backend with `uvicorn main:app --host 0.0.0.0 --port 8000` behind a reverse proxy
-- Deploy frontend to Vercel or similar
-- Register production Stripe webhook endpoint
+- Run `alembic upgrade head` before first deploy
+- Register production Stripe webhook endpoint (`/webhooks/stripe`)
 - Update Supabase redirect URLs for production domain
 - Set a real `SEC_USER_AGENT` with your company contact email
+- Optional: run `python backend/scripts/prewarm_cache.py` to warm filing cache
 
 ---
 

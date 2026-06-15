@@ -1,5 +1,5 @@
 import CompareGrid from "@/components/compare/CompareGrid";
-import { parsePeerSlug } from "@/lib/utils";
+import { parsePeerSlug, validateCompareTickers } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ peer_slug: string }>;
@@ -11,6 +11,7 @@ export default async function ComparePage({ params, searchParams }: Props) {
   const { year } = await searchParams;
   const tickers = parsePeerSlug(peer_slug);
   const fiscalYear = year ? parseInt(year, 10) : undefined;
+  const slugError = validateCompareTickers(tickers);
 
-  return <CompareGrid tickers={tickers} fiscalYear={fiscalYear} />;
+  return <CompareGrid tickers={tickers} fiscalYear={fiscalYear} slugError={slugError} />;
 }

@@ -214,3 +214,24 @@ async def create_peer_group(
     return SavedPeerGroupResponse(
         id=group.id, group_name=group.group_name, tickers_list=group.tickers_list
     )
+
+
+@app.delete("/peer-groups/{group_id}")
+async def delete_peer_group(
+    group_id: str,
+    auth: Annotated[AuthContext, Depends(require_auth)],
+    db: Session = Depends(get_db),
+):
+    from middleware import check_professional_access
+
+    check_professional_access(auth)
+    db.info["current_org_id"] = auth.organization.id
+    group = db.query(SavedPeerGroup).filter(
+        SavedPeerGroup.id == group_id,
+        SavedPeerGroup.organization_id == auth.organization.id,
+    ).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Peer group not found")
+    db.delete(group)
+    db.commit()
+    return {"status": "deleted"}

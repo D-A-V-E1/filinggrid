@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "FilingGrid",
     short_name: "FilingGrid",
-    description: "Stateless SEC filing comparison workspace",
+    description: "Fast SEC filing comparison workspace",
     start_url: "/",
     display: "standalone",
     background_color: "#f8fafc",

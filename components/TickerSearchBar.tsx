@@ -14,9 +14,11 @@ interface TickerChip {
 export default function TickerSearchBar({
   initialTickers = [],
   compact = false,
+  fiscalYear,
 }: {
   initialTickers?: string[];
   compact?: boolean;
+  fiscalYear?: number;
 }) {
   const router = useRouter();
   const [tickers, setTickers] = useState<TickerChip[]>(
@@ -25,9 +27,11 @@ export default function TickerSearchBar({
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<{ ticker: string; company_name: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
   async function handleQueryChange(value: string) {
     setQuery(value.toUpperCase());
+    setSearchError("");
     if (value.length >= 1) {
       try {
         const results = await searchTickers(value);
@@ -35,6 +39,7 @@ export default function TickerSearchBar({
         setShowSuggestions(true);
       } catch {
         setSuggestions([]);
+        setSearchError("Ticker search unavailable — is the API running?");
       }
     } else {
       setSuggestions([]);
@@ -57,7 +62,11 @@ export default function TickerSearchBar({
 
   function handleCompare() {
     if (tickers.length < 2) return;
-    router.push(`/compare/${buildPeerSlug(tickers.map((t) => t.ticker))}`);
+    const slug = buildPeerSlug(tickers.map((t) => t.ticker));
+    const currentYear = new Date().getFullYear();
+    const year = fiscalYear ?? currentYear;
+    const url = year < currentYear ? `/compare/${slug}?year=${year}` : `/compare/${slug}`;
+    router.push(url);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -131,7 +140,12 @@ export default function TickerSearchBar({
           </button>
         </div>
       </div>
-      <PrivacyStrip className="mt-3 px-1" />
+      {!compact && <PrivacyStrip className="mt-3 px-1" />}
+      {searchError && (
+        <p className="mt-2 px-1 text-xs text-amber-700" role="alert">
+          {searchError}
+        </p>
+      )}
     </div>
   );
 }

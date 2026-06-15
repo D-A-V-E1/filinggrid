@@ -212,15 +212,62 @@ export async function getAuthMe(): Promise<AuthMe> {
   return apiFetch<AuthMe>("/auth/me");
 }
 
-export async function createCheckout(email?: string): Promise<{ checkout_url: string }> {
+export async function checkApiHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/health`, { cache: "no-store" });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { status?: string };
+    return body.status === "ok";
+  } catch {
+    return false;
+  }
+}
+
+export async function createCheckout(options?: {
+  email?: string;
+  returnPath?: string;
+}): Promise<{ checkout_url: string }> {
   return apiFetch("/billing/checkout", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({
+      email: options?.email,
+      return_path: options?.returnPath,
+    }),
   });
 }
 
-export async function createPortal(): Promise<{ portal_url: string }> {
-  return apiFetch("/billing/portal", { method: "POST" });
+export async function createPortal(returnPath?: string): Promise<{ portal_url: string }> {
+  return apiFetch("/billing/portal", {
+    method: "POST",
+    body: JSON.stringify({ return_path: returnPath }),
+  });
+}
+
+export interface PeerGroup {
+  id: string;
+  group_name: string;
+  tickers_list: string[];
+}
+
+export async function listPeerGroups(): Promise<PeerGroup[]> {
+  return apiFetch<PeerGroup[]>("/peer-groups");
+}
+
+export async function createPeerGroup(
+  groupName: string,
+  tickers: string[]
+): Promise<PeerGroup> {
+  return apiFetch<PeerGroup>("/peer-groups", {
+    method: "POST",
+    body: JSON.stringify({
+      group_name: groupName,
+      tickers_list: tickers.map((t) => t.toUpperCase()),
+    }),
+  });
+}
+
+export async function deletePeerGroup(groupId: string): Promise<void> {
+  await apiFetch<{ status: string }>(`/peer-groups/${groupId}`, { method: "DELETE" });
 }
 
 export async function searchTickers(q: string): Promise<{ ticker: string; company_name: string }[]> {

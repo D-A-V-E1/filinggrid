@@ -13,18 +13,23 @@ echo  ========================================
 echo.
 
 :: ---- Node.js ---------------------------------------------------------------
-set "NODEJS_DIR=%LOCALAPPDATA%\Programs\nodejs"
-if exist "%NODEJS_DIR%\npm.cmd" (
+set "NODEJS_DIR="
+if exist "%LOCALAPPDATA%\Programs\nodejs\npm.cmd" set "NODEJS_DIR=%LOCALAPPDATA%\Programs\nodejs"
+if not defined NODEJS_DIR if exist "C:\Program Files\nodejs\npm.cmd" set "NODEJS_DIR=C:\Program Files\nodejs"
+if defined NODEJS_DIR (
     set "PATH=%NODEJS_DIR%;%PATH%"
     set "NPM=%NODEJS_DIR%\npm.cmd"
 ) else (
-    where npm >nul 2>&1
-    if errorlevel 1 (
-        echo [ERROR] npm not found.
-        echo         Install Node.js from https://nodejs.org
-        goto :fail
+    for /f "delims=" %%i in ('where npm.cmd 2^>nul') do if not defined NPM set "NPM=%%i"
+    if not defined NPM (
+        where npm >nul 2>&1
+        if errorlevel 1 (
+            echo [ERROR] npm not found.
+            echo         Install Node.js from https://nodejs.org
+            goto :fail
+        )
+        set "NPM=npm"
     )
-    set "NPM=npm"
 )
 
 for /f "delims=" %%v in ('node --version 2^>nul') do echo [OK]   Node.js %%v
