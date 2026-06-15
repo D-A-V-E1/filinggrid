@@ -2,20 +2,31 @@ import type { ParseResponse } from "./api";
 import { normalizePeerSlug } from "./utils";
 
 const META_PREFIX = "fg:meta:";
+const SECTION_PREFIX = "fg:section:";
 
 export function parseMetaCacheKey(tickers: string[], fiscalYear?: number): string {
   const slug = normalizePeerSlug(tickers);
   return `${META_PREFIX}${slug}:${fiscalYear ?? "current"}`;
 }
 
-/** True when at least one column has section HTML ready to render. */
+function sectionHtmlCacheKey(cacheKey: string, sectionId: string): string {
+  return `${SECTION_PREFIX}${cacheKey}:${sectionId}`;
+}
+
+/** True when at least one column has section metadata for navigation. */
+export function hasSectionIndex(data: ParseResponse): boolean {
+  return data.columns.some((c) => !c.error && c.sections.length > 0);
+}
+
+/** @deprecated Use hasSectionIndex — kept for callers checking inline HTML. */
 export function hasRenderableSections(data: ParseResponse): boolean {
-  return data.columns.some(
+  const hasHtml = data.columns.some(
     (c) =>
       !c.error &&
       c.sections.length > 0 &&
       c.sections.some((s) => typeof s.html === "string" && s.html.length > 0)
   );
+  return hasHtml || hasSectionIndex(data);
 }
 
 export function loadParseMeta(key: string): ParseResponse | null {
@@ -24,7 +35,7 @@ export function loadParseMeta(key: string): ParseResponse | null {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const data = JSON.parse(raw) as ParseResponse;
-    if (!hasRenderableSections(data)) {
+    if (!hasSectionIndex(data)) {
       sessionStorage.removeItem(key);
       return null;
     }
@@ -37,11 +48,29 @@ export function loadParseMeta(key: string): ParseResponse | null {
 
 export function saveParseMeta(key: string, data: ParseResponse): void {
   if (typeof window === "undefined") return;
-  if (!hasRenderableSections(data)) return;
+  if (!hasSectionIndex(data)) return;
   try {
     sessionStorage.setItem(key, JSON.stringify(data));
   } catch {
     /* quota exceeded — server disk cache still applies */
+  }
+}
+
+export function loadSectionHtml(cacheKey: string, sectionId: string): string | null {
+  if (typeof window === "undefined" || !cacheKey) return null;
+  try {
+    return sessionStorage.getItem(sectionHtmlCacheKey(cacheKey, sectionId));
+  } catch {
+    return null;
+  }
+}
+
+export function saveSectionHtml(cacheKey: string, sectionId: string, html: string): void {
+  if (typeof window === "undefined" || !cacheKey || !html) return;
+  try {
+    sessionStorage.setItem(sectionHtmlCacheKey(cacheKey, sectionId), html);
+  } catch {
+    /* quota exceeded */
   }
 }
 

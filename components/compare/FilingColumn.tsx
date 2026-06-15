@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
-import type { FilingSection } from "@/lib/api";
+import { memo, useEffect, useRef, useState } from "react";
+import { fetchSectionHtml, type FinancialsXbrl, type FilingSection } from "@/lib/api";
+import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
 
 interface FilingColumnProps {
   ticker: string;
@@ -9,14 +10,95 @@ interface FilingColumnProps {
   form: string | null;
   filingDate: string | null;
   fiscalYear: number | null;
+  cacheKey: string | null;
   sections: FilingSection[];
   activeSection: string | null;
   sectionLabel: string | null;
   error: string | null;
+  financialsXbrl?: FinancialsXbrl | null;
 }
 
 function formatSectionLabel(label: string): string {
   return label.replace(/^Item \d+[A-Z]? — /, "").replace(/^Note — /, "");
+}
+
+function formatMetricValue(value: number, unit?: string): string {
+  if (unit === "USD/shares" || unit === "pure") {
+    return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+  return `$${value.toLocaleString()}`;
+}
+
+const XBRL_ROW_METRICS: { key: keyof FinancialsXbrl["annual_summary"][0]; label: string; unit?: string }[] = [
+  { key: "revenue", label: "Revenue" },
+  { key: "net_income", label: "Net income" },
+  { key: "operating_income", label: "Operating income" },
+  { key: "total_assets", label: "Total assets" },
+  { key: "total_liabilities", label: "Total liabilities" },
+  { key: "stockholders_equity", label: "Stockholders' equity" },
+  { key: "cash", label: "Cash & equivalents" },
+  { key: "eps_diluted", label: "EPS (diluted)", unit: "USD/shares" },
+];
+
+function XbrlMetricsPanel({ data }: { data: FinancialsXbrl }) {
+  const rows = data.annual_summary?.slice(0, 4) ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <article className="mb-4 rounded-lg border border-brand-200 bg-brand-50/40 px-4 py-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-brand-800">
+          SEC XBRL (fast path)
+        </p>
+        {data.fetch_ms != null && (
+          <span className="font-mono text-[10px] text-brand-600/80">
+            {data.fetch_ms}ms{data.from_cache ? " · cached" : ""}
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[280px] border-collapse text-left text-xs">
+          <thead>
+            <tr className="border-b border-brand-200/80">
+              <th className="py-1.5 pr-3 font-medium text-slate-600">Metric</th>
+              {rows.map((r) => (
+                <th key={r.fy} className="py-1.5 px-2 text-right font-mono font-semibold text-slate-700">
+                  FY {r.fy}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {XBRL_ROW_METRICS.map(({ key, label, unit }) => {
+              const hasValues = rows.some((r) => r[key] != null);
+              if (!hasValues) return null;
+              return (
+                <tr key={key} className="border-b border-brand-100/80 last:border-0">
+                  <td className="py-1.5 pr-3 text-slate-600">{label}</td>
+                  {rows.map((r) => {
+                    const val = r[key];
+                    return (
+                      <td key={r.fy} className="py-1.5 px-2 text-right font-mono tabular-nums text-slate-800">
+                        {val != null ? formatMetricValue(val as number, unit) : "—"}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+        Headline GAAP metrics from SEC companyfacts. Full statement tables still load from HTML when
+        available.
+      </p>
+    </article>
+  );
 }
 
 function FilingColumn({
@@ -25,12 +107,18 @@ function FilingColumn({
   form,
   filingDate,
   fiscalYear,
+  cacheKey,
   sections,
   activeSection,
   sectionLabel,
   error,
+  financialsXbrl,
 }: FilingColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [sectionHtml, setSectionHtml] = useState<string | null>(null);
+  const [loadingSection, setLoadingSection] = useState(false);
+  const [sectionError, setSectionError] = useState("");
+
   const section = activeSection ? sections.find((s) => s.id === activeSection) : sections[0];
   const displayLabel = section
     ? formatSectionLabel(section.label)
@@ -41,6 +129,55 @@ function FilingColumn({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [activeSection, ticker]);
+
+  useEffect(() => {
+    if (!activeSection || !section) {
+      setSectionHtml(null);
+      setLoadingSection(false);
+      setSectionError("");
+      return;
+    }
+
+    if (section.html && section.html.length > 0) {
+      setSectionHtml(section.html);
+      setLoadingSection(false);
+      setSectionError("");
+      return;
+    }
+
+    if (cacheKey) {
+      const cached = loadSectionHtml(cacheKey, activeSection);
+      if (cached) {
+        setSectionHtml(cached);
+        setLoadingSection(false);
+        setSectionError("");
+        return;
+      }
+    }
+
+    let cancelled = false;
+    setLoadingSection(true);
+    setSectionError("");
+    setSectionHtml(null);
+
+    fetchSectionHtml(ticker, activeSection, fiscalYear)
+      .then((html) => {
+        if (cancelled) return;
+        if (cacheKey) saveSectionHtml(cacheKey, activeSection, html);
+        setSectionHtml(html);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setSectionError(err instanceof Error ? err.message : "Failed to load section");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSection(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, section, ticker, fiscalYear, cacheKey]);
 
   if (error) {
     return (
@@ -74,6 +211,9 @@ function FilingColumn({
         className="filing-column-scroll min-h-0 flex-1 overflow-y-scroll overscroll-y-contain"
       >
         <div className="compare-column-body px-5 py-5">
+          {activeSection === "financial-statements" && financialsXbrl && (
+            <XbrlMetricsPanel data={financialsXbrl} />
+          )}
           {!activeSection && sections.length === 0 ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>
           ) : !section ? (
@@ -83,11 +223,21 @@ function FilingColumn({
                 {ticker} did not include this disclosure in the selected period.
               </p>
             </div>
-          ) : section.html && section.html.length > 0 ? (
+          ) : loadingSection ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+              <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+            </div>
+          ) : sectionError ? (
+            <div className="rounded-lg border border-red-200 bg-white px-4 py-6 text-center">
+              <p className="text-sm text-red-600">{sectionError}</p>
+            </div>
+          ) : sectionHtml && sectionHtml.length > 0 ? (
             <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
               <div
                 className="filing-content prose prose-sm max-w-none font-serif text-slate-800 prose-headings:font-sans prose-headings:text-slate-900 prose-table:text-xs prose-td:px-2 prose-th:px-2 prose-th:font-semibold"
-                dangerouslySetInnerHTML={{ __html: section.html }}
+                dangerouslySetInnerHTML={{ __html: sectionHtml }}
               />
             </article>
           ) : (

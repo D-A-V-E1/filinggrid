@@ -51,6 +51,29 @@ export interface SectionHtmlResponse {
   cache_key?: string | null;
 }
 
+export interface FinancialsXbrl {
+  ticker: string;
+  cik: string;
+  entity_name: string;
+  fiscal_year_filter: number | null;
+  source: string;
+  from_cache: boolean;
+  fetch_ms?: number;
+  annual_summary: Array<{
+    fy: number;
+    revenue?: number;
+    net_income?: number;
+    operating_income?: number;
+    total_assets?: number;
+    total_liabilities?: number;
+    stockholders_equity?: number;
+    cash?: number;
+    eps_diluted?: number;
+    [key: string]: number | string | undefined;
+  }>;
+  metrics?: Record<string, unknown>;
+}
+
 export interface PaywallError {
   code: string;
   reason: string;
@@ -181,6 +204,18 @@ export async function parseFilingsStream(
       }
     }
   }
+}
+
+export async function fetchFinancials(
+  ticker: string,
+  fiscalYear?: number | null
+): Promise<FinancialsXbrl> {
+  const params = new URLSearchParams();
+  if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+  const qs = params.toString();
+  return apiFetch<FinancialsXbrl>(
+    `/filings/${encodeURIComponent(ticker.toUpperCase())}/financials${qs ? `?${qs}` : ""}`
+  );
 }
 
 export async function fetchSectionHtml(

@@ -6,26 +6,41 @@ from collections import OrderedDict
 from threading import Lock
 from typing import Any
 
+from filing_store import find_cache_key as disk_find_cache_key
 from filing_store import find_section_html as disk_find_section_html
-from filing_store import load_parsed_filing, make_cache_key, save_parsed_filing
+from filing_store import load_parsed_filing, make_cache_key, save_parsed_filing, update_section_html
 
 _MAX_ENTRIES = 64
 _lock = Lock()
 _memory: OrderedDict[str, dict[str, Any]] = OrderedDict()
+_structure: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
 
 def _touch(key: str) -> None:
     _memory.move_to_end(key)
 
 
-def store_parsed_column(key: str, column: dict[str, Any], sections_with_html: list[dict[str, Any]]) -> None:
-    sections_html = {s["id"]: s.get("html", "") for s in sections_with_html}
+def store_parsed_column(key: str, column: dict[str, Any], sections: list[dict[str, Any]]) -> None:
+    sections_html = {s["id"]: s.get("html", "") for s in sections if s.get("html")}
     with _lock:
-        _memory[key] = {"column_meta": column, "sections_html": sections_html, "sections": sections_with_html}
+        _memory[key] = {"column_meta": column, "sections_html": sections_html, "sections": sections}
         _touch(key)
         while len(_memory) > _MAX_ENTRIES:
             _memory.popitem(last=False)
-    save_parsed_filing(key, column, sections_with_html)
+    save_parsed_filing(key, column, sections)
+
+
+def store_section_html(cache_key: str, section_id: str, html: str) -> None:
+    with _lock:
+        entry = _memory.get(cache_key)
+        if entry:
+            entry["sections_html"][section_id] = html
+            for section in entry.get("sections", []):
+                if section.get("id") == section_id:
+                    section["html"] = html
+                    break
+            _touch(cache_key)
+    update_section_html(cache_key, section_id, html)
 
 
 def load_parsed_column(cache_key: str) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
@@ -71,10 +86,49 @@ def find_section_html(ticker: str, section_id: str, fiscal_year: int | None) -> 
             if fiscal_year is not None and col.get("fiscal_year") != fiscal_year:
                 continue
             html = entry["sections_html"].get(section_id)
-            if html is not None:
+            if html:
                 _touch(key)
                 return html
     return disk_find_section_html(ticker, section_id, fiscal_year)
 
 
-__all__ = ["make_cache_key", "store_parsed_column", "load_parsed_column", "find_section_html"]
+def store_filing_structure(cache_key: str, structure: dict[str, Any]) -> None:
+    """Keep parsed DOM structure in memory for fast on-demand section extraction."""
+    with _lock:
+        _structure[cache_key] = structure
+        _structure.move_to_end(cache_key)
+        while len(_structure) > _MAX_ENTRIES:
+            _structure.popitem(last=False)
+
+
+def get_filing_structure(cache_key: str) -> dict[str, Any] | None:
+    with _lock:
+        structure = _structure.get(cache_key)
+        if structure is not None:
+            _structure.move_to_end(cache_key)
+        return structure
+
+
+def find_cache_key(ticker: str, fiscal_year: int | None) -> str | None:
+    ticker = ticker.upper()
+    with _lock:
+        for key, entry in reversed(_memory.items()):
+            col = entry["column_meta"]
+            if col.get("ticker", "").upper() != ticker:
+                continue
+            if fiscal_year is not None and col.get("fiscal_year") != fiscal_year:
+                continue
+            return key
+    return disk_find_cache_key(ticker, fiscal_year)
+
+
+__all__ = [
+    "make_cache_key",
+    "store_parsed_column",
+    "store_section_html",
+    "load_parsed_column",
+    "find_section_html",
+    "find_cache_key",
+    "store_filing_structure",
+    "get_filing_structure",
+]
