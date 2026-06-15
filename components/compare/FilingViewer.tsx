@@ -19,18 +19,21 @@ export default function FilingViewer({ filingUrl, sectionLabel, ticker }: Filing
   }, [filingUrl]);
 
   useEffect(() => {
+    if (!iframeLoaded || iframeBlocked) return;
+
     const timer = window.setTimeout(() => {
       const iframe = iframeRef.current;
-      if (!iframe || iframeBlocked) return;
+      if (!iframe) return;
       try {
         const doc = iframe.contentDocument;
-        if (doc && doc.body && doc.body.childElementCount === 0) {
+        if (!doc || !doc.body || doc.body.childElementCount === 0) {
           setIframeBlocked(true);
         }
       } catch {
-        // Cross-origin — cannot inspect; assume iframe may still be usable.
+        // SEC EDGAR sets X-Frame-Options; cross-origin access means embed is blocked.
+        setIframeBlocked(true);
       }
-    }, 2500);
+    }, 1500);
     return () => window.clearTimeout(timer);
   }, [filingUrl, iframeBlocked, iframeLoaded]);
 
