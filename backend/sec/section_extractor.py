@@ -319,6 +319,69 @@ def _table_row_ancestor(tag: Tag) -> Tag | None:
     return None
 
 
+def _anchor_link_context(link: Tag) -> str:
+    """Row/cell text for a TOC anchor link (Item number + subtitle)."""
+    row = _table_row_ancestor(link)
+    if row:
+        text = _normalize_text(row.get_text(" ", strip=True))
+        if len(text) >= 5:
+            return text
+    parent = link.parent
+    if isinstance(parent, Tag) and parent.name in ("td", "div", "span", "p", "th"):
+        text = _normalize_text(parent.get_text(" ", strip=True))
+        if len(text) >= 5:
+            return text
+    return _normalize_text(link.get_text(" ", strip=True))
+
+
+def _extract_toc_anchors(root: Tag) -> dict[str, str]:
+    """Map section ids to in-document fragment ids from the filing table of contents."""
+    anchors: dict[str, str] = {}
+    for link in root.find_all("a", href=True):
+        href = link.get("href", "")
+        if not isinstance(href, str) or not href.startswith("#"):
+            continue
+        fragment = href[1:].strip()
+        if not fragment:
+            continue
+        context = _anchor_link_context(link)
+        if len(context) < 3:
+            continue
+        match = _match_section(context)
+        if not match:
+            continue
+        section_id, _ = match
+        if section_id not in anchors:
+            anchors[section_id] = fragment
+    return anchors
+
+
+def _heading_anchor(block: Tag) -> str | None:
+    """Nearest element id/name on a section heading block."""
+    for tag in [block, *block.parents]:
+        if not isinstance(tag, Tag):
+            continue
+        element_id = tag.get("id")
+        if element_id:
+            return str(element_id)
+        name = tag.get("name")
+        if name:
+            return str(name)
+    for descendant in block.find_all(id=True, limit=3):
+        element_id = descendant.get("id")
+        if element_id:
+            return str(element_id)
+    return None
+
+
+def _resolve_section_anchor(
+    section_id: str,
+    heading_block: Tag,
+    toc_anchors: dict[str, str],
+) -> str | None:
+    return toc_anchors.get(section_id) or _heading_anchor(heading_block)
+
+
 def _extract_table_rows(start: Tag, end: Tag | None) -> str | None:
     start_row = _table_row_ancestor(start)
     if not start_row:
@@ -458,6 +521,7 @@ def _prepare_filing_structure(html_bytes: bytes) -> dict[str, Any]:
 
     blocks, block_index = _build_block_index(root)
     headings = _find_headings(blocks, block_index)
+    toc_anchors = _extract_toc_anchors(root)
 
     if not headings:
         body = root
@@ -471,6 +535,7 @@ def _prepare_filing_structure(html_bytes: bytes) -> dict[str, Any]:
             "headings": [],
             "section_ends": [],
             "best_meta": {},
+            "toc_anchors": toc_anchors,
         }
 
     best_meta: dict[str, tuple[int, int, str, str, int]] = {}
@@ -498,6 +563,7 @@ def _prepare_filing_structure(html_bytes: bytes) -> dict[str, Any]:
         "headings": headings,
         "section_ends": section_ends,
         "best_meta": best_meta,
+        "toc_anchors": toc_anchors,
     }
 
 
@@ -519,19 +585,22 @@ def _sections_from_structure(structure: dict[str, Any], *, include_html: bool) -
     block_index = structure["block_index"]
     section_ends = structure["section_ends"]
     best_meta = structure["best_meta"]
+    toc_anchors = structure.get("toc_anchors") or {}
 
     best_by_id: dict[str, dict[str, Any]] = {}
     for section_id, (_span, i, heading_text, label, order) in best_meta.items():
+        start_block = headings[i][0]
+        anchor = _resolve_section_anchor(section_id, start_block, toc_anchors)
         entry: dict[str, Any] = {
             "id": section_id,
             "label": label,
             "heading": heading_text,
+            "anchor": anchor,
             "html": "",
             "text_preview": heading_text[:500],
             "_order": order,
         }
         if include_html:
-            start_block = headings[i][0]
             end_block = section_ends[i]
             html_content = _extract_between(start_block, end_block, blocks, block_index)
             entry["html"] = html_content

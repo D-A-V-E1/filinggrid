@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
 import { isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
+import { buildSectionFilingUrl } from "@/lib/sec-url";
 import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
@@ -220,6 +221,11 @@ function FilingColumn({
       ? formatSectionLabel(sectionLabel)
       : "Select a section";
 
+  const sectionFilingUrl = useMemo(() => {
+    if (!filingUrl || !activeSection || !section) return null;
+    return buildSectionFilingUrl(filingUrl, activeSection, section.anchor, section.heading);
+  }, [filingUrl, activeSection, section]);
+
   const hasXbrlData = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return false;
     if (activeSection === "financial-statements") {
@@ -368,8 +374,8 @@ function FilingColumn({
               </p>
             </div>
           ) : showSecViewer ? (
-            filingUrl ? (
-              <FilingViewer filingUrl={filingUrl} sectionLabel={displayLabel} ticker={ticker} />
+            sectionFilingUrl ? (
+              <FilingViewer filingUrl={sectionFilingUrl} sectionLabel={displayLabel} ticker={ticker} />
             ) : (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-center">
                 <p className="text-sm text-amber-800">SEC filing link unavailable for this column.</p>

@@ -79,6 +79,7 @@ def _sections_for_response(sections: list[dict[str, Any]], *, include_html: bool
             "id": s["id"],
             "label": s["label"],
             "heading": s.get("heading", ""),
+            **({"anchor": s["anchor"]} if s.get("anchor") else {}),
             **({"html": s.get("html", "")} if include_html else {}),
             "text_preview": s.get("text_preview", ""),
         }

@@ -19,6 +19,7 @@ export interface FilingSection {
   id: string;
   label: string;
   heading: string;
+  anchor?: string | null;
   html?: string;
   text_preview: string;
 }
