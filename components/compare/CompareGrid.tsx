@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   checkApiHealth,
+  fetchFinancials,
   parseFilingsStream,
+  type FinancialsXbrl,
   type FilingColumn,
   type ParseResponse,
 } from "@/lib/api";
 import { getComparableSectionIds } from "@/lib/sections";
-import { hasParsedColumns, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
+import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
 import { useAuth } from "@/hooks/useAuth";
 import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
@@ -41,6 +43,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
   const { auth } = useAuth();
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>({});
   const loadIdRef = useRef(0);
 
   const columnMinWidth = 300;
@@ -75,7 +78,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     setError("");
 
     const cached = loadParseMeta(cacheKey);
-    if (cached && hasParsedColumns(cached)) {
+    if (cached && hasSectionIndex(cached)) {
       setData(cached);
       setLoading(false);
       setLoadingTickers([]);
@@ -154,6 +157,20 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     if (slugError) return;
     loadFilings();
   }, [loadFilings, slugError]);
+
+  useEffect(() => {
+    if (!data) return;
+    for (const col of data.columns) {
+      if (col.error) continue;
+      fetchFinancials(col.ticker, fiscalYear)
+        .then((fin) => {
+          setFinancialsByTicker((prev) =>
+            prev[col.ticker] ? prev : { ...prev, [col.ticker]: fin }
+          );
+        })
+        .catch(() => null);
+    }
+  }, [data, fiscalYear]);
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
@@ -311,10 +328,12 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
                         form={col.form}
                         filingDate={col.filing_date}
                         fiscalYear={col.fiscal_year}
+                        cacheKey={col.cache_key ?? null}
                         sections={col.sections}
                         activeSection={activeSection}
                         sectionLabel={activeSectionLabel}
                         error={col.error}
+                        financialsXbrl={financialsByTicker[col.ticker] ?? null}
                       />
                     );
                   })}

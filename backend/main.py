@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from middleware import AuthContext, check_parse_access, get_auth_context, require_auth
 from filing_parser import ParseRequest, ParseResponse, SectionHtmlResponse, get_section_html, parse_filings, parse_filings_stream
 from sec.client import fetch_ticker_map
+from sec.xbrl_client import fetch_ticker_financials
 
 settings = get_settings()
 
@@ -159,6 +160,16 @@ async def parse_stream_endpoint(
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/filings/{ticker}/financials")
+async def filing_financials_endpoint(
+    ticker: str,
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+    fiscal_year: int | None = Query(None),
+):
+    check_parse_access(auth, 1, fiscal_year)
+    return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year)
 
 
 @app.get("/parse/section", response_model=SectionHtmlResponse)

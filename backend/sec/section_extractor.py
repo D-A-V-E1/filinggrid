@@ -428,8 +428,8 @@ def _text_preview(html: str) -> str:
     return re.sub(r"\s+", " ", text)[:500]
 
 
-def parse_filing_sections(html_bytes: bytes) -> dict[str, Any]:
-    """Parse filing HTML into sections from heading to next heading."""
+def _prepare_filing_structure(html_bytes: bytes) -> dict[str, Any]:
+    """Parse HTML once and locate section boundaries (no HTML extraction)."""
     _block_start_cache.clear()
     stream = io.BytesIO(html_bytes)
     soup = BeautifulSoup(stream, "html.parser")
@@ -443,14 +443,14 @@ def parse_filing_sections(html_bytes: bytes) -> dict[str, Any]:
         body = root
         text = body.get_text(" ", strip=True)[:5000] if body else ""
         return {
-            "sections": [{
-                "id": "full-document",
-                "label": "Full Document",
-                "heading": "Full Filing",
-                "html": str(body)[:500000] if body else "",
-                "text_preview": text[:500],
-            }],
-            "section_ids": ["full-document"],
+            "full_document": True,
+            "root": root,
+            "body_text": text,
+            "blocks": blocks,
+            "block_index": block_index,
+            "headings": [],
+            "section_ends": [],
+            "best_meta": {},
         }
 
     best_meta: dict[str, tuple[int, int, str, str, int]] = {}
@@ -469,25 +469,105 @@ def parse_filing_sections(html_bytes: bytes) -> dict[str, Any]:
         if existing is None or span > existing[0]:
             best_meta[section_id] = (span, i, heading_text, label, order)
 
+    return {
+        "full_document": False,
+        "root": root,
+        "body_text": "",
+        "blocks": blocks,
+        "block_index": block_index,
+        "headings": headings,
+        "section_ends": section_ends,
+        "best_meta": best_meta,
+    }
+
+
+def _sections_from_structure(structure: dict[str, Any], *, include_html: bool) -> list[dict[str, Any]]:
+    if structure.get("full_document"):
+        root = structure["root"]
+        text = structure["body_text"]
+        html_content = str(root)[:500000] if root else ""
+        return [{
+            "id": "full-document",
+            "label": "Full Document",
+            "heading": "Full Filing",
+            "html": html_content if include_html else "",
+            "text_preview": text[:500],
+        }]
+
+    headings = structure["headings"]
+    blocks = structure["blocks"]
+    block_index = structure["block_index"]
+    section_ends = structure["section_ends"]
+    best_meta = structure["best_meta"]
+
     best_by_id: dict[str, dict[str, Any]] = {}
     for section_id, (_span, i, heading_text, label, order) in best_meta.items():
-        start_block = headings[i][0]
-        end_block = section_ends[i]
-        html_content = _extract_between(start_block, end_block, blocks, block_index)
-
-        best_by_id[section_id] = {
+        entry: dict[str, Any] = {
             "id": section_id,
             "label": label,
             "heading": heading_text,
-            "html": html_content,
-            "text_preview": _text_preview(html_content),
+            "html": "",
+            "text_preview": heading_text[:500],
             "_order": order,
         }
+        if include_html:
+            start_block = headings[i][0]
+            end_block = section_ends[i]
+            html_content = _extract_between(start_block, end_block, blocks, block_index)
+            entry["html"] = html_content
+            entry["text_preview"] = _text_preview(html_content)
+        best_by_id[section_id] = entry
 
     sections = sorted(best_by_id.values(), key=lambda s: s["_order"])
     for s in sections:
         del s["_order"]
+    return sections
 
+
+def parse_filing_section_index(html_bytes: bytes) -> dict[str, Any]:
+    """Fast path: section metadata only (no per-section HTML extraction)."""
+    structure = _prepare_filing_structure(html_bytes)
+    sections = _sections_from_structure(structure, include_html=False)
+    return {
+        "sections": sections,
+        "section_ids": [s["id"] for s in sections],
+    }
+
+
+def extract_section_html(
+    html_bytes: bytes,
+    section_id: str,
+    structure: dict[str, Any] | None = None,
+) -> str | None:
+    """Extract HTML for a single section on demand."""
+    if structure is None:
+        structure = _prepare_filing_structure(html_bytes)
+    if structure.get("full_document"):
+        if section_id == "full-document":
+            root = structure["root"]
+            return str(root)[:500000] if root else ""
+        return None
+
+    headings = structure["headings"]
+    blocks = structure["blocks"]
+    block_index = structure["block_index"]
+    section_ends = structure["section_ends"]
+    best_meta = structure["best_meta"]
+
+    meta = best_meta.get(section_id)
+    if not meta:
+        return None
+
+    _span, i, _heading_text, _label, _order = meta
+    start_block = headings[i][0]
+    end_block = section_ends[i]
+    return _extract_between(start_block, end_block, blocks, block_index)
+
+
+def parse_filing_sections(html_bytes: bytes) -> dict[str, Any]:
+    """Parse filing HTML into sections from heading to next heading."""
+    structure = _prepare_filing_structure(html_bytes)
+    sections = _sections_from_structure(structure, include_html=True)
     return {
         "sections": sections,
         "section_ids": [s["id"] for s in sections],
