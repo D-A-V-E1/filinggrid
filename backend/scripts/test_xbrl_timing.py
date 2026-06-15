@@ -22,7 +22,14 @@ async def main() -> None:
     print(f"XBRL-backed notes: {len(notes)}")
     for sid in sorted(notes):
         n = notes[sid]
-        print(f"  {sid}: {len(n.get('metrics', {}))} metrics, {len(n.get('annual_summary', []))} FY rows")
+        disc = n.get("disclosures") or []
+        print(
+            f"  {sid}: {len(n.get('metrics', {}))} metrics, "
+            f"{len(n.get('annual_summary', []))} FY rows, {len(disc)} disclosures"
+        )
+        for d in disc[:1]:
+            preview = (d.get("text") or "")[:120].replace("\n", " ")
+            print(f"    [{d.get('concept')}] {preview}...")
     if result.get("annual_summary"):
         print("Latest FY financials:", json.dumps(result["annual_summary"][0], indent=2))
     warm = await fetch_ticker_financials(ticker)

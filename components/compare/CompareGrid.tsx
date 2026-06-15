@@ -10,7 +10,7 @@ import {
   type FilingColumn,
   type ParseResponse,
 } from "@/lib/api";
-import { getComparableSectionIds } from "@/lib/sections";
+import { getComparableSectionIds, resolveDefaultActiveSection } from "@/lib/sections";
 import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
@@ -74,6 +74,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
 
   const loadFilings = useCallback(async () => {
     const loadId = ++loadIdRef.current;
+    setActiveSection(null);
     setLoading(true);
     setLoadingTickers(tickers);
     setError("");
@@ -84,7 +85,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       setLoading(false);
       setLoadingTickers([]);
       const navigable = getComparableSectionIds(cached.columns);
-      setActiveSection((prev) => prev ?? navigable[0] ?? null);
+      setActiveSection(resolveDefaultActiveSection(navigable));
       return;
     }
 
@@ -117,7 +118,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           });
 
           const navigable = getComparableSectionIds(columns);
-          setActiveSection((prev) => prev ?? navigable[0] ?? null);
+          setActiveSection((prev) => prev ?? resolveDefaultActiveSection(navigable));
         },
         onDone: (at) => {
           if (loadId !== loadIdRef.current) return;

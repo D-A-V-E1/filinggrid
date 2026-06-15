@@ -62,6 +62,13 @@ export interface XbrlMetricSeries {
   quarterly?: Array<{ fy?: number; fp?: string; value?: number; end?: string }>;
 }
 
+export interface XbrlDisclosure {
+  key: string;
+  label: string;
+  concept: string;
+  text: string;
+}
+
 export interface NoteSectionXbrl {
   section_id: string;
   label: string;
@@ -71,6 +78,7 @@ export interface NoteSectionXbrl {
     fy: number;
     [key: string]: number | string | undefined;
   }>;
+  disclosures?: XbrlDisclosure[];
 }
 
 export interface FinancialsXbrl {

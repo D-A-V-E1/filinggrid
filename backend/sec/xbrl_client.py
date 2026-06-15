@@ -21,10 +21,18 @@ POC scope: common us-gaap tags with fallbacks; not exhaustive GAAP mapping.
 
 from __future__ import annotations
 
+import re
 import time
+from html import unescape
 from typing import Any
 
-from sec.client import fetch_ticker_map, get_http_client, resolve_ticker, _rate_limited_get
+from sec.client import (
+    fetch_ticker_map,
+    find_filing,
+    get_http_client,
+    resolve_ticker,
+    _rate_limited_get,
+)
 
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 
@@ -536,6 +544,378 @@ NOTE_SECTION_METRICS: dict[str, list[dict[str, Any]]] = {
     ],
 }
 
+# Note section id -> narrative text block definitions (key, label, candidate us-gaap concepts)
+NOTE_SECTION_TEXT_BLOCKS: dict[str, list[dict[str, Any]]] = {
+    "note-summary-policies": [
+        {
+            "key": "summary_policies",
+            "label": "Summary of significant accounting policies",
+            "concepts": [
+                "BasisOfPresentationAndSignificantAccountingPoliciesTextBlock",
+                "SignificantAccountingPoliciesTextBlock",
+            ],
+        },
+        {
+            "key": "basis_of_presentation",
+            "label": "Basis of presentation",
+            "concepts": [
+                "BasisOfAccountingPolicyPolicyTextBlock",
+                "BasisOfPresentationTextBlock",
+            ],
+        },
+    ],
+    "note-revenue": [
+        {
+            "key": "revenue_recognition",
+            "label": "Revenue recognition",
+            "concepts": [
+                "RevenueFromContractWithCustomerTextBlock",
+                "RevenueRecognitionPolicyTextBlock",
+                "RevenueRecognitionPolicyPolicyTextBlock",
+            ],
+        },
+    ],
+    "note-segments": [
+        {
+            "key": "segment_reporting",
+            "label": "Segment information",
+            "concepts": [
+                "SegmentReportingDisclosureTextBlock",
+                "ScheduleOfSegmentReportingInformationBySegmentTextBlock",
+            ],
+        },
+    ],
+    "note-cash": [
+        {
+            "key": "cash_disclosure",
+            "label": "Cash and cash equivalents",
+            "concepts": [
+                "CashAndCashEquivalentsTextBlock",
+                "ScheduleOfCashCashEquivalentsAndShortTermInvestmentsTableTextBlock",
+            ],
+        },
+    ],
+    "note-investments": [
+        {
+            "key": "investments",
+            "label": "Investments and marketable securities",
+            "concepts": [
+                "FinancialInstrumentsDisclosureTextBlock",
+                "InvestmentsInDebtAndEquitySecuritiesTextBlock",
+                "AvailableForSaleSecuritiesTextBlock",
+            ],
+        },
+    ],
+    "note-fair-value": [
+        {
+            "key": "fair_value",
+            "label": "Fair value measurements",
+            "concepts": [
+                "FairValueDisclosuresTextBlock",
+                "FairValueMeasurementPolicyPolicyTextBlock",
+                "FairValueAssetsAndLiabilitiesMeasuredOnRecurringAndNonrecurringBasisTextBlock",
+            ],
+        },
+    ],
+    "note-receivables": [
+        {
+            "key": "receivables",
+            "label": "Accounts receivable",
+            "concepts": [
+                "AccountsReceivableAndOtherReceivablesTextBlock",
+                "AccountsReceivableDisclosureTextBlock",
+            ],
+        },
+    ],
+    "note-inventory": [
+        {
+            "key": "inventory",
+            "label": "Inventory",
+            "concepts": ["InventoryDisclosureTextBlock", "InventoryPolicyTextBlock"],
+        },
+    ],
+    "note-ppe": [
+        {
+            "key": "ppe",
+            "label": "Property, plant and equipment",
+            "concepts": ["PropertyPlantAndEquipmentTextBlock"],
+        },
+    ],
+    "note-goodwill": [
+        {
+            "key": "goodwill_intangibles",
+            "label": "Goodwill and intangible assets",
+            "concepts": [
+                "GoodwillAndIntangibleAssetsDisclosureTextBlock",
+                "GoodwillAndIntangibleAssetsPolicyTextBlock",
+            ],
+        },
+    ],
+    "note-leases": [
+        {
+            "key": "leases",
+            "label": "Leases",
+            "concepts": [
+                "LeaseDescriptionTextBlock",
+                "LesseeOperatingLeasesTextBlock",
+                "LesseeFinanceLeasesTextBlock",
+            ],
+        },
+    ],
+    "note-debt": [
+        {
+            "key": "debt",
+            "label": "Debt",
+            "concepts": [
+                "DebtDisclosureTextBlock",
+                "LongTermDebtTextBlock",
+                "ScheduleOfDebtTableTextBlock",
+            ],
+        },
+    ],
+    "note-derivatives": [
+        {
+            "key": "derivatives",
+            "label": "Derivatives and hedging",
+            "concepts": [
+                "DerivativeInstrumentsAndHedgingActivitiesDisclosureTextBlock",
+                "ScheduleOfNotionalAmountsOfOutstandingDerivativePositionsTableTextBlock",
+            ],
+        },
+    ],
+    "note-pension": [
+        {
+            "key": "pension",
+            "label": "Pension and postretirement benefits",
+            "concepts": [
+                "DefinedBenefitPlanDisclosuresTextBlock",
+                "PensionAndOtherPostretirementBenefitsDisclosureTextBlock",
+            ],
+        },
+    ],
+    "note-income-tax": [
+        {
+            "key": "income_tax",
+            "label": "Income taxes",
+            "concepts": [
+                "IncomeTaxDisclosureTextBlock",
+                "ScheduleOfIncomeTaxExpenseBenefitTextBlock",
+                "IncomeTaxPolicyTextBlock",
+            ],
+        },
+    ],
+    "note-stock-comp": [
+        {
+            "key": "stock_comp",
+            "label": "Share-based compensation",
+            "concepts": [
+                "DisclosureOfCompensationRelatedCostsShareBasedPaymentsTextBlock",
+                "ShareBasedCompensationTextBlock",
+                "ScheduleOfCompensationCostForShareBasedPaymentArrangementsAllocationOfShareBasedCompensationCostsByPlanTableTextBlock",
+            ],
+        },
+    ],
+    "note-equity": [
+        {
+            "key": "equity",
+            "label": "Stockholders' equity",
+            "concepts": ["StockholdersEquityNoteDisclosureTextBlock"],
+        },
+    ],
+    "note-eps": [
+        {
+            "key": "eps",
+            "label": "Earnings per share",
+            "concepts": [
+                "EarningsPerShareTextBlock",
+                "ScheduleOfEarningsPerShareBasicAndDilutedTableTextBlock",
+            ],
+        },
+    ],
+    "note-aoci": [
+        {
+            "key": "aoci",
+            "label": "Accumulated other comprehensive income",
+            "concepts": [
+                "AccumulatedOtherComprehensiveIncomeLossTextBlock",
+                "ScheduleOfAccumulatedOtherComprehensiveIncomeLossTableTextBlock",
+            ],
+        },
+    ],
+    "note-restructuring": [
+        {
+            "key": "restructuring",
+            "label": "Restructuring",
+            "concepts": [
+                "RestructuringAndRelatedActivitiesDisclosureTextBlock",
+                "RestructuringCostsTextBlock",
+            ],
+        },
+    ],
+    "note-impairment": [
+        {
+            "key": "impairment",
+            "label": "Impairment",
+            "concepts": [
+                "ImpairmentOfLongLivedAssetsAndGoodwillTextBlock",
+                "AssetImpairmentChargesTextBlock",
+            ],
+        },
+    ],
+    "note-acquisitions": [
+        {
+            "key": "acquisitions",
+            "label": "Business combinations",
+            "concepts": [
+                "BusinessCombinationDisclosureTextBlock",
+                "BusinessCombinationsPolicyTextBlock",
+            ],
+        },
+    ],
+    "note-software": [
+        {
+            "key": "software",
+            "label": "Capitalized software",
+            "concepts": [
+                "CapitalizedSoftwareDisclosureTextBlock",
+                "CapitalizedComputerSoftwarePolicyTextBlock",
+            ],
+        },
+    ],
+    "note-related-party": [
+        {
+            "key": "related_party",
+            "label": "Related party transactions",
+            "concepts": ["RelatedPartyTransactionsDisclosureTextBlock"],
+        },
+    ],
+    "note-contingencies": [
+        {
+            "key": "contingencies",
+            "label": "Commitments and contingencies",
+            "concepts": [
+                "CommitmentsAndContingenciesDisclosureTextBlock",
+                "LossContingenciesDisclosureTextBlock",
+            ],
+        },
+    ],
+    "note-subsequent-events": [
+        {
+            "key": "subsequent_events",
+            "label": "Subsequent events",
+            "concepts": ["SubsequentEventsTextBlock"],
+        },
+    ],
+    "note-recent-standards": [
+        {
+            "key": "recent_standards",
+            "label": "Recently adopted accounting standards",
+            "concepts": [
+                "NewAccountingPronouncementsAndChangesInAccountingPrinciplesTextBlock",
+                "NewAccountingPronouncementsPolicyPolicyTextBlock",
+            ],
+        },
+    ],
+}
+
+
+def _strip_xbrl_html(html_fragment: str) -> str:
+    """Convert inline XBRL HTML fragments to plain prose for display."""
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html_fragment, flags=re.I | re.S)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.I)
+    text = re.sub(r"</div>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = unescape(text)
+    text = text.replace("\xa0", " ")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _extract_ix_text_block(html: str, concept: str) -> str | None:
+    """Extract narrative text for a us-gaap TextBlock concept from inline XBRL HTML."""
+    pattern = re.compile(
+        rf'<ix:nonNumeric\b[^>]*\bname="[^"]*:{re.escape(concept)}"[^>]*>',
+        re.I,
+    )
+    match = pattern.search(html)
+    if not match:
+        return None
+
+    tag_html = match.group(0)
+    parts: list[str] = []
+    close = re.search(r"</ix:nonNumeric>", html[match.end() :], re.I)
+    if close:
+        inner = html[match.end() : match.end() + close.start()]
+        heading = _strip_xbrl_html(inner)
+        if heading:
+            parts.append(heading)
+
+    cont_id_m = re.search(r'\bcontinuedat="([^"]+)"', tag_html, re.I)
+    cont_id = cont_id_m.group(1) if cont_id_m else None
+    visited: set[str] = set()
+    while cont_id and cont_id not in visited:
+        visited.add(cont_id)
+        cont_pat = re.compile(
+            rf'<ix:continuation\b[^>]*\bid="{re.escape(cont_id)}"[^>]*>(.*?)</ix:continuation>',
+            re.I | re.S,
+        )
+        cont_match = cont_pat.search(html)
+        if not cont_match:
+            break
+        body = _strip_xbrl_html(cont_match.group(1))
+        if body:
+            parts.append(body)
+        cont_tag = cont_match.group(0)
+        next_m = re.search(r'\bcontinuedat="([^"]+)"', cont_tag, re.I)
+        cont_id = next_m.group(1) if next_m else None
+
+    return "\n\n".join(parts) if parts else None
+
+
+def _extract_disclosures_from_html(
+    html: str,
+    block_defs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return matched disclosure blocks for a note section from iXBRL HTML."""
+    disclosures: list[dict[str, Any]] = []
+    seen_concepts: set[str] = set()
+
+    for defn in block_defs:
+        for concept in defn["concepts"]:
+            if concept in seen_concepts:
+                continue
+            text = _extract_ix_text_block(html, concept)
+            if not text:
+                continue
+            seen_concepts.add(concept)
+            disclosures.append(
+                {
+                    "key": defn["key"],
+                    "label": defn.get("label", concept),
+                    "concept": concept,
+                    "text": text,
+                }
+            )
+            break
+
+    return disclosures
+
+
+def _load_cached_filing_html(cik: str, fiscal_year: int | None) -> bytes | None:
+    """Load filing HTML from disk cache only (no SEC network fetch)."""
+    from filing_store import load_filing_html, load_submissions
+
+    submissions = load_submissions(cik)
+    if not submissions:
+        return None
+    filing = find_filing(submissions, form_types=["10-K", "10-Q"], fiscal_year=fiscal_year)
+    if not filing:
+        return None
+    return load_filing_html(cik, filing["accession_no_dash"])
+
 
 async def fetch_company_facts(cik: str) -> tuple[dict[str, Any], bool]:
     """Fetch raw companyfacts JSON; returns (data, from_cache)."""
@@ -727,22 +1107,42 @@ def extract_note_sections(
     facts: dict[str, Any],
     *,
     fiscal_year: int | None = None,
+    filing_html: bytes | None = None,
 ) -> dict[str, Any]:
-    """Map companyfacts to footnote section metrics keyed by note-* section id."""
+    """Map companyfacts + optional iXBRL HTML to footnote section metrics and disclosures."""
+    return extract_note_disclosures(facts, filing_html, fiscal_year=fiscal_year)
+
+
+def extract_note_disclosures(
+    facts: dict[str, Any],
+    filing_html: bytes | None = None,
+    *,
+    fiscal_year: int | None = None,
+) -> dict[str, Any]:
+    """Map companyfacts and iXBRL HTML to footnote metrics and narrative disclosure blocks."""
     gaap = (facts.get("facts") or {}).get("us-gaap") or {}
+    html = filing_html.decode("utf-8", errors="replace") if filing_html else ""
     notes: dict[str, Any] = {}
 
-    for section_id, metric_defs in NOTE_SECTION_METRICS.items():
-        metrics = _extract_metrics_from_defs(gaap, metric_defs, fiscal_year=fiscal_year)
-        if not metrics:
+    section_ids = set(NOTE_SECTION_METRICS) | set(NOTE_SECTION_TEXT_BLOCKS)
+    for section_id in section_ids:
+        metric_defs = NOTE_SECTION_METRICS.get(section_id, [])
+        block_defs = NOTE_SECTION_TEXT_BLOCKS.get(section_id, [])
+
+        metrics = _extract_metrics_from_defs(gaap, metric_defs, fiscal_year=fiscal_year) if metric_defs else {}
+        disclosures = _extract_disclosures_from_html(html, block_defs) if html and block_defs else []
+
+        if not metrics and not disclosures:
             continue
-        annual_summary = _build_annual_summary(metrics)
+
+        annual_summary = _build_annual_summary(metrics) if metrics else []
         notes[section_id] = {
             "section_id": section_id,
             "label": _note_section_label(section_id),
             "metrics": metrics,
             "annual_summary": annual_summary,
-            "has_data": True,
+            "disclosures": disclosures,
+            "has_data": bool(metrics or disclosures),
         }
 
     return notes
@@ -759,7 +1159,8 @@ async def fetch_ticker_financials(
     resolved = await resolve_ticker(ticker, ticker_map)
     facts, from_cache = await fetch_company_facts(resolved["cik"])
     extracted = extract_financial_metrics(facts, fiscal_year=fiscal_year)
-    notes_xbrl = extract_note_sections(facts, fiscal_year=fiscal_year)
+    filing_html = _load_cached_filing_html(resolved["cik"], fiscal_year)
+    notes_xbrl = extract_note_disclosures(facts, filing_html, fiscal_year=fiscal_year)
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
 
     cik_padded = str(int(resolved["cik"])).zfill(10)

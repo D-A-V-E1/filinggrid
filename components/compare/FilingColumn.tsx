@@ -6,6 +6,7 @@ import {
   type FinancialsXbrl,
   type FilingSection,
   type NoteSectionXbrl,
+  type XbrlDisclosure,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
 import { isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
@@ -126,6 +127,40 @@ function XbrlMetricsPanel({ rows, annualSummary, fetchMs, fromCache, subtitle }:
   );
 }
 
+function splitDisclosureParagraphs(text: string): string[] {
+  return text
+    .split(/\n{2,}/)
+    .map((p) => p.replace(/\n/g, " ").trim())
+    .filter(Boolean);
+}
+
+function XbrlDisclosuresPanel({ disclosures }: { disclosures: XbrlDisclosure[] }) {
+  if (disclosures.length === 0) return null;
+
+  return (
+    <article className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
+      <p className="mb-3 font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        XBRL disclosure text
+      </p>
+      <div className="space-y-5">
+        {disclosures.map((block) => (
+          <section key={`${block.key}-${block.concept}`}>
+            <h3 className="font-sans text-sm font-semibold text-slate-900">{block.label}</h3>
+            <p className="mt-0.5 font-mono text-[10px] text-slate-400">{block.concept}</p>
+            <div className="narrative-content mt-2">
+              {splitDisclosureParagraphs(block.text).map((paragraph, i) => (
+                <p key={i} className={i > 0 ? "mt-3" : undefined}>
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function ExcerptToggleButton({
   label,
   loading,
@@ -191,7 +226,10 @@ function FilingColumn({
       return (financialsXbrl.annual_summary?.length ?? 0) > 0;
     }
     const note = financialsXbrl.notes_xbrl?.[activeSection];
-    return Boolean(note?.has_data && note.annual_summary?.length);
+    if (!note?.has_data) return false;
+    return Boolean(
+      (note.annual_summary?.length ?? 0) > 0 || (note.disclosures?.length ?? 0) > 0
+    );
   }, [financialsXbrl, activeSection]);
 
   const xbrlOnly = Boolean(activeSection && isXbrlBackedSection(activeSection) && hasXbrlData);
@@ -219,16 +257,31 @@ function FilingColumn({
     }
 
     const note = financialsXbrl.notes_xbrl?.[activeSection];
-    if (!note?.has_data || !note.annual_summary?.length) return null;
+    if (!note?.has_data) return null;
+
+    const metricsPanel =
+      note.annual_summary?.length ? (
+        <XbrlMetricsPanel
+          rows={buildNoteRowMetrics(note)}
+          annualSummary={note.annual_summary}
+          fetchMs={financialsXbrl.fetch_ms}
+          fromCache={financialsXbrl.from_cache}
+          subtitle="Tagged GAAP facts from SEC companyfacts."
+        />
+      ) : null;
+
+    const disclosuresPanel =
+      note.disclosures && note.disclosures.length > 0 ? (
+        <XbrlDisclosuresPanel disclosures={note.disclosures} />
+      ) : null;
+
+    if (!metricsPanel && !disclosuresPanel) return null;
 
     return (
-      <XbrlMetricsPanel
-        rows={buildNoteRowMetrics(note)}
-        annualSummary={note.annual_summary}
-        fetchMs={financialsXbrl.fetch_ms}
-        fromCache={financialsXbrl.from_cache}
-        subtitle="Tagged GAAP facts from SEC companyfacts."
-      />
+      <>
+        {disclosuresPanel}
+        {metricsPanel}
+      </>
     );
   }, [financialsXbrl, activeSection]);
 

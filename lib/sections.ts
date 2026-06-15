@@ -98,3 +98,13 @@ export function getComparableSectionIds(
   }
   return catalogOrder.filter((id) => found.has(id));
 }
+
+export const DEFAULT_ACTIVE_SECTION = "financial-statements";
+
+/** Prefer financial statements on load; fall back to first navigable section. */
+export function resolveDefaultActiveSection(navigableSectionIds: string[]): string | null {
+  if (navigableSectionIds.includes(DEFAULT_ACTIVE_SECTION)) {
+    return DEFAULT_ACTIVE_SECTION;
+  }
+  return navigableSectionIds[0] ?? null;
+}
