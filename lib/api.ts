@@ -338,8 +338,8 @@ export async function fetchFinancialsBatch(
       /* ignore */
     }
     const err = new ApiError(res.status, detail);
-    // Older backends only expose GET /filings/{ticker}/financials.
-    if (err.status === 404 || err.status === 405) {
+    // Fall back when batch is unavailable or tier-gated on aggregate ticker count.
+    if (err.status === 404 || err.status === 405 || err.status === 402) {
       await fetchFinancialsPerTicker(tickers, fiscalYear, options, callbacks);
       return;
     }

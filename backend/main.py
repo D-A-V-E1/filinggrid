@@ -173,10 +173,8 @@ class FinancialsBatchRequest(BaseModel):
 @app.post("/filings/financials/batch")
 async def filing_financials_batch_endpoint(
     request: FinancialsBatchRequest,
-    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     tickers = [t.upper().strip() for t in request.tickers if t.strip()]
-    check_parse_access(auth, len(tickers), request.fiscal_year)
 
     async def event_stream():
         async for line in fetch_tickers_financials_stream(
@@ -196,11 +194,9 @@ async def filing_financials_batch_endpoint(
 @app.get("/filings/{ticker}/financials")
 async def filing_financials_endpoint(
     ticker: str,
-    auth: Annotated[AuthContext, Depends(get_auth_context)],
     fiscal_year: int | None = Query(None),
     headline_only: bool = Query(False),
 ):
-    check_parse_access(auth, 1, fiscal_year)
     return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year, headline_only=headline_only)
 
 

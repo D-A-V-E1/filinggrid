@@ -27,6 +27,7 @@ interface FilingColumnProps {
   error: string | null;
   financialsXbrl?: FinancialsXbrl | null;
   financialsPending?: boolean;
+  financialsError?: string | null;
 }
 
 function formatSectionLabel(label: string): string {
@@ -209,6 +210,7 @@ function FilingColumn({
   error,
   financialsXbrl,
   financialsPending = false,
+  financialsError = null,
 }: FilingColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
@@ -373,7 +375,12 @@ function FilingColumn({
         <div className="compare-column-body px-5 py-5">
           {xbrlPanel}
 
-          {financialsPending && activeSection === "financial-statements" && !xbrlPanel ? (
+          {financialsError && activeSection === "financial-statements" && !xbrlPanel ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4">
+              <p className="text-sm font-medium text-red-800">Could not load XBRL financials</p>
+              <p className="mt-1 text-xs text-red-700">{financialsError}</p>
+            </div>
+          ) : financialsPending && activeSection === "financial-statements" && !xbrlPanel ? (
             <div className="space-y-3 rounded-lg border border-brand-200 bg-brand-50/40 px-5 py-5 shadow-sm">
               <div className="h-4 w-3/4 animate-pulse rounded bg-brand-200" />
               <div className="h-4 w-full animate-pulse rounded bg-brand-100" />

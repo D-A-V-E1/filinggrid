@@ -51,6 +51,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>({});
+  const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>({});
   const loadIdRef = useRef(0);
 
   const columnMinWidth = 300;
@@ -106,6 +107,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     setActiveSection(DEFAULT_ACTIVE_SECTION);
     setError("");
     setFinancialsByTicker({});
+    setFinancialsErrors({});
     setLoadingTickers(tickers);
     setLoadingSections(false);
 
@@ -120,6 +122,16 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
         onFinancial: (ticker, fin) => {
           if (loadId !== loadIdRef.current) return;
           setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
+          setFinancialsErrors((prev) => {
+            if (!(ticker in prev)) return prev;
+            const next = { ...prev };
+            delete next[ticker];
+            return next;
+          });
+        },
+        onError: (ticker, message) => {
+          if (loadId !== loadIdRef.current) return;
+          setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
         },
         onDone: () => undefined,
       });
@@ -175,19 +187,23 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
             if (loadId !== loadIdRef.current) return;
             applyFinancial(ticker, fin);
           },
-          onError: (ticker) => {
+          onError: (ticker, message) => {
             if (loadId !== loadIdRef.current) return;
+            setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
             setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
           },
           onDone: () => {
             if (loadId === loadIdRef.current) setLoadingFinancials(false);
           },
         }
-      ).catch(() => {
-        if (loadId === loadIdRef.current) {
-          setLoadingTickers([]);
-          setLoadingFinancials(false);
-        }
+      ).catch((err) => {
+        if (loadId !== loadIdRef.current) return;
+        const message = err instanceof Error ? err.message : "Failed to load financials";
+        setFinancialsErrors(
+          Object.fromEntries(tickers.map((t) => [t.toUpperCase(), message]))
+        );
+        setLoadingTickers([]);
+        setLoadingFinancials(false);
       });
 
       try {
@@ -237,9 +253,31 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           onFinancial: (ticker, fin) => {
             if (loadId !== loadIdRef.current) return;
             setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
+            setFinancialsErrors((prev) => {
+              if (!(ticker in prev)) return prev;
+              const next = { ...prev };
+              delete next[ticker];
+              return next;
+            });
+          },
+          onError: (ticker, message) => {
+            if (loadId !== loadIdRef.current) return;
+            setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
           },
           onDone: () => undefined,
-        }).catch(() => undefined);
+        }).catch((err) => {
+          if (loadId !== loadIdRef.current) return;
+          const message = err instanceof Error ? err.message : "Failed to load financials";
+          setFinancialsErrors((prev) => ({
+            ...prev,
+            ...Object.fromEntries(
+              tickers
+                .map((t) => t.toUpperCase())
+                .filter((t) => !(t in prev))
+                .map((t) => [t, message])
+            ),
+          }));
+        });
       } catch (err) {
         if (loadId !== loadIdRef.current) return;
         if (err instanceof ApiError && err.isPaywall) {
@@ -420,6 +458,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
                         error={col.error}
                         financialsXbrl={financialsByTicker[col.ticker] ?? null}
                         financialsPending={loadingFinancials && !(col.ticker in financialsByTicker)}
+                        financialsError={financialsErrors[col.ticker] ?? null}
                       />
                     );
                   })}
