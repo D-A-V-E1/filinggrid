@@ -1,6 +1,6 @@
 const ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data";
 
-/** Best-effort EDGAR fragment ids when parsed section metadata has no anchor (10-K / 10-Q / 20-F variants). */
+/** Best-effort EDGAR fragment ids when parsed section metadata has no anchor (10-K / 10-Q / 20-F / 6-K variants). */
 const SECTION_ANCHOR_FALLBACKS: Record<string, string> = {
   business: "item_1_business",
   "risk-factors": "item_1a_risk_factors",
@@ -67,6 +67,11 @@ export function resolveSectionAnchor(
     if (/operating and financial review/i.test(heading ?? "")) {
       return "item_5_operating_and_financial_review";
     }
+    if (/management.s discussion/i.test(heading ?? "")) {
+      return headingItem === "2"
+        ? "item_2_managements_discussion_analysis_f"
+        : SECTION_ANCHOR_FALLBACKS.mda ?? null;
+    }
     return SECTION_ANCHOR_FALLBACKS.mda ?? null;
   }
   if (sectionId === "risk-factors") {
@@ -86,6 +91,9 @@ export function resolveSectionAnchor(
     return SECTION_ANCHOR_FALLBACKS["market-risk"] ?? null;
   }
   if (sectionId === "financial-statements" && headingItem === "1") {
+    return "item_1_financial_statements";
+  }
+  if (sectionId === "financial-statements" && /condensed consolidated financial/i.test(heading ?? "")) {
     return "item_1_financial_statements";
   }
   if (sectionId === "financial-statements" && headingItem === "8") {
@@ -109,6 +117,9 @@ export function resolveSectionAnchor(
 
   if (headingItem) {
     if (headingItem === "1a") return "item_1a_risk_factors";
+    if (headingItem === "2") return "item_2_managements_discussion_analysis_f";
+    if (headingItem === "3") return "item_3_quantitative_qualitative_disclosu";
+    if (headingItem === "4") return "item_4_controls_procedures";
     if (headingItem === "7") return "item_7";
     if (headingItem === "7a") return "item_7a";
     if (headingItem === "8") return "item_8";

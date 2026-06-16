@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -10,12 +11,16 @@ from sec.client import close_http_client, fetch_filing_html, fetch_submissions, 
 from sec.section_extractor import parse_filing_section_index
 
 MAJOR = ["business", "risk-factors", "mda", "market-risk", "financial-statements", "controls"]
+FORM_TYPES = {
+    "10-q": ["10-Q", "10-Q/A"],
+    "6-k": ["6-K"],
+}
 
 
-async def check(ticker: str) -> None:
+async def check(ticker: str, form_types: list[str] | None = None) -> None:
     r = await resolve_ticker(ticker)
     subs = await fetch_submissions(r["cik"])
-    f = find_filing(subs) or find_filing(subs, fiscal_year=None)
+    f = find_filing(subs, form_types=form_types) or find_filing(subs, form_types=form_types, fiscal_year=None)
     html = await fetch_filing_html(r["cik"], f)
     idx = parse_filing_section_index(html)
     soup = BeautifulSoup(html, "html.parser")
@@ -39,8 +44,14 @@ async def check(ticker: str) -> None:
 
 
 async def main() -> None:
-    for t in sys.argv[1:] or ["AAPL", "TM", "TSLA", "GM", "SAP", "ASML", "NVO"]:
-        await check(t)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("tickers", nargs="*")
+    parser.add_argument("--forms", choices=sorted(FORM_TYPES))
+    args = parser.parse_args()
+    form_types = FORM_TYPES.get(args.forms) if args.forms else None
+    tickers = args.tickers or ["AAPL", "TM", "TSLA", "GM", "SAP", "ASML", "NVO"]
+    for t in tickers:
+        await check(t, form_types)
     await close_http_client()
 
 

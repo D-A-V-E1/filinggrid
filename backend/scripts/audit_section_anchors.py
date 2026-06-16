@@ -6,6 +6,8 @@ fragment ids in each filing HTML document.
 
 Usage:
   backend\\.venv\\Scripts\\python.exe backend/scripts/audit_section_anchors.py
+  backend\\.venv\\Scripts\\python.exe backend/scripts/audit_section_anchors.py --forms 10-q
+  backend\\.venv\\Scripts\\python.exe backend/scripts/audit_section_anchors.py --forms 6-k
   backend\\.venv\\Scripts\\python.exe backend/scripts/audit_section_anchors.py --tickers AAPL TM SAP
   backend\\.venv\\Scripts\\python.exe backend/scripts/audit_section_anchors.py --peers tsla-vs-tm-vs-gm
 """
@@ -27,7 +29,15 @@ _BACKEND = Path(__file__).resolve().parents[1]
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from sec.client import close_http_client, fetch_filing_html, fetch_submissions, find_filing, resolve_ticker
+from sec.client import (
+    ANNUAL_COMPARABLE_FORMS,
+    INTERIM_COMPARABLE_FORMS,
+    close_http_client,
+    fetch_filing_html,
+    fetch_submissions,
+    find_filing,
+    resolve_ticker,
+)
 from sec.section_extractor import parse_filing_section_index
 
 # Mirror lib/sec-url.ts fallbacks for when anchor is missing in API response.
@@ -78,6 +88,12 @@ def resolve_section_anchor_frontend(
             return "item_2_managements_discussion_analysis_f"
         if heading and re.search(r"operating and financial review", heading, re.I):
             return "item_5_operating_and_financial_review"
+        if heading and re.search(r"management.s discussion", heading, re.I):
+            return (
+                "item_2_managements_discussion_analysis_f"
+                if heading_item == "2"
+                else SECTION_ANCHOR_FALLBACKS.get("mda")
+            )
         return SECTION_ANCHOR_FALLBACKS.get("mda")
     if section_id == "risk-factors":
         if heading and re.match(r"^\s*[A-Z]\.\s*RISK FACTORS", heading, re.I):
@@ -99,6 +115,10 @@ def resolve_section_anchor_frontend(
         return SECTION_ANCHOR_FALLBACKS.get("market-risk")
     if section_id == "financial-statements" and heading_item == "1":
         return "item_1_financial_statements"
+    if section_id == "financial-statements" and heading and re.search(
+        r"condensed consolidated financial", heading, re.I
+    ):
+        return "item_1_financial_statements"
     if section_id == "financial-statements" and heading_item == "8":
         return "item_8_financial_information"
     if section_id == "legal-proceedings" and heading_item == "1":
@@ -117,6 +137,12 @@ def resolve_section_anchor_frontend(
     if heading_item:
         if heading_item == "1a":
             return "item_1a_risk_factors"
+        if heading_item == "2":
+            return "item_2_managements_discussion_analysis_f"
+        if heading_item == "3":
+            return "item_3_quantitative_qualitative_disclosu"
+        if heading_item == "4":
+            return "item_4_controls_procedures"
         if heading_item == "7":
             return "item_7"
         if heading_item == "7a":
@@ -175,11 +201,21 @@ class TickerReport:
         return len(self.issues) == 0
 
 
+DEFAULT_TICKERS_10Q = ["AAPL", "MSFT", "JPM", "NVDA", "TSLA", "GM", "KO", "WMT"]
+DEFAULT_TICKERS_6K = ["TM", "SAP", "ASML", "NVO", "SONY"]
+
 DEFAULT_TICKERS = [
-    "AAPL", "MSFT", "JPM", "NVDA",  # US 10-K
-    "TM", "SAP", "ASML", "NVO", "SONY",  # Foreign 20-F
-    "TSLA", "GM", "BRK-B", "KO", "WMT",  # Mixed
+    "AAPL", "MSFT", "JPM", "NVDA",
+    "TM", "SAP", "ASML", "NVO", "SONY",
+    "TSLA", "GM", "BRK-B", "KO", "WMT",
 ]
+
+FORM_PRESETS: dict[str, list[str]] = {
+    "annual": list(ANNUAL_COMPARABLE_FORMS) + list(INTERIM_COMPARABLE_FORMS),
+    "10-q": ["10-Q", "10-Q/A"],
+    "10-qa": ["10-Q", "10-Q/A"],
+    "6-k": ["6-K"],
+}
 
 PEER_GROUPS = {
     "tsla-vs-tm-vs-gm": ["TSLA", "TM", "GM"],
@@ -189,12 +225,16 @@ PEER_GROUPS = {
 }
 
 
-async def audit_ticker(ticker: str, fiscal_year: int | None) -> TickerReport:
+async def audit_ticker(
+    ticker: str,
+    fiscal_year: int | None,
+    form_types: list[str] | None = None,
+) -> TickerReport:
     resolved = await resolve_ticker(ticker)
     submissions = await fetch_submissions(resolved["cik"])
-    filing = find_filing(submissions, fiscal_year=fiscal_year)
+    filing = find_filing(submissions, form_types=form_types, fiscal_year=fiscal_year)
     if not filing:
-        filing = find_filing(submissions, fiscal_year=None)
+        filing = find_filing(submissions, form_types=form_types, fiscal_year=None)
     if not filing:
         return TickerReport(ticker=ticker, form="?", sections=0, issues=[
             AnchorIssue(ticker, "?", "?", "", None, None, "no filing found")
@@ -258,6 +298,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(description="Audit SEC section anchor links")
     parser.add_argument("--tickers", nargs="*", default=None)
     parser.add_argument("--peers", nargs="*", default=None, help="Peer slug keys from PEER_GROUPS")
+    parser.add_argument("--forms", nargs="*", default=None, help="Form preset: annual, 10-q, 6-k")
     parser.add_argument("--year", type=int, default=None)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -269,7 +310,18 @@ async def main() -> int:
     if args.tickers:
         tickers.extend(t.upper() for t in args.tickers)
     if not tickers:
-        tickers = DEFAULT_TICKERS
+        form_key = (args.forms[0].lower() if args.forms else "annual")
+        if form_key in ("10-q", "10-qa"):
+            tickers = DEFAULT_TICKERS_10Q
+        elif form_key == "6-k":
+            tickers = DEFAULT_TICKERS_6K
+        else:
+            tickers = DEFAULT_TICKERS
+
+    form_types: list[str] | None = None
+    if args.forms:
+        preset = args.forms[0].lower()
+        form_types = FORM_PRESETS.get(preset, args.forms)
 
     tickers = list(dict.fromkeys(tickers))
     reports: list[TickerReport] = []
@@ -277,7 +329,7 @@ async def main() -> int:
     try:
         for ticker in tickers:
             print(f"Auditing {ticker}...", flush=True)
-            report = await audit_ticker(ticker, args.year)
+            report = await audit_ticker(ticker, args.year, form_types)
             reports.append(report)
             status = "OK" if report.ok else f"{len(report.issues)} issue(s)"
             print(f"  {ticker} ({report.form}): {report.sections} sections — {status}")

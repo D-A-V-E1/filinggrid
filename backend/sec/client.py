@@ -163,9 +163,11 @@ def _form_tier(form: str) -> int:
         return 0
     if form in ("10-K/A", "20-F/A"):
         return 1
-    if form in INTERIM_COMPARABLE_FORMS:
+    if form in ("10-Q", "6-K"):
         return 2
-    return 3
+    if form in ("10-Q/A",):
+        return 3
+    return 4
 
 
 def _filing_date_ord(filing_date: str | None) -> int:

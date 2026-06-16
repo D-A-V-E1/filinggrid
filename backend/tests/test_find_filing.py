@@ -113,3 +113,25 @@ def test_find_filing_prefers_10k_over_10ka_same_year():
     filing = find_filing(subs, fiscal_year=2024)
     assert filing is not None
     assert filing["form"] == "10-K"
+
+
+def test_find_filing_prefers_10q_over_10qa_same_year():
+    subs = _submissions(
+        [
+            {
+                "form": "10-Q/A",
+                "accession": "0000320193-24-000088",
+                "filing_date": "2025-02-01",
+                "report_date": "2024-09-30",
+            },
+            {
+                "form": "10-Q",
+                "accession": "0000320193-24-000055",
+                "filing_date": "2024-11-01",
+                "report_date": "2024-09-30",
+            },
+        ]
+    )
+    filing = find_filing(subs, form_types=["10-Q", "10-Q/A"], fiscal_year=2024)
+    assert filing is not None
+    assert filing["form"] == "10-Q"

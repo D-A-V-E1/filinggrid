@@ -17,13 +17,28 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
     {"id": "risk-factors", "label": "Item 1A — Risk Factors", "patterns": [r"item\s*1a", r"^\d+\.[a-z]\s+risk\s*factors", r"^risk\s*factors"]},
     {"id": "unresolved-staff", "label": "Item 1B — Unresolved Staff Comments", "patterns": [r"item\s*1b"]},
     {"id": "properties", "label": "Item 2 — Properties", "patterns": [r"item\s*2[\.\s—–-]*properties"]},
-    {"id": "legal-proceedings", "label": "Item 3 — Legal Proceedings", "patterns": [r"item\s*3[\.\s—–-]*legal"]},
+    {"id": "legal-proceedings", "label": "Item 3 — Legal Proceedings", "patterns": [
+        r"item\s*3[\.\s—–-]*legal", r"part\s*ii[\.\s—–-]*item\s*1[\.\s—–-]*legal",
+    ]},
     {"id": "mine-safety", "label": "Item 4 — Mine Safety", "patterns": [r"item\s*4[\.\s—–-]*mine", r"mine\s*safety"]},
-    {"id": "mda", "label": "Item 7 — MD&A", "patterns": [r"item\s*7[\.\s—–-]*management", r"item\s*5[\.\s—–-]*operating", r"^management.s\s*discussion", r"^md&a$", r"^operating\s*and\s*financial\s*review"]},
-    {"id": "market-risk", "label": "Item 7A — Market Risk", "patterns": [r"item\s*7a", r"quantitative.*qualitative.*market"]},
-    {"id": "financial-statements", "label": "Item 8 — Financial Statements", "patterns": [r"item\s*8", r"financial\s*statements"]},
+    {"id": "mda", "label": "Item 7 — MD&A", "patterns": [
+        r"item\s*7[\.\s—–-]*management", r"item\s*5[\.\s—–-]*operating",
+        r"item\s*2[\.\s—–-]*management", r"item\s*2[\.\s—–-]*md&a",
+        r"^management.s\s*discussion", r"^md&a$", r"^operating\s*and\s*financial\s*review",
+        r"results\s*of\s*operations",
+    ]},
+    {"id": "market-risk", "label": "Item 7A — Market Risk", "patterns": [
+        r"item\s*7a", r"item\s*3[\.\s—–-]*quantitative", r"item\s*3[\.\s—–-]*market",
+        r"quantitative.*qualitative.*market",
+    ]},
+    {"id": "financial-statements", "label": "Item 8 — Financial Statements", "patterns": [
+        r"item\s*8", r"item\s*1[\.\s—–-]*financial", r"^financial\s*statements",
+        r"condensed\s*consolidated\s*financial",
+    ]},
     {"id": "disagreements", "label": "Item 9 — Disagreements", "patterns": [r"item\s*9[\.\s—–-]*"]},
-    {"id": "controls", "label": "Item 9A — Controls & Procedures", "patterns": [r"item\s*9a", r"controls\s*and\s*procedures"]},
+    {"id": "controls", "label": "Item 9A — Controls & Procedures", "patterns": [
+        r"item\s*9a", r"item\s*4[\.\s—–-]*controls", r"controls\s*and\s*procedures",
+    ]},
     {"id": "other-info", "label": "Item 9B — Other Information", "patterns": [r"item\s*9b"]},
     {
         "id": "note-summary-policies",
@@ -134,6 +149,7 @@ _ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"management.s\s*discussion|md&a", re.IGNORECASE), "mda"),
     (re.compile(r"risk\s*factors", re.IGNORECASE), "risk-factors"),
     (re.compile(r"financial\s*statements", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"condensed\s*consolidated", re.IGNORECASE), "financial-statements"),
     (re.compile(r"legal\s*proceed", re.IGNORECASE), "legal-proceedings"),
     (re.compile(r"quantitative.*qualitative.*market|market\s*risk", re.IGNORECASE), "market-risk"),
     (re.compile(r"controls\s*and\s*procedures", re.IGNORECASE), "controls"),
@@ -206,6 +222,17 @@ def _resolve_item_section(item_num: str, head: str) -> tuple[str, str] | None:
             r"business|information on the company", head, re.IGNORECASE
         ):
             return None
+        # 10-Q Part I uses items 1–4 for financials, MD&A, market risk, and controls.
+        if item_num in ("2", "3", "4") and section_id in (
+            "properties",
+            "legal-proceedings",
+            "mine-safety",
+        ):
+            return None
+        if item_num == "1" and section_id == "business" and re.search(
+            r"financial\s*statements", head, re.IGNORECASE
+        ):
+            return "financial-statements", _section_label("financial-statements")
         subtitle = _AMBIGUOUS_ITEM_SUBTITLES.get(section_id)
         if subtitle and not subtitle.search(head):
             return None
@@ -370,6 +397,14 @@ def _anchor_link_context(link: Tag) -> str:
     return _normalize_text(link.get_text(" ", strip=True))
 
 
+def _anchor_in_document(root: Tag | None, anchor: str | None) -> bool:
+    if root is None or not anchor:
+        return False
+    if root.find(id=anchor) is not None:
+        return True
+    return root.find(attrs={"name": anchor}) is not None
+
+
 def _match_toc_section(text: str) -> tuple[str, str] | None:
     """Looser section match for TOC rows that lead with item numbers (e.g. 20-F '11 Market Risk')."""
     cleaned = _normalize_text(text)
@@ -407,6 +442,8 @@ def _extract_toc_anchors(root: Tag) -> dict[str, str]:
         if section_id == "business" and not re.search(
             r"item\s*1\b|information on the company", context, re.IGNORECASE
         ):
+            continue
+        if not _anchor_in_document(root, fragment):
             continue
         if section_id not in anchors:
             anchors[section_id] = fragment
@@ -495,17 +532,18 @@ def _resolve_section_anchor(
     root: Tag | None = None,
     heading_text: str | None = None,
 ) -> str | None:
-    if section_id in toc_anchors:
-        return toc_anchors[section_id]
+    toc_anchor = toc_anchors.get(section_id)
+    if toc_anchor and _anchor_in_document(root, toc_anchor):
+        return toc_anchor
     anchor = _heading_anchor(heading_block)
-    if anchor:
+    if anchor and _anchor_in_document(root, anchor):
         return anchor
     if root is not None and heading_text:
         fuzzy = _fuzzy_toc_anchor(root, heading_text, section_id)
-        if fuzzy:
+        if fuzzy and _anchor_in_document(root, fuzzy):
             return fuzzy
         text_anchor = _anchor_for_heading_text(root, heading_text)
-        if text_anchor:
+        if text_anchor and _anchor_in_document(root, text_anchor):
             return text_anchor
     return None
 
