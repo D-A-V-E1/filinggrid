@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from threading import Lock
+from threading import Lock, Thread
 from typing import Any
 
 from filing_store import find_cache_key as disk_find_cache_key
@@ -27,7 +27,7 @@ def store_parsed_column(key: str, column: dict[str, Any], sections: list[dict[st
         _touch(key)
         while len(_memory) > _MAX_ENTRIES:
             _memory.popitem(last=False)
-    save_parsed_filing(key, column, sections)
+    Thread(target=save_parsed_filing, args=(key, column, sections), daemon=True).start()
 
 
 def store_section_html(cache_key: str, section_id: str, html: str) -> None:
@@ -40,7 +40,7 @@ def store_section_html(cache_key: str, section_id: str, html: str) -> None:
                     section["html"] = html
                     break
             _touch(cache_key)
-    update_section_html(cache_key, section_id, html)
+    Thread(target=update_section_html, args=(cache_key, section_id, html), daemon=True).start()
 
 
 def load_parsed_column(cache_key: str) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:

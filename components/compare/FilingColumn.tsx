@@ -26,6 +26,7 @@ interface FilingColumnProps {
   sectionLabel: string | null;
   error: string | null;
   financialsXbrl?: FinancialsXbrl | null;
+  financialsPending?: boolean;
 }
 
 function formatSectionLabel(label: string): string {
@@ -207,6 +208,7 @@ function FilingColumn({
   sectionLabel,
   error,
   financialsXbrl,
+  financialsPending = false,
 }: FilingColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
@@ -330,6 +332,9 @@ function FilingColumn({
       .finally(() => setLoadingHtml(false));
   }, [activeSection, loadingHtml, sectionHtml, cacheKey, ticker, fiscalYear]);
 
+  const showFinancialsBootstrap =
+    activeSection === "financial-statements" && (hasXbrlData || financialsPending);
+
   if (error) {
     return (
       <div className="compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-white">
@@ -364,9 +369,16 @@ function FilingColumn({
         <div className="compare-column-body px-5 py-5">
           {xbrlPanel}
 
-          {!activeSection && sections.length === 0 ? (
+          {financialsPending && activeSection === "financial-statements" && !xbrlPanel ? (
+            <div className="space-y-3 rounded-lg border border-brand-200 bg-brand-50/40 px-5 py-5 shadow-sm">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-brand-200" />
+              <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
+              <div className="h-4 w-5/6 animate-pulse rounded bg-brand-100" />
+              <p className="text-[10px] text-brand-700/70">Loading SEC XBRL financials…</p>
+            </div>
+          ) : !activeSection && sections.length === 0 && !showFinancialsBootstrap ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>
-          ) : !section ? (
+          ) : !section && !showFinancialsBootstrap ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
               <p className="text-sm font-medium text-slate-500">Not in this filing</p>
               <p className="mt-1 text-xs text-slate-400">

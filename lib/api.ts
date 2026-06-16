@@ -127,16 +127,34 @@ export class ApiError extends Error {
   }
 }
 
+let _authTokenCache: { token: string | null; expiresAt: number } | null = null;
+let _authTokenInflight: Promise<string | null> | null = null;
+const AUTH_TOKEN_TTL_MS = 30_000;
+
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  try {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  } catch {
-    return null;
+  const now = Date.now();
+  if (_authTokenCache && now < _authTokenCache.expiresAt) {
+    return _authTokenCache.token;
   }
+  if (_authTokenInflight) return _authTokenInflight;
+
+  _authTokenInflight = (async () => {
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token ?? null;
+      _authTokenCache = { token, expiresAt: Date.now() + AUTH_TOKEN_TTL_MS };
+      return token;
+    } catch {
+      return null;
+    } finally {
+      _authTokenInflight = null;
+    }
+  })();
+
+  return _authTokenInflight;
 }
 
 export async function apiFetch<T>(
@@ -240,14 +258,97 @@ export async function parseFilingsStream(
 
 export async function fetchFinancials(
   ticker: string,
-  fiscalYear?: number | null
+  fiscalYear?: number | null,
+  options?: { headlineOnly?: boolean }
 ): Promise<FinancialsXbrl> {
   const params = new URLSearchParams();
   if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+  if (options?.headlineOnly) params.set("headline_only", "true");
   const qs = params.toString();
   return apiFetch<FinancialsXbrl>(
     `/filings/${encodeURIComponent(ticker.toUpperCase())}/financials${qs ? `?${qs}` : ""}`
   );
+}
+
+export interface FinancialsBatchCallbacks {
+  onStart?: (tickers: string[]) => void;
+  onFinancial: (ticker: string, financials: FinancialsXbrl) => void;
+  onError?: (ticker: string, message: string) => void;
+  onDone: () => void;
+}
+
+/** Stream headline/full financials for multiple tickers in one request (shared ticker map). */
+export async function fetchFinancialsBatch(
+  tickers: string[],
+  fiscalYear: number | undefined,
+  options: { headlineOnly?: boolean },
+  callbacks: FinancialsBatchCallbacks
+): Promise<void> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/x-ndjson",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}/filings/financials/batch`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      tickers: tickers.map((t) => t.toUpperCase()),
+      fiscal_year: fiscalYear ?? null,
+      headline_only: options.headlineOnly ?? false,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail: PaywallError | string | Record<string, unknown> = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? body;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, detail);
+  }
+
+  if (!res.body) {
+    throw new Error("Streaming response not supported");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as {
+        type: string;
+        tickers?: string[];
+        ticker?: string;
+        financials?: FinancialsXbrl;
+        message?: string;
+      };
+
+      if (event.type === "start" && event.tickers) {
+        callbacks.onStart?.(event.tickers);
+      } else if (event.type === "financial" && event.ticker && event.financials) {
+        callbacks.onFinancial(event.ticker, event.financials);
+      } else if (event.type === "error" && event.ticker) {
+        callbacks.onError?.(event.ticker, event.message ?? "Failed to load financials");
+      } else if (event.type === "done") {
+        callbacks.onDone();
+      }
+    }
+  }
 }
 
 export async function fetchSectionHtml(

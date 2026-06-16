@@ -224,7 +224,6 @@ async def parse_filings(request: ParseRequest) -> ParseResponse:
 
 async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
     target_year = request.fiscal_year or datetime.now().year
-    ticker_map = await fetch_ticker_map()
     parsed_at = datetime.utcnow().isoformat() + "Z"
 
     yield json.dumps(
@@ -234,6 +233,8 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
             "parsed_at": parsed_at,
         }
     ) + "\n"
+
+    ticker_map = await fetch_ticker_map()
 
     tasks = {
         asyncio.create_task(

@@ -21,13 +21,17 @@ ANNUAL_COMPARABLE_FORMS: tuple[str, ...] = ("10-K", "10-K/A", "20-F", "20-F/A")
 INTERIM_COMPARABLE_FORMS: tuple[str, ...] = ("10-Q", "10-Q/A", "6-K")
 COMPARABLE_FORM_TYPES: list[str] = list(ANNUAL_COMPARABLE_FORMS) + list(INTERIM_COMPARABLE_FORMS)
 
-_last_request_time = 0.0
+_next_request_time = 0.0
 _request_lock = asyncio.Lock()
 MIN_INTERVAL = 0.11  # ~9 req/sec to stay under SEC 10 req/sec limit
 
 _ticker_map_cache: dict[str, dict[str, Any]] | None = None
 _ticker_map_cached_at = 0.0
 TICKER_MAP_TTL = 3600.0  # 1 hour
+_ticker_map_inflight: asyncio.Task[dict[str, dict[str, Any]]] | None = None
+
+_submissions_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
+_filing_html_inflight: dict[tuple[str, str], asyncio.Task[bytes]] = {}
 
 _http_client: httpx.AsyncClient | None = None
 
@@ -51,15 +55,20 @@ async def close_http_client() -> None:
 
 
 async def _rate_limited_get(client: httpx.AsyncClient, url: str, *, data_api: bool = False) -> httpx.Response:
-    global _last_request_time
+    global _next_request_time
     headers = _data_headers() if data_api else None
+
+    # Reserve the next SEC request slot while holding the scheduler lock.
     async with _request_lock:
-        elapsed = time.monotonic() - _last_request_time
-        if elapsed < MIN_INTERVAL:
-            await asyncio.sleep(MIN_INTERVAL - elapsed)
-        response = await client.get(url, headers=headers)
-        _last_request_time = time.monotonic()
-        return response
+        now = time.monotonic()
+        send_at = _next_request_time if _next_request_time > now else now
+        _next_request_time = send_at + MIN_INTERVAL
+
+    wait_for = send_at - time.monotonic()
+    if wait_for > 0:
+        await asyncio.sleep(wait_for)
+
+    return await client.get(url, headers=headers)
 
 
 def _headers() -> dict[str, str]:
@@ -77,26 +86,37 @@ def _data_headers() -> dict[str, str]:
 
 
 async def fetch_ticker_map() -> dict[str, dict[str, Any]]:
-    global _ticker_map_cache, _ticker_map_cached_at
+    global _ticker_map_cache, _ticker_map_cached_at, _ticker_map_inflight
     now = time.monotonic()
     if _ticker_map_cache and (now - _ticker_map_cached_at) < TICKER_MAP_TTL:
         return _ticker_map_cache
 
-    client = await get_http_client()
-    resp = await _rate_limited_get(client, TICKERS_URL)
-    resp.raise_for_status()
-    raw = resp.json()
-    result: dict[str, dict[str, Any]] = {}
-    for entry in raw.values():
-        ticker = str(entry.get("ticker", "")).upper()
-        if ticker:
-            result[ticker] = {
-                "cik": str(entry["cik_str"]).zfill(10),
-                "title": entry.get("title", ticker),
-            }
-    _ticker_map_cache = result
-    _ticker_map_cached_at = now
-    return result
+    if _ticker_map_inflight is not None:
+        return await _ticker_map_inflight
+
+    async def _load() -> dict[str, dict[str, Any]]:
+        client = await get_http_client()
+        resp = await _rate_limited_get(client, TICKERS_URL)
+        resp.raise_for_status()
+        raw = resp.json()
+        result: dict[str, dict[str, Any]] = {}
+        for entry in raw.values():
+            ticker = str(entry.get("ticker", "")).upper()
+            if ticker:
+                result[ticker] = {
+                    "cik": str(entry["cik_str"]).zfill(10),
+                    "title": entry.get("title", ticker),
+                }
+        return result
+
+    _ticker_map_inflight = asyncio.create_task(_load())
+    try:
+        result = await _ticker_map_inflight
+        _ticker_map_cache = result
+        _ticker_map_cached_at = time.monotonic()
+        return result
+    finally:
+        _ticker_map_inflight = None
 
 
 async def resolve_ticker(ticker: str, ticker_map: dict | None = None) -> dict[str, Any]:
@@ -116,14 +136,26 @@ async def fetch_submissions(cik: str) -> dict[str, Any]:
     if cached:
         return cached
 
-    cik_padded = str(int(cik)).zfill(10)
-    url = SUBMISSIONS_URL.format(cik=cik_padded)
-    client = await get_http_client()
-    resp = await _rate_limited_get(client, url, data_api=True)
-    resp.raise_for_status()
-    data = resp.json()
-    save_submissions(cik, data)
-    return data
+    in_flight = _submissions_inflight.get(cik)
+    if in_flight is not None:
+        return await in_flight
+
+    async def _load() -> dict[str, Any]:
+        cik_padded = str(int(cik)).zfill(10)
+        url = SUBMISSIONS_URL.format(cik=cik_padded)
+        client = await get_http_client()
+        resp = await _rate_limited_get(client, url, data_api=True)
+        resp.raise_for_status()
+        data = resp.json()
+        save_submissions(cik, data)
+        return data
+
+    task = asyncio.create_task(_load())
+    _submissions_inflight[cik] = task
+    try:
+        return await task
+    finally:
+        _submissions_inflight.pop(cik, None)
 
 
 def _form_tier(form: str) -> int:
@@ -207,11 +239,23 @@ async def fetch_filing_html(cik: str, filing: dict[str, Any]) -> bytes:
     if cached:
         return cached
 
-    url = build_filing_url(cik, accession, filing.get("primary_document"))
+    key = (cik, accession)
+    in_flight = _filing_html_inflight.get(key)
+    if in_flight is not None:
+        return await in_flight
 
-    client = await get_http_client()
-    resp = await _rate_limited_get(client, url)
-    resp.raise_for_status()
-    html_bytes = await resp.aread()
-    save_filing_html(cik, accession, html_bytes)
-    return html_bytes
+    async def _load() -> bytes:
+        url = build_filing_url(cik, accession, filing.get("primary_document"))
+        client = await get_http_client()
+        resp = await _rate_limited_get(client, url)
+        resp.raise_for_status()
+        html_bytes = await resp.aread()
+        save_filing_html(cik, accession, html_bytes)
+        return html_bytes
+
+    task = asyncio.create_task(_load())
+    _filing_html_inflight[key] = task
+    try:
+        return await task
+    finally:
+        _filing_html_inflight.pop(key, None)

@@ -21,8 +21,11 @@ POC scope: common us-gaap tags with fallbacks; not exhaustive GAAP mapping.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import re
 import time
+from collections.abc import AsyncIterator
 from html import unescape
 from typing import Any
 
@@ -35,6 +38,7 @@ from sec.client import (
 )
 
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+_companyfacts_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
 # Metric key -> candidate us-gaap concept names (first match wins)
 METRIC_CONCEPTS: dict[str, list[str]] = {
@@ -925,14 +929,27 @@ async def fetch_company_facts(cik: str) -> tuple[dict[str, Any], bool]:
     if cached:
         return cached, True
 
-    cik_padded = str(int(cik)).zfill(10)
-    url = COMPANYFACTS_URL.format(cik=cik_padded)
-    client = await get_http_client()
-    resp = await _rate_limited_get(client, url, data_api=True)
-    resp.raise_for_status()
-    data = resp.json()
-    save_company_facts(cik, data)
-    return data, False
+    in_flight = _companyfacts_inflight.get(cik)
+    if in_flight is not None:
+        return await in_flight, False
+
+    async def _load() -> dict[str, Any]:
+        cik_padded = str(int(cik)).zfill(10)
+        url = COMPANYFACTS_URL.format(cik=cik_padded)
+        client = await get_http_client()
+        resp = await _rate_limited_get(client, url, data_api=True)
+        resp.raise_for_status()
+        data = resp.json()
+        save_company_facts(cik, data)
+        return data
+
+    task = asyncio.create_task(_load())
+    _companyfacts_inflight[cik] = task
+    try:
+        data = await task
+        return data, False
+    finally:
+        _companyfacts_inflight.pop(cik, None)
 
 
 def _pick_concept(gaap: dict[str, Any], candidates: list[str]) -> dict[str, Any] | None:
@@ -1153,14 +1170,17 @@ async def fetch_ticker_financials(
     fiscal_year: int | None = None,
     *,
     ticker_map: dict[str, dict[str, Any]] | None = None,
+    headline_only: bool = False,
 ) -> dict[str, Any]:
     """Resolve ticker, fetch companyfacts, return structured financial metrics."""
     started = time.perf_counter()
     resolved = await resolve_ticker(ticker, ticker_map)
     facts, from_cache = await fetch_company_facts(resolved["cik"])
     extracted = extract_financial_metrics(facts, fiscal_year=fiscal_year)
-    filing_html = _load_cached_filing_html(resolved["cik"], fiscal_year)
-    notes_xbrl = extract_note_disclosures(facts, filing_html, fiscal_year=fiscal_year)
+    notes_xbrl: dict[str, Any] = {}
+    if not headline_only:
+        filing_html = _load_cached_filing_html(resolved["cik"], fiscal_year)
+        notes_xbrl = extract_note_disclosures(facts, filing_html, fiscal_year=fiscal_year)
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
 
     cik_padded = str(int(resolved["cik"])).zfill(10)
@@ -1176,3 +1196,43 @@ async def fetch_ticker_financials(
         "notes_xbrl": notes_xbrl,
         **{k: v for k, v in extracted.items() if k not in ("entity_name", "cik")},
     }
+
+
+async def fetch_tickers_financials_stream(
+    tickers: list[str],
+    fiscal_year: int | None = None,
+    *,
+    headline_only: bool = False,
+) -> AsyncIterator[str]:
+    """Stream headline/full financials for multiple tickers; one ticker map fetch."""
+    ordered = [t.upper().strip() for t in tickers if t.strip()]
+    unique = list(dict.fromkeys(ordered))
+    if not unique:
+        yield json.dumps({"type": "done"}) + "\n"
+        return
+
+    yield json.dumps({"type": "start", "tickers": unique}) + "\n"
+
+    ticker_map = await fetch_ticker_map()
+
+    async def _fetch_one(ticker: str) -> tuple[str, dict[str, Any] | None, str | None]:
+        try:
+            data = await fetch_ticker_financials(
+                ticker,
+                fiscal_year,
+                ticker_map=ticker_map,
+                headline_only=headline_only,
+            )
+            return ticker, data, None
+        except Exception as exc:
+            return ticker, None, str(exc)
+
+    tasks = {asyncio.create_task(_fetch_one(t)): t for t in unique}
+    for task in asyncio.as_completed(tasks):
+        ticker, data, err = await task
+        if data is not None:
+            yield json.dumps({"type": "financial", "ticker": ticker, "financials": data}) + "\n"
+        else:
+            yield json.dumps({"type": "error", "ticker": ticker, "message": err or "unknown"}) + "\n"
+
+    yield json.dumps({"type": "done"}) + "\n"

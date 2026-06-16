@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
 import { searchTickers } from "@/lib/api";
 import PrivacyStrip from "./PrivacyStrip";
@@ -21,6 +21,8 @@ export default function TickerSearchBar({
   fiscalYear?: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [isNavigating, setIsNavigating] = useState(false);
   const [tickers, setTickers] = useState<TickerChip[]>(
     initialTickers.map((t) => ({ ticker: t.toUpperCase() }))
   );
@@ -28,6 +30,31 @@ export default function TickerSearchBar({
   const [suggestions, setSuggestions] = useState<{ ticker: string; company_name: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchError, setSearchError] = useState("");
+
+  const compareUrl = useMemo(() => {
+    if (tickers.length < 2) return null;
+    const slug = buildPeerSlug(tickers.map((t) => t.ticker));
+    const currentYear = new Date().getFullYear();
+    const year = fiscalYear ?? currentYear;
+    return year < currentYear ? `/compare/${slug}?year=${year}` : `/compare/${slug}`;
+  }, [tickers, fiscalYear]);
+
+  useEffect(() => {
+    if (!compareUrl) return;
+    router.prefetch(compareUrl);
+  }, [compareUrl, router]);
+
+  useEffect(() => {
+    if (!isNavigating || !compareUrl) return;
+    const targetPath = compareUrl.split("?")[0];
+    if (pathname === targetPath) setIsNavigating(false);
+  }, [pathname, compareUrl, isNavigating]);
+
+  useEffect(() => {
+    if (!isNavigating) return;
+    const timer = window.setTimeout(() => setIsNavigating(false), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [isNavigating]);
 
   async function handleQueryChange(value: string) {
     setQuery(value.toUpperCase());
@@ -61,12 +88,9 @@ export default function TickerSearchBar({
   }
 
   function handleCompare() {
-    if (tickers.length < 2) return;
-    const slug = buildPeerSlug(tickers.map((t) => t.ticker));
-    const currentYear = new Date().getFullYear();
-    const year = fiscalYear ?? currentYear;
-    const url = year < currentYear ? `/compare/${slug}?year=${year}` : `/compare/${slug}`;
-    router.push(url);
+    if (!compareUrl || isNavigating) return;
+    setIsNavigating(true);
+    router.push(compareUrl);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -133,10 +157,10 @@ export default function TickerSearchBar({
           <button
             type="button"
             onClick={handleCompare}
-            disabled={tickers.length < 2}
+            disabled={tickers.length < 2 || isNavigating}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Compare
+            {isNavigating ? "Opening…" : "Compare"}
           </button>
         </div>
       </div>

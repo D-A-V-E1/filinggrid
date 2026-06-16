@@ -4,13 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   checkApiHealth,
-  fetchFinancials,
+  fetchFinancialsBatch,
   parseFilingsStream,
   type FinancialsXbrl,
   type FilingColumn,
   type ParseResponse,
 } from "@/lib/api";
-import { getComparableSectionIds, resolveDefaultActiveSection } from "@/lib/sections";
+import {
+  getComparableSectionIds,
+  resolveDefaultActiveSection,
+  DEFAULT_ACTIVE_SECTION,
+  FINANCIALS_BOOTSTRAP_CATALOG,
+} from "@/lib/sections";
 import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,8 +36,9 @@ interface CompareGridProps {
 export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareGridProps) {
   const cacheKey = useMemo(() => parseMetaCacheKey(tickers, fiscalYear), [tickers, fiscalYear]);
   const [data, setData] = useState<ParseResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingFinancials, setLoadingFinancials] = useState(false);
   const [loadingTickers, setLoadingTickers] = useState<string[]>([]);
+  const [loadingSections, setLoadingSections] = useState(false);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [paywall, setPaywall] = useState<{ open: boolean; reason: string; message: string }>({
@@ -49,6 +55,21 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
 
   const columnMinWidth = 300;
 
+  const buildPlaceholderColumn = useCallback(
+    (ticker: string, fin?: FinancialsXbrl): FilingColumn => ({
+      ticker,
+      company_name: fin?.entity_name ?? ticker,
+      cik: fin?.cik ?? "",
+      form: null,
+      filing_date: null,
+      report_date: null,
+      fiscal_year: fiscalYear ?? null,
+      sections: [],
+      error: null,
+    }),
+    [fiscalYear]
+  );
+
   useEffect(() => {
     if (auth?.tier) setTier(auth.tier);
   }, [auth?.tier]);
@@ -59,9 +80,14 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
 
   useEffect(() => {
     if (!slugError) return;
-    setLoading(false);
+    setLoadingFinancials(false);
     setError("");
   }, [slugError]);
+
+  const isBootstrapMode = useMemo(() => {
+    if (!data) return false;
+    return data.columns.every((c) => c.sections.length === 0);
+  }, [data]);
 
   const availableSectionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -69,110 +95,167 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     for (const col of data.columns) {
       for (const s of col.sections) ids.add(s.id);
     }
+    if (ids.size === 0 && isBootstrapMode) {
+      ids.add(DEFAULT_ACTIVE_SECTION);
+    }
     return ids;
-  }, [data]);
+  }, [data, isBootstrapMode]);
 
-  const loadFilings = useCallback(async () => {
+  const loadFilings = useCallback(() => {
     const loadId = ++loadIdRef.current;
-    setActiveSection(null);
-    setLoading(true);
-    setLoadingTickers(tickers);
+    setActiveSection(DEFAULT_ACTIVE_SECTION);
     setError("");
+    setFinancialsByTicker({});
+    setLoadingTickers(tickers);
+    setLoadingSections(false);
 
     const cached = loadParseMeta(cacheKey);
     if (cached && hasSectionIndex(cached)) {
       setData(cached);
-      setLoading(false);
+      setActiveSection(resolveDefaultActiveSection(getComparableSectionIds(cached.columns)));
       setLoadingTickers([]);
-      const navigable = getComparableSectionIds(cached.columns);
-      setActiveSection(resolveDefaultActiveSection(navigable));
+      setLoadingFinancials(false);
+
+      void fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: false }, {
+        onFinancial: (ticker, fin) => {
+          if (loadId !== loadIdRef.current) return;
+          setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
+        },
+        onDone: () => undefined,
+      });
       return;
     }
 
-    let catalog: ParseResponse["section_catalog"] = [];
-    let parsedAt = new Date().toISOString();
-    const columns: FilingColumn[] = [];
+    setData({
+      columns: tickers.map((t) => buildPlaceholderColumn(t)),
+      section_catalog: FINANCIALS_BOOTSTRAP_CATALOG,
+      parsed_at: new Date().toISOString(),
+      stateless: false,
+    });
+    setLoadingFinancials(true);
 
-    try {
-      await parseFilingsStream(tickers, fiscalYear, {
-        onCatalog: (sectionCatalog, at) => {
-          if (loadId !== loadIdRef.current) return;
-          catalog = sectionCatalog;
-          parsedAt = at;
-        },
-        onColumn: (column) => {
-          if (loadId !== loadIdRef.current) return;
-          const idx = columns.findIndex((c) => c.ticker === column.ticker);
-          if (idx >= 0) columns[idx] = column;
-          else columns.push(column);
+    void (async () => {
+      const financialsMap: Record<string, FinancialsXbrl> = {};
+      let anyFinancials = false;
 
-          setLoadingTickers((pending) => pending.filter((t) => t !== column.ticker));
-          if (column.sections.length > 0) {
-            setLoading(false);
-          }
-          setData({
-            columns: [...columns],
-            section_catalog: catalog,
-            parsed_at: parsedAt,
-            stateless: false,
-          });
-
-          const navigable = getComparableSectionIds(columns);
-          setActiveSection((prev) => prev ?? resolveDefaultActiveSection(navigable));
-        },
-        onDone: (at) => {
-          if (loadId !== loadIdRef.current) return;
-          parsedAt = at;
-          const result: ParseResponse = {
-            columns: [...columns],
-            section_catalog: catalog,
-            parsed_at: parsedAt,
-            stateless: false,
+      const applyFinancial = (ticker: string, fin: FinancialsXbrl) => {
+        financialsMap[ticker] = fin;
+        anyFinancials = anyFinancials || (fin.annual_summary?.length ?? 0) > 0;
+        setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            columns: prev.columns.map((c) =>
+              c.ticker === ticker
+                ? {
+                    ...c,
+                    company_name: fin.entity_name ?? c.company_name,
+                    cik: fin.cik ?? c.cik,
+                  }
+                : c
+            ),
           };
-          setData(result);
-          saveParseMeta(cacheKey, result);
-          setLoadingTickers([]);
-        },
-      });
-    } catch (err) {
-      if (loadId !== loadIdRef.current) return;
-      if (err instanceof ApiError && err.isPaywall) {
-        const detail = err.detail as { reason?: string; message?: string };
-        setPaywall({
-          open: true,
-          reason: detail.reason || "subscription_required",
-          message: detail.message || "Upgrade to Professional to continue.",
         });
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to load filings");
-        if (columns.length === 0) setData(null);
+        setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
+        setLoadingFinancials(false);
+      };
+
+      const columns: FilingColumn[] = tickers.map((t) => buildPlaceholderColumn(t));
+      let sectionCatalog: ParseResponse["section_catalog"] = FINANCIALS_BOOTSTRAP_CATALOG;
+
+      setLoadingSections(true);
+
+      try {
+        await Promise.all([
+          fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: true }, {
+            onFinancial: (ticker, fin) => {
+              if (loadId !== loadIdRef.current) return;
+              applyFinancial(ticker, fin);
+            },
+            onError: (ticker) => {
+              if (loadId !== loadIdRef.current) return;
+              setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
+            },
+            onDone: () => {
+              if (loadId === loadIdRef.current) setLoadingFinancials(false);
+            },
+          }),
+          parseFilingsStream(tickers, fiscalYear, {
+            onCatalog: (sectionCatalogIn, at) => {
+              if (loadId !== loadIdRef.current) return;
+              sectionCatalog = sectionCatalogIn;
+              setData((prev) =>
+                prev ? { ...prev, section_catalog: sectionCatalogIn, parsed_at: at } : prev
+              );
+            },
+            onColumn: (column) => {
+              if (loadId !== loadIdRef.current) return;
+              const idx = columns.findIndex((c) => c.ticker === column.ticker);
+              if (idx >= 0) columns[idx] = column;
+              else columns.push(column);
+
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  columns: [...columns],
+                  section_catalog: sectionCatalog.length > 0 ? sectionCatalog : prev.section_catalog,
+                };
+              });
+              const navigable = getComparableSectionIds(columns);
+              setActiveSection((prev) => prev ?? resolveDefaultActiveSection(navigable));
+            },
+            onDone: () => {
+              if (loadId !== loadIdRef.current) return;
+              const merged: ParseResponse = {
+                columns: [...columns],
+                section_catalog: sectionCatalog,
+                parsed_at: new Date().toISOString(),
+                stateless: false,
+              };
+              setData(merged);
+              if (hasSectionIndex(merged)) saveParseMeta(cacheKey, merged);
+            },
+          }),
+        ]);
+
+        if (loadId !== loadIdRef.current) return;
+
+        void fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: false }, {
+          onFinancial: (ticker, fin) => {
+            if (loadId !== loadIdRef.current) return;
+            setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
+          },
+          onDone: () => undefined,
+        });
+      } catch (err) {
+        if (loadId !== loadIdRef.current) return;
+        if (err instanceof ApiError && err.isPaywall) {
+          const detail = err.detail as { reason?: string; message?: string };
+          setPaywall({
+            open: true,
+            reason: detail.reason || "subscription_required",
+            message: detail.message || "Upgrade to Professional to continue.",
+          });
+        } else if (!anyFinancials) {
+          setError(err instanceof Error ? err.message : "Failed to load filings");
+          setData(null);
+        }
+        setLoadingTickers([]);
+        setLoadingFinancials(false);
+      } finally {
+        if (loadId === loadIdRef.current) {
+          setLoadingSections(false);
+        }
       }
-      setLoadingTickers([]);
-    } finally {
-      if (loadId === loadIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [cacheKey, tickers, fiscalYear]);
+    })();
+  }, [buildPlaceholderColumn, cacheKey, tickers, fiscalYear]);
 
   useEffect(() => {
     if (slugError) return;
     loadFilings();
   }, [loadFilings, slugError]);
-
-  useEffect(() => {
-    if (!data) return;
-    for (const col of data.columns) {
-      if (col.error) continue;
-      fetchFinancials(col.ticker, fiscalYear)
-        .then((fin) => {
-          setFinancialsByTicker((prev) =>
-            prev[col.ticker] ? prev : { ...prev, [col.ticker]: fin }
-          );
-        })
-        .catch(() => null);
-    }
-  }, [data, fiscalYear]);
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
@@ -187,8 +270,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     return data.section_catalog.find((s) => s.id === activeSection)?.label ?? null;
   }, [data, activeSection]);
 
-  const showWorkspace = data && data.columns.length > 0 && !loading;
-  const showPartialWorkspace = data && data.columns.length > 0 && loading;
+  const canShowCompare = Boolean(data && data.columns.length > 0);
 
   if (slugError) {
     return (
@@ -217,17 +299,20 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
               Professional
             </span>
           )}
-          {loading && (
+          {loadingFinancials && (
             <span className="text-xs text-slate-400">
               {loadingTickers.length > 0
-                ? `Loading ${loadingTickers.join(", ")}…`
-                : "Loading filings…"}
+                ? `Loading financials for ${loadingTickers.join(", ")}…`
+                : "Loading financials…"}
             </span>
           )}
-          {!loading && data?.columns.some((c) => c.from_cache) && (
+          {loadingSections && !loadingFinancials && (
+            <span className="text-xs text-slate-400">Loading filing sections…</span>
+          )}
+          {!loadingFinancials && !loadingSections && data?.columns.some((c) => c.from_cache) && (
             <span className="text-xs text-slate-400">Loaded from cache</span>
           )}
-          {!loading && activeSection && (
+          {activeSection && (
             <span className="hidden text-xs text-slate-400 sm:inline">
               Viewing: {activeSection.replace(/-/g, " ")}
             </span>
@@ -236,20 +321,6 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {loading && !data && (
-          <div className="flex flex-1 items-center justify-center">
-            <div className="flex gap-8">
-              {tickers.map((t) => (
-                <div key={t} className="w-72 animate-pulse space-y-3">
-                  <div className="h-12 rounded bg-slate-200" />
-                  <div className="h-64 rounded bg-slate-100" />
-                  <div className="h-48 rounded bg-slate-100" />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {error && !data && (
           <div className="flex flex-1 items-center justify-center p-6">
             <div className="max-w-md text-center">
@@ -265,7 +336,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           </div>
         )}
 
-        {(showWorkspace || showPartialWorkspace) && data && availableSectionIds.size === 0 && (
+        {canShowCompare && data && availableSectionIds.size === 0 && (
           <div className="flex flex-1 items-center justify-center p-8">
             <div className="max-w-md text-center">
               <p className="text-sm font-medium text-slate-700">No sections were parsed</p>
@@ -278,7 +349,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           </div>
         )}
 
-        {(showWorkspace || showPartialWorkspace) && data && availableSectionIds.size > 0 && (
+        {canShowCompare && data && availableSectionIds.size > 0 && (
           <div className="flex h-full min-h-0 w-full overflow-hidden">
             <SectionNav
               availableSectionIds={availableSectionIds}
@@ -337,6 +408,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
                         sectionLabel={activeSectionLabel}
                         error={col.error}
                         financialsXbrl={financialsByTicker[col.ticker] ?? null}
+                        financialsPending={loadingFinancials && !(col.ticker in financialsByTicker)}
                       />
                     );
                   })}

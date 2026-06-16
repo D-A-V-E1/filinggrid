@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from middleware import AuthContext, check_parse_access, get_auth_context, require_auth
 from filing_parser import ParseRequest, ParseResponse, SectionHtmlResponse, get_section_html, parse_filings, parse_filings_stream
 from sec.client import fetch_ticker_map
-from sec.xbrl_client import fetch_ticker_financials
+from sec.xbrl_client import fetch_ticker_financials, fetch_tickers_financials_stream
 
 settings = get_settings()
 
@@ -32,7 +32,7 @@ class GZipExceptStreamMiddleware:
         self.gzip = GZipMiddleware(app, minimum_size=minimum_size)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and scope.get("path") == "/parse/stream":
+        if scope["type"] == "http" and scope.get("path") in ("/parse/stream", "/filings/financials/batch"):
             await self.app(scope, receive, send)
             return
         await self.gzip(scope, receive, send)
@@ -167,9 +167,39 @@ async def filing_financials_endpoint(
     ticker: str,
     auth: Annotated[AuthContext, Depends(get_auth_context)],
     fiscal_year: int | None = Query(None),
+    headline_only: bool = Query(False),
 ):
     check_parse_access(auth, 1, fiscal_year)
-    return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year)
+    return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year, headline_only=headline_only)
+
+
+class FinancialsBatchRequest(BaseModel):
+    tickers: list[str]
+    fiscal_year: int | None = None
+    headline_only: bool = False
+
+
+@app.post("/filings/financials/batch")
+async def filing_financials_batch_endpoint(
+    request: FinancialsBatchRequest,
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+):
+    tickers = [t.upper().strip() for t in request.tickers if t.strip()]
+    check_parse_access(auth, len(tickers), request.fiscal_year)
+
+    async def event_stream():
+        async for line in fetch_tickers_financials_stream(
+            tickers,
+            request.fiscal_year,
+            headline_only=request.headline_only,
+        ):
+            yield line
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/parse/section", response_model=SectionHtmlResponse)

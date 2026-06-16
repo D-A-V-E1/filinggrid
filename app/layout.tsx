@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
 import Link from "next/link";
 import { Suspense } from "react";
+import ChunkErrorRecovery from "@/components/ChunkErrorRecovery";
 import HeaderNav from "@/components/HeaderNav";
 import QueryStatusBanner from "@/components/QueryStatusBanner";
 import "./globals.css";
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${sourceSerif.variable} ${ibmPlexMono.variable}`}>
       <body className="font-sans">
+        <ChunkErrorRecovery />
         <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between px-4">
             <Link href="/" className="flex items-center gap-2">

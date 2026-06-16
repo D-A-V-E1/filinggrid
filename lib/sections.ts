@@ -101,6 +101,11 @@ export function getComparableSectionIds(
 
 export const DEFAULT_ACTIVE_SECTION = "financial-statements";
 
+/** Minimal catalog shown while XBRL financials load before HTML parse completes. */
+export const FINANCIALS_BOOTSTRAP_CATALOG: { id: string; label: string }[] = [
+  { id: DEFAULT_ACTIVE_SECTION, label: "Item 8 — Financial Statements" },
+];
+
 /** Prefer financial statements on load; fall back to first navigable section. */
 export function resolveDefaultActiveSection(navigableSectionIds: string[]): string | null {
   if (navigableSectionIds.includes(DEFAULT_ACTIVE_SECTION)) {
