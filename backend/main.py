@@ -15,6 +15,7 @@ from typing import Annotated, Literal, Optional
 from billing.stripe_routes import router as billing_router
 from config import get_settings
 from database import SavedPeerGroup, get_db, init_db
+from dev_routes import router as dev_router
 from sqlalchemy.orm import Session
 from middleware import AuthContext, check_parse_access, get_auth_context, require_auth
 from filing_parser import ParseRequest, ParseResponse, SectionHtmlResponse, get_section_html, parse_filings, parse_filings_stream
@@ -71,6 +72,7 @@ app.add_middleware(
 )
 
 app.include_router(billing_router)
+app.include_router(dev_router)
 
 
 @app.post("/webhooks/stripe")

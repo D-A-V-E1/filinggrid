@@ -292,6 +292,9 @@ Copy `.env.example` to `.env` and fill in:
 | `SEC_USER_AGENT` | **Required by SEC** — include your contact email |
 | `APP_URL` | Used in Stripe redirect URLs |
 | `CORS_ORIGINS` | Allowed frontend origin |
+| `ALLOW_DEV_TIER_TOGGLE` | Enable dev tier overrides (`true` local only) |
+| `DEV_PRO_TIER` | Force Professional tier when toggle enabled |
+| `NEXT_PUBLIC_DEV_TIER` | Browser sends `X-Dev-Tier` (`free` or `professional`) |
 
 ---
 
@@ -352,6 +355,8 @@ Stripe Dashboard → Settings → Billing → Customer portal → Enable.
 | Billing | — | Stripe Checkout + Portal |
 
 Paywall triggers automatically on the 4th ticker or a historical year request.
+
+**Local testing without Stripe:** see [docs/TIER_TESTING.md](docs/TIER_TESTING.md) for `ALLOW_DEV_TIER_TOGGLE`, `X-Dev-Tier`, `/dev/tier`, and the `set_org_tier.py` script.
 
 ---
 
