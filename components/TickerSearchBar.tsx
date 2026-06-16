@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
 import { searchTickers } from "@/lib/api";
@@ -30,6 +30,7 @@ export default function TickerSearchBar({
   const [suggestions, setSuggestions] = useState<{ ticker: string; company_name: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const queryRequestIdRef = useRef(0);
 
   const compareUrl = useMemo(() => {
     if (tickers.length < 2) return null;
@@ -57,14 +58,20 @@ export default function TickerSearchBar({
   }, [isNavigating]);
 
   async function handleQueryChange(value: string) {
-    setQuery(value.toUpperCase());
+    const normalized = value.toUpperCase();
+    const requestId = ++queryRequestIdRef.current;
+
+    setQuery(normalized);
     setSearchError("");
-    if (value.length >= 1) {
+    if (normalized.trim().length >= 1) {
       try {
-        const results = await searchTickers(value);
-        setSuggestions(results.filter((r) => !tickers.some((t) => t.ticker === r.ticker)));
-        setShowSuggestions(true);
+        const results = await searchTickers(normalized);
+        if (requestId !== queryRequestIdRef.current) return;
+        const filtered = results.filter((r) => !tickers.some((t) => t.ticker === r.ticker));
+        setSuggestions(filtered);
+        setShowSuggestions(filtered.length > 0);
       } catch {
+        if (requestId !== queryRequestIdRef.current) return;
         setSuggestions([]);
         setSearchError("Ticker search unavailable — is the API running?");
       }
@@ -130,7 +137,7 @@ export default function TickerSearchBar({
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              onFocus={() => query && setShowSuggestions(true)}
+              onFocus={() => query && suggestions.length > 0 && setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               placeholder={tickers.length ? "Add ticker…" : "Enter ticker (e.g. AAPL)"}
               className="w-full bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"

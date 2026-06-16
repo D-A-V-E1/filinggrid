@@ -282,9 +282,9 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-x-hidden">
       <ApiHealthBanner healthy={apiHealthy} />
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
+      <div className="relative z-30 flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
         <TickerSearchBar initialTickers={tickers} compact fiscalYear={fiscalYear} />
         <YearPicker fiscalYear={fiscalYear} tier={tier} onPaywall={handlePaywall} />
         <PeerGroupsMenu

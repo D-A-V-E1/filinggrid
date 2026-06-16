@@ -1,5 +1,7 @@
 """Stripe Checkout, Customer Portal, and webhook handlers."""
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
