@@ -225,8 +225,12 @@ function FilingColumn({
 
   const sectionFilingUrl = useMemo(() => {
     if (!filingUrl || !activeSection || !section) return null;
-    return buildSectionFilingUrl(filingUrl, activeSection, section.anchor, section.heading);
-  }, [filingUrl, activeSection, section]);
+    let anchor = section.anchor;
+    if (!anchor && activeSection.startsWith("note-")) {
+      anchor = sections.find((s) => s.id === "financial-statements")?.anchor ?? null;
+    }
+    return buildSectionFilingUrl(filingUrl, activeSection, anchor, section.heading);
+  }, [filingUrl, activeSection, section, sections]);
 
   const hasXbrlData = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return false;

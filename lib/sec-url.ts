@@ -55,7 +55,8 @@ export function resolveSectionAnchor(
   if (!sectionId) return null;
 
   if (sectionId.startsWith("note-")) {
-    return SECTION_ANCHOR_FALLBACKS["financial-statements"] ?? null;
+    // Footnotes inherit the financial statements anchor from the column when available.
+    return null;
   }
 
   const headingItem = heading?.match(/item\s+(\d+[a-z]?)\b/i)?.[1]?.toLowerCase();
@@ -63,9 +64,13 @@ export function resolveSectionAnchor(
   if (sectionId === "mda") {
     if (headingItem === "5") return "item_5_operating_and_financial_review";
     if (headingItem === "2") return "item_2_managements_discussion_analysis_f";
+    if (/operating and financial review/i.test(heading ?? "")) {
+      return "item_5_operating_and_financial_review";
+    }
     return SECTION_ANCHOR_FALLBACKS.mda ?? null;
   }
   if (sectionId === "risk-factors") {
+    if (/^[A-Z]\.\s*RISK FACTORS/i.test(heading ?? "")) return "item_3d_risk_factors";
     if (headingItem === "3") return "item_3d_risk_factors";
     return "item_1a_risk_factors";
   }
@@ -74,6 +79,10 @@ export function resolveSectionAnchor(
   }
   if (sectionId === "market-risk") {
     if (headingItem === "3") return "item_3_quantitative_qualitative_disclosu";
+    if (/item\s*11/i.test(heading ?? "")) return "item_11_quantitative_qualitative_disclosu";
+    if (/quantitative and qualitative disclosures about market risk/i.test(heading ?? "")) {
+      return "item_11_quantitative_qualitative_disclosu";
+    }
     return SECTION_ANCHOR_FALLBACKS["market-risk"] ?? null;
   }
   if (sectionId === "financial-statements" && headingItem === "1") {
@@ -87,6 +96,12 @@ export function resolveSectionAnchor(
   }
   if (sectionId === "controls" && headingItem === "4") {
     return "item_4_controls_procedures";
+  }
+  if (sectionId === "controls" && /item\s*15/i.test(heading ?? "")) {
+    return "item_15_controls_and_procedures";
+  }
+  if (sectionId === "business" && /information on the company/i.test(heading ?? "")) {
+    return "item_4_information_on_the_company";
   }
 
   const fallback = SECTION_ANCHOR_FALLBACKS[sectionId];

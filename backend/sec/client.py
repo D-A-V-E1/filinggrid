@@ -159,11 +159,13 @@ async def fetch_submissions(cik: str) -> dict[str, Any]:
 
 
 def _form_tier(form: str) -> int:
-    if form in ANNUAL_COMPARABLE_FORMS:
+    if form in ("10-K", "20-F"):
         return 0
-    if form in INTERIM_COMPARABLE_FORMS:
+    if form in ("10-K/A", "20-F/A"):
         return 1
-    return 2
+    if form in INTERIM_COMPARABLE_FORMS:
+        return 2
+    return 3
 
 
 def _filing_date_ord(filing_date: str | None) -> int:

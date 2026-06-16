@@ -13,13 +13,13 @@ warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # Standard SEC disclosure sections mapped to anchor IDs
 SECTION_DEFINITIONS: list[dict[str, Any]] = [
-    {"id": "business", "label": "Item 1 — Business", "patterns": [r"item\s*1[\.\s—–-]*business", r"^business$", r"information\s*on\s*the\s*company"]},
-    {"id": "risk-factors", "label": "Item 1A — Risk Factors", "patterns": [r"item\s*1a", r"risk\s*factors"]},
+    {"id": "business", "label": "Item 1 — Business", "patterns": [r"item\s*1[\.\s—–-]*business", r"information\s*on\s*the\s*company"]},
+    {"id": "risk-factors", "label": "Item 1A — Risk Factors", "patterns": [r"item\s*1a", r"^\d+\.[a-z]\s+risk\s*factors", r"^risk\s*factors"]},
     {"id": "unresolved-staff", "label": "Item 1B — Unresolved Staff Comments", "patterns": [r"item\s*1b"]},
     {"id": "properties", "label": "Item 2 — Properties", "patterns": [r"item\s*2[\.\s—–-]*properties"]},
     {"id": "legal-proceedings", "label": "Item 3 — Legal Proceedings", "patterns": [r"item\s*3[\.\s—–-]*legal"]},
-    {"id": "mine-safety", "label": "Item 4 — Mine Safety", "patterns": [r"item\s*4"]},
-    {"id": "mda", "label": "Item 7 — MD&A", "patterns": [r"item\s*7[\.\s—–-]*management", r"management.s\s*discussion", r"^md&a$", r"operating\s*and\s*financial\s*review"]},
+    {"id": "mine-safety", "label": "Item 4 — Mine Safety", "patterns": [r"item\s*4[\.\s—–-]*mine", r"mine\s*safety"]},
+    {"id": "mda", "label": "Item 7 — MD&A", "patterns": [r"item\s*7[\.\s—–-]*management", r"item\s*5[\.\s—–-]*operating", r"^management.s\s*discussion", r"^md&a$", r"^operating\s*and\s*financial\s*review"]},
     {"id": "market-risk", "label": "Item 7A — Market Risk", "patterns": [r"item\s*7a", r"quantitative.*qualitative.*market"]},
     {"id": "financial-statements", "label": "Item 8 — Financial Statements", "patterns": [r"item\s*8", r"financial\s*statements"]},
     {"id": "disagreements", "label": "Item 9 — Disagreements", "patterns": [r"item\s*9[\.\s—–-]*"]},
@@ -144,6 +144,8 @@ _ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
 ]
 _MAX_HEADING_CHARS = 220
 
+_OPTIONAL_SECTION_IDS = frozenset({"unresolved-staff", "other-info", "disagreements", "mine-safety"})
+
 _MAJOR_SECTION_IDS = frozenset({
     "business",
     "risk-factors",
@@ -184,12 +186,29 @@ def _section_label(section_id: str) -> str:
     return next(s["label"] for s in SECTION_DEFINITIONS if s["id"] == section_id)
 
 
+_AMBIGUOUS_ITEM_SUBTITLES: dict[str, re.Pattern[str]] = {
+    "properties": re.compile(r"properties", re.IGNORECASE),
+    "legal-proceedings": re.compile(r"legal\s*proceed", re.IGNORECASE),
+    "mine-safety": re.compile(r"mine\s*safety", re.IGNORECASE),
+    "unresolved-staff": re.compile(r"unresolved\s*staff", re.IGNORECASE),
+    "other-info": re.compile(r"other\s*information", re.IGNORECASE),
+    "disagreements": re.compile(r"disagreements", re.IGNORECASE),
+}
+
+
 def _resolve_item_section(item_num: str, head: str) -> tuple[str, str] | None:
     for pattern, section_id in _ITEM_SUBTITLE_RULES:
         if pattern.search(head):
             return section_id, _section_label(section_id)
     section_id = _ITEM_IDS.get(item_num.lower())
     if section_id:
+        if section_id == "business" and not re.search(
+            r"business|information on the company", head, re.IGNORECASE
+        ):
+            return None
+        subtitle = _AMBIGUOUS_ITEM_SUBTITLES.get(section_id)
+        if subtitle and not subtitle.search(head):
+            return None
         return section_id, _section_label(section_id)
     return None
 
@@ -219,11 +238,26 @@ def _match_section(text: str) -> tuple[str, str] | None:
     if re.match(r"^see\s+accompanying\b", cleaned, re.IGNORECASE):
         return None
 
+    if re.match(r"^refer\s+to\b", cleaned, re.IGNORECASE):
+        return None
+
+    if re.match(r"^of\s+", cleaned, re.IGNORECASE):
+        return None
+
+    if "," in cleaned[:50] and not item_match:
+        return None
+
+    subitem_risk = re.match(r"^\s*([A-Za-z])\.\s*(RISK\s+FACTORS|risk\s+factors)", head, re.IGNORECASE)
+    if subitem_risk:
+        return "risk-factors", _section_label("risk-factors")
+
     for section_id, label, pattern in _COMPILED:
         if section_id.startswith("note-"):
             if pattern.search(head):
                 return section_id, label
         elif pattern.search(head):
+            if section_id in _MAJOR_SECTION_IDS and not pattern.match(head) and not item_match:
+                continue
             return section_id, label
     return None
 
@@ -336,6 +370,23 @@ def _anchor_link_context(link: Tag) -> str:
     return _normalize_text(link.get_text(" ", strip=True))
 
 
+def _match_toc_section(text: str) -> tuple[str, str] | None:
+    """Looser section match for TOC rows that lead with item numbers (e.g. 20-F '11 Market Risk')."""
+    cleaned = _normalize_text(text)
+    stripped = re.sub(r"^\d+[A-Za-z]?\.?\s+", "", cleaned)
+    for candidate in (stripped, cleaned):
+        match = _match_section(candidate)
+        if match:
+            return match
+    head = stripped[:_MAX_HEADING_CHARS]
+    for section_id, label, pattern in _COMPILED:
+        if section_id.startswith("note-"):
+            continue
+        if section_id in _MAJOR_SECTION_IDS and pattern.search(head):
+            return section_id, label
+    return None
+
+
 def _extract_toc_anchors(root: Tag) -> dict[str, str]:
     """Map section ids to in-document fragment ids from the filing table of contents."""
     anchors: dict[str, str] = {}
@@ -349,13 +400,62 @@ def _extract_toc_anchors(root: Tag) -> dict[str, str]:
         context = _anchor_link_context(link)
         if len(context) < 3:
             continue
-        match = _match_section(context)
+        match = _match_toc_section(context)
         if not match:
             continue
         section_id, _ = match
+        if section_id == "business" and not re.search(
+            r"item\s*1\b|information on the company", context, re.IGNORECASE
+        ):
+            continue
         if section_id not in anchors:
             anchors[section_id] = fragment
     return anchors
+
+
+def _fuzzy_toc_anchor(root: Tag, heading_text: str, section_id: str) -> str | None:
+    """Match TOC links when heading text aligns but strict section rules missed."""
+    needle = _normalize_text(heading_text).lower()
+    if len(needle) < 8:
+        return None
+    for link in root.find_all("a", href=True):
+        href = link.get("href", "")
+        if not isinstance(href, str) or not href.startswith("#"):
+            continue
+        fragment = href[1:].strip()
+        if not fragment:
+            continue
+        context = _anchor_link_context(link).lower()
+        if needle not in context and context not in needle:
+            continue
+        match = _match_section(context)
+        if match and match[0] == section_id:
+            return fragment
+    return None
+
+
+def _anchor_for_heading_text(root: Tag, heading_text: str) -> str | None:
+    """Locate nearest in-document id for an extracted section heading string."""
+    needle = _normalize_text(heading_text).lower()
+    if len(needle) < 8:
+        return None
+    for text_node in root.find_all(string=True):
+        if not text_node or needle not in _normalize_text(str(text_node)).lower():
+            continue
+        parent = text_node.parent
+        if not isinstance(parent, Tag):
+            continue
+        parent_text = _normalize_text(parent.get_text(" ", strip=True))
+        if needle not in parent_text.lower():
+            continue
+        if len(parent_text) > len(needle) + 80:
+            continue
+        for finder in (parent.find_all_previous, parent.find_all_next):
+            for elem in finder(id=True, limit=8):
+                element_id = elem.get("id")
+                if element_id and len(str(element_id)) > 4:
+                    return str(element_id)
+    return None
 
 
 def _heading_anchor(block: Tag) -> str | None:
@@ -369,9 +469,21 @@ def _heading_anchor(block: Tag) -> str | None:
         name = tag.get("name")
         if name:
             return str(name)
-    for descendant in block.find_all(id=True, limit=3):
+    for descendant in block.find_all(id=True, limit=5):
         element_id = descendant.get("id")
         if element_id:
+            return str(element_id)
+    for tag in block.find_all_previous(True, limit=30):
+        if not isinstance(tag, Tag):
+            continue
+        element_id = tag.get("id")
+        if element_id and len(str(element_id)) > 4:
+            return str(element_id)
+    for tag in block.find_all_next(True, limit=30):
+        if not isinstance(tag, Tag):
+            continue
+        element_id = tag.get("id")
+        if element_id and len(str(element_id)) > 4:
             return str(element_id)
     return None
 
@@ -380,8 +492,22 @@ def _resolve_section_anchor(
     section_id: str,
     heading_block: Tag,
     toc_anchors: dict[str, str],
+    root: Tag | None = None,
+    heading_text: str | None = None,
 ) -> str | None:
-    return toc_anchors.get(section_id) or _heading_anchor(heading_block)
+    if section_id in toc_anchors:
+        return toc_anchors[section_id]
+    anchor = _heading_anchor(heading_block)
+    if anchor:
+        return anchor
+    if root is not None and heading_text:
+        fuzzy = _fuzzy_toc_anchor(root, heading_text, section_id)
+        if fuzzy:
+            return fuzzy
+        text_anchor = _anchor_for_heading_text(root, heading_text)
+        if text_anchor:
+            return text_anchor
+    return None
 
 
 def _extract_table_rows(start: Tag, end: Tag | None) -> str | None:
@@ -588,11 +714,14 @@ def _sections_from_structure(structure: dict[str, Any], *, include_html: bool) -
     section_ends = structure["section_ends"]
     best_meta = structure["best_meta"]
     toc_anchors = structure.get("toc_anchors") or {}
+    root = structure.get("root")
 
     best_by_id: dict[str, dict[str, Any]] = {}
     for section_id, (_span, i, heading_text, label, order) in best_meta.items():
         start_block = headings[i][0]
-        anchor = _resolve_section_anchor(section_id, start_block, toc_anchors)
+        anchor = _resolve_section_anchor(
+            section_id, start_block, toc_anchors, root=root, heading_text=heading_text
+        )
         entry: dict[str, Any] = {
             "id": section_id,
             "label": label,
@@ -607,6 +736,8 @@ def _sections_from_structure(structure: dict[str, Any], *, include_html: bool) -
             html_content = _extract_between(start_block, end_block, blocks, block_index)
             entry["html"] = html_content
             entry["text_preview"] = _text_preview(html_content)
+        if section_id in _OPTIONAL_SECTION_IDS and not anchor:
+            continue
         best_by_id[section_id] = entry
 
     sections = sorted(best_by_id.values(), key=lambda s: s["_order"])
