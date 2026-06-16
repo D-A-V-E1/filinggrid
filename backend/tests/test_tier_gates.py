@@ -11,6 +11,7 @@ from middleware import (
     TIER_LIMITS,
     check_parse_access,
     check_professional_access,
+    get_auth_context,
     resolve_effective_tier,
 )
 
@@ -126,3 +127,37 @@ def test_dev_tier_endpoint_hidden_without_toggle(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _ensure_dev_toggle_allowed()
     assert exc.value.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_get_auth_context_applies_dev_header_for_anonymous(monkeypatch):
+    mock_settings = MagicMock()
+    mock_settings.allow_dev_tier_toggle = True
+    mock_settings.dev_pro_tier = False
+    mock_settings.supabase_jwt_secret = ""
+    monkeypatch.setattr("middleware.settings", mock_settings)
+
+    request = MagicMock()
+    request.headers.get.return_value = "professional"
+
+    auth = await get_auth_context(request, credentials=None, db=MagicMock())
+    assert auth.is_authenticated is False
+    assert auth.tier == "professional"
+    assert auth.limits["max_columns"] == 8
+
+
+@pytest.mark.anyio
+async def test_get_auth_context_applies_env_override_without_auth(monkeypatch):
+    mock_settings = MagicMock()
+    mock_settings.allow_dev_tier_toggle = True
+    mock_settings.dev_pro_tier = True
+    mock_settings.supabase_jwt_secret = ""
+    monkeypatch.setattr("middleware.settings", mock_settings)
+
+    request = MagicMock()
+    request.headers.get.return_value = None
+
+    auth = await get_auth_context(request, credentials=None, db=MagicMock())
+    assert auth.is_authenticated is False
+    assert auth.tier == "professional"
+    assert auth.limits["max_columns"] == 8

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createPeerGroup, deletePeerGroup, listPeerGroups, type PeerGroup } from "@/lib/api";
 import { buildPeerSlug } from "@/lib/utils";
@@ -86,7 +86,7 @@ export default function PeerGroupsMenu({
     }
   }
 
-  async function handleDelete(groupId: string, e: React.MouseEvent) {
+  async function handleDelete(groupId: string, e: MouseEvent) {
     e.stopPropagation();
     if (!confirm("Delete this saved group?")) return;
     setError("");

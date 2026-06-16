@@ -120,10 +120,16 @@ async def get_auth_context(
     db: Session = Depends(get_db),
 ) -> AuthContext:
     if not credentials:
-        return AuthContext(tier="free", is_authenticated=False)
+        return AuthContext(
+            tier=resolve_effective_tier(request, "free"),
+            is_authenticated=False,
+        )
 
     if not settings.supabase_jwt_secret:
-        return AuthContext(tier="free", is_authenticated=False)
+        return AuthContext(
+            tier=resolve_effective_tier(request, "free"),
+            is_authenticated=False,
+        )
 
     payload = decode_jwt(credentials.credentials)
     email = payload.get("email")
