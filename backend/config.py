@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "http://localhost:3000"
 
+    # Dev/test tier override (never enable in production without explicit intent)
+    allow_dev_tier_toggle: bool = False
+    dev_pro_tier: bool = False
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

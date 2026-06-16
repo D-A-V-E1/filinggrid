@@ -51,6 +51,22 @@ class AuthContext:
         return TIER_LIMITS.get(self.tier, TIER_LIMITS["free"])
 
 
+def resolve_effective_tier(request: Request, org_tier: str) -> str:
+    """Apply dev/test tier overrides when ALLOW_DEV_TIER_TOGGLE is enabled."""
+    tier = org_tier if org_tier in TIER_LIMITS else "free"
+    if not settings.allow_dev_tier_toggle:
+        return tier
+
+    header_tier = (request.headers.get("x-dev-tier") or "").strip().lower()
+    if header_tier in TIER_LIMITS:
+        return header_tier
+
+    if settings.dev_pro_tier:
+        return "professional"
+
+    return tier
+
+
 def decode_jwt(token: str) -> dict:
     if not settings.supabase_jwt_secret:
         raise HTTPException(
@@ -121,9 +137,7 @@ async def get_auth_context(
 
     db.info["current_org_id"] = org.id
 
-    tier = org.subscription_tier or "free"
-    if tier not in TIER_LIMITS:
-        tier = "free"
+    tier = resolve_effective_tier(request, org.subscription_tier or "free")
 
     return AuthContext(user=user, organization=org, tier=tier, is_authenticated=True)
 

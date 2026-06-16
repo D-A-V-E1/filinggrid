@@ -168,6 +168,11 @@ export async function apiFetch<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
+  const devTier = process.env.NEXT_PUBLIC_DEV_TIER;
+  if (devTier === "free" || devTier === "professional") {
+    headers["X-Dev-Tier"] = devTier;
+  }
+
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
   if (!res.ok) {
@@ -202,6 +207,11 @@ export async function parseFilingsStream(
     Accept: "application/x-ndjson",
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const devTier = process.env.NEXT_PUBLIC_DEV_TIER;
+  if (devTier === "free" || devTier === "professional") {
+    headers["X-Dev-Tier"] = devTier;
+  }
 
   const res = await fetch(`${API_URL}/parse/stream`, {
     method: "POST",
