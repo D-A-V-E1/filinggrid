@@ -911,7 +911,7 @@ def _load_cached_filing_html(cik: str, fiscal_year: int | None) -> bytes | None:
     submissions = load_submissions(cik)
     if not submissions:
         return None
-    filing = find_filing(submissions, form_types=["10-K", "10-Q"], fiscal_year=fiscal_year)
+    filing = find_filing(submissions, fiscal_year=fiscal_year)
     if not filing:
         return None
     return load_filing_html(cik, filing["accession_no_dash"])
@@ -987,8 +987,8 @@ def _sort_observations(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _filter_annual(entries: list[dict[str, Any]], fiscal_year: int | None) -> list[dict[str, Any]]:
-    annual = [e for e in entries if e.get("fp") == "FY" and e.get("form") in ("10-K", "10-K/A", None, "")]
-    annual = [e for e in annual if e.get("form") in ("10-K", "10-K/A")]
+    annual = [e for e in entries if e.get("fp") == "FY" and e.get("form") in ("10-K", "10-K/A", "20-F", "20-F/A", None, "")]
+    annual = [e for e in annual if e.get("form") in ("10-K", "10-K/A", "20-F", "20-F/A")]
     annual = _dedupe_observations(_sort_observations(annual))
     if fiscal_year is not None:
         annual = [e for e in annual if e.get("fy") == fiscal_year]

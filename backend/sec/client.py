@@ -16,6 +16,11 @@ TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
 
+# Domestic + foreign issuer forms supported for side-by-side compare.
+ANNUAL_COMPARABLE_FORMS: tuple[str, ...] = ("10-K", "10-K/A", "20-F", "20-F/A")
+INTERIM_COMPARABLE_FORMS: tuple[str, ...] = ("10-Q", "10-Q/A", "6-K")
+COMPARABLE_FORM_TYPES: list[str] = list(ANNUAL_COMPARABLE_FORMS) + list(INTERIM_COMPARABLE_FORMS)
+
 _last_request_time = 0.0
 _request_lock = asyncio.Lock()
 MIN_INTERVAL = 0.11  # ~9 req/sec to stay under SEC 10 req/sec limit
@@ -121,12 +126,29 @@ async def fetch_submissions(cik: str) -> dict[str, Any]:
     return data
 
 
+def _form_tier(form: str) -> int:
+    if form in ANNUAL_COMPARABLE_FORMS:
+        return 0
+    if form in INTERIM_COMPARABLE_FORMS:
+        return 1
+    return 2
+
+
+def _filing_date_ord(filing_date: str | None) -> int:
+    if not filing_date:
+        return 0
+    try:
+        return int(filing_date.replace("-", ""))
+    except ValueError:
+        return 0
+
+
 def find_filing(
     submissions: dict[str, Any],
     form_types: list[str] | None = None,
     fiscal_year: int | None = None,
 ) -> dict[str, Any] | None:
-    form_types = form_types or ["10-K", "10-Q"]
+    form_types = form_types or COMPARABLE_FORM_TYPES
     recent = submissions.get("filings", {}).get("recent", {})
     forms = recent.get("form", [])
     accessions = recent.get("accessionNumber", [])
@@ -159,7 +181,10 @@ def find_filing(
 
     if not candidates:
         return None
-    candidates.sort(key=lambda x: x.get("filing_date") or "", reverse=True)
+    # Prefer annual reports (10-K / 20-F) over interim (10-Q / 6-K), then newest filing date.
+    candidates.sort(
+        key=lambda x: (_form_tier(x["form"]), -_filing_date_ord(x.get("filing_date")))
+    )
     return candidates[0]
 
 

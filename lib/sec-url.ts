@@ -1,6 +1,6 @@
 const ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data";
 
-/** Best-effort EDGAR fragment ids when parsed section metadata has no anchor (10-K / 10-Q variants). */
+/** Best-effort EDGAR fragment ids when parsed section metadata has no anchor (10-K / 10-Q / 20-F variants). */
 const SECTION_ANCHOR_FALLBACKS: Record<string, string> = {
   business: "item_1_business",
   "risk-factors": "item_1a_risk_factors",
@@ -61,11 +61,16 @@ export function resolveSectionAnchor(
   const headingItem = heading?.match(/item\s+(\d+[a-z]?)\b/i)?.[1]?.toLowerCase();
 
   if (sectionId === "mda") {
+    if (headingItem === "5") return "item_5_operating_and_financial_review";
     if (headingItem === "2") return "item_2_managements_discussion_analysis_f";
     return SECTION_ANCHOR_FALLBACKS.mda ?? null;
   }
   if (sectionId === "risk-factors") {
+    if (headingItem === "3") return "item_3d_risk_factors";
     return "item_1a_risk_factors";
+  }
+  if (sectionId === "business" && headingItem === "4") {
+    return "item_4_information_on_the_company";
   }
   if (sectionId === "market-risk") {
     if (headingItem === "3") return "item_3_quantitative_qualitative_disclosu";
@@ -73,6 +78,9 @@ export function resolveSectionAnchor(
   }
   if (sectionId === "financial-statements" && headingItem === "1") {
     return "item_1_financial_statements";
+  }
+  if (sectionId === "financial-statements" && headingItem === "8") {
+    return "item_8_financial_information";
   }
   if (sectionId === "legal-proceedings" && headingItem === "1") {
     return "item_1_legal_proceedings";

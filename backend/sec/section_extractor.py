@@ -13,13 +13,13 @@ warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # Standard SEC disclosure sections mapped to anchor IDs
 SECTION_DEFINITIONS: list[dict[str, Any]] = [
-    {"id": "business", "label": "Item 1 — Business", "patterns": [r"item\s*1[\.\s—–-]*business", r"^business$"]},
+    {"id": "business", "label": "Item 1 — Business", "patterns": [r"item\s*1[\.\s—–-]*business", r"^business$", r"information\s*on\s*the\s*company"]},
     {"id": "risk-factors", "label": "Item 1A — Risk Factors", "patterns": [r"item\s*1a", r"risk\s*factors"]},
     {"id": "unresolved-staff", "label": "Item 1B — Unresolved Staff Comments", "patterns": [r"item\s*1b"]},
     {"id": "properties", "label": "Item 2 — Properties", "patterns": [r"item\s*2[\.\s—–-]*properties"]},
     {"id": "legal-proceedings", "label": "Item 3 — Legal Proceedings", "patterns": [r"item\s*3[\.\s—–-]*legal"]},
     {"id": "mine-safety", "label": "Item 4 — Mine Safety", "patterns": [r"item\s*4"]},
-    {"id": "mda", "label": "Item 7 — MD&A", "patterns": [r"item\s*7[\.\s—–-]*management", r"management.s\s*discussion", r"^md&a$"]},
+    {"id": "mda", "label": "Item 7 — MD&A", "patterns": [r"item\s*7[\.\s—–-]*management", r"management.s\s*discussion", r"^md&a$", r"operating\s*and\s*financial\s*review"]},
     {"id": "market-risk", "label": "Item 7A — Market Risk", "patterns": [r"item\s*7a", r"quantitative.*qualitative.*market"]},
     {"id": "financial-statements", "label": "Item 8 — Financial Statements", "patterns": [r"item\s*8", r"financial\s*statements"]},
     {"id": "disagreements", "label": "Item 9 — Disagreements", "patterns": [r"item\s*9[\.\s—–-]*"]},
@@ -129,6 +129,8 @@ _ITEM_IDS = {
 }
 # Item numbers differ between 10-K and 10-Q; resolve using the subtitle when present.
 _ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"operating\s*and\s*financial\s*review", re.IGNORECASE), "mda"),
+    (re.compile(r"information\s*on\s*the\s*company", re.IGNORECASE), "business"),
     (re.compile(r"management.s\s*discussion|md&a", re.IGNORECASE), "mda"),
     (re.compile(r"risk\s*factors", re.IGNORECASE), "risk-factors"),
     (re.compile(r"financial\s*statements", re.IGNORECASE), "financial-statements"),

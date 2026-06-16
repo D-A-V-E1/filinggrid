@@ -131,7 +131,7 @@ async def _parse_single_ticker(
                 ticker=ticker,
                 company_name=resolved["company_name"],
                 cik=resolved["cik"],
-                error=f"No 10-K/10-Q filing found for fiscal year {target_year}",
+                error=f"No comparable filing (10-K, 10-Q, 20-F, or 6-K) found for fiscal year {target_year}",
             )
             return column, [], None, False
 
