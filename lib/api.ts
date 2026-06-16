@@ -296,7 +296,7 @@ async function fetchFinancialsPerTicker(
   callbacks: FinancialsBatchCallbacks
 ): Promise<void> {
   const ordered = tickers.map((t) => t.toUpperCase()).filter(Boolean);
-  const unique = [...new Set(ordered)];
+  const unique = Array.from(new Set(ordered));
   callbacks.onStart?.(unique);
 
   await Promise.all(
