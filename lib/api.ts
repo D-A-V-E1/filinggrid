@@ -131,6 +131,12 @@ let _authTokenCache: { token: string | null; expiresAt: number } | null = null;
 let _authTokenInflight: Promise<string | null> | null = null;
 const AUTH_TOKEN_TTL_MS = 30_000;
 
+/** Warm auth token cache before first API call (avoids serial delay on compare load). */
+export function prefetchAuthToken(): void {
+  if (typeof window === "undefined") return;
+  void getAuthToken();
+}
+
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   const now = Date.now();

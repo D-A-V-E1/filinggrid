@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   checkApiHealth,
+  fetchFinancials,
   fetchFinancialsBatch,
   parseFilingsStream,
+  prefetchAuthToken,
   type FinancialsXbrl,
   type FilingColumn,
   type ParseResponse,
@@ -76,6 +78,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
   }, [auth?.tier]);
 
   useEffect(() => {
+    prefetchAuthToken();
     checkApiHealth().then(setApiHealthy);
   }, []);
 
@@ -110,31 +113,82 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     setFinancialsErrors({});
     setLoadingTickers(tickers);
     setLoadingSections(false);
+    setLoadingFinancials(true);
 
-    const cached = loadParseMeta(cacheKey);
-    if (cached && hasSectionIndex(cached)) {
-      setData(cached);
-      setActiveSection(resolveDefaultActiveSection(getComparableSectionIds(cached.columns)));
-      setLoadingTickers([]);
-      setLoadingFinancials(false);
-
-      void fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: false }, {
-        onFinancial: (ticker, fin) => {
+    const upgradeFullFinancials = (ticker: string) => {
+      void fetchFinancials(ticker, fiscalYear, { headlineOnly: false })
+        .then((full) => {
           if (loadId !== loadIdRef.current) return;
-          setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
+          setFinancialsByTicker((prev) => ({ ...prev, [ticker]: full }));
           setFinancialsErrors((prev) => {
             if (!(ticker in prev)) return prev;
             const next = { ...prev };
             delete next[ticker];
             return next;
           });
+        })
+        .catch((err) => {
+          if (loadId !== loadIdRef.current) return;
+          const message = err instanceof Error ? err.message : "Failed to load financials";
+          setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
+        });
+    };
+
+    let anyFinancials = false;
+
+    const applyHeadlineFinancial = (ticker: string, fin: FinancialsXbrl) => {
+      anyFinancials = anyFinancials || (fin.annual_summary?.length ?? 0) > 0;
+      setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          columns: prev.columns.map((c) =>
+            c.ticker === ticker
+              ? {
+                  ...c,
+                  company_name: fin.entity_name ?? c.company_name,
+                  cik: fin.cik ?? c.cik,
+                }
+              : c
+          ),
+        };
+      });
+      setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
+      setLoadingFinancials(false);
+      upgradeFullFinancials(ticker);
+    };
+
+    const startHeadlineFinancials = () => {
+      void fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: true }, {
+        onFinancial: (ticker, fin) => {
+          if (loadId !== loadIdRef.current) return;
+          applyHeadlineFinancial(ticker, fin);
         },
         onError: (ticker, message) => {
           if (loadId !== loadIdRef.current) return;
           setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
+          setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
         },
-        onDone: () => undefined,
+        onDone: () => {
+          if (loadId === loadIdRef.current) setLoadingFinancials(false);
+        },
+      }).catch((err) => {
+        if (loadId !== loadIdRef.current) return;
+        const message = err instanceof Error ? err.message : "Failed to load financials";
+        setFinancialsErrors(
+          Object.fromEntries(tickers.map((t) => [t.toUpperCase(), message]))
+        );
+        setLoadingTickers([]);
+        setLoadingFinancials(false);
       });
+    };
+
+    const cached = loadParseMeta(cacheKey);
+    if (cached && hasSectionIndex(cached)) {
+      setData(cached);
+      setActiveSection(resolveDefaultActiveSection(getComparableSectionIds(cached.columns)));
+      startHeadlineFinancials();
       return;
     }
 
@@ -144,67 +198,13 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       parsed_at: new Date().toISOString(),
       stateless: false,
     });
-    setLoadingFinancials(true);
 
     void (async () => {
-      const financialsMap: Record<string, FinancialsXbrl> = {};
-      let anyFinancials = false;
-
-      const applyFinancial = (ticker: string, fin: FinancialsXbrl) => {
-        financialsMap[ticker] = fin;
-        anyFinancials = anyFinancials || (fin.annual_summary?.length ?? 0) > 0;
-        setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
-        setData((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            columns: prev.columns.map((c) =>
-              c.ticker === ticker
-                ? {
-                    ...c,
-                    company_name: fin.entity_name ?? c.company_name,
-                    cik: fin.cik ?? c.cik,
-                  }
-                : c
-            ),
-          };
-        });
-        setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
-        setLoadingFinancials(false);
-      };
-
       const columns: FilingColumn[] = tickers.map((t) => buildPlaceholderColumn(t));
       let sectionCatalog: ParseResponse["section_catalog"] = FINANCIALS_BOOTSTRAP_CATALOG;
 
       setLoadingSections(true);
-
-      const headlineFinancialsPromise = fetchFinancialsBatch(
-        tickers,
-        fiscalYear,
-        { headlineOnly: true },
-        {
-          onFinancial: (ticker, fin) => {
-            if (loadId !== loadIdRef.current) return;
-            applyFinancial(ticker, fin);
-          },
-          onError: (ticker, message) => {
-            if (loadId !== loadIdRef.current) return;
-            setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
-            setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
-          },
-          onDone: () => {
-            if (loadId === loadIdRef.current) setLoadingFinancials(false);
-          },
-        }
-      ).catch((err) => {
-        if (loadId !== loadIdRef.current) return;
-        const message = err instanceof Error ? err.message : "Failed to load financials";
-        setFinancialsErrors(
-          Object.fromEntries(tickers.map((t) => [t.toUpperCase(), message]))
-        );
-        setLoadingTickers([]);
-        setLoadingFinancials(false);
-      });
+      startHeadlineFinancials();
 
       try {
         await parseFilingsStream(tickers, fiscalYear, {
@@ -243,40 +243,6 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
             setData(merged);
             if (hasSectionIndex(merged)) saveParseMeta(cacheKey, merged);
           },
-        });
-
-        if (loadId !== loadIdRef.current) return;
-
-        await headlineFinancialsPromise;
-
-        void fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: false }, {
-          onFinancial: (ticker, fin) => {
-            if (loadId !== loadIdRef.current) return;
-            setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
-            setFinancialsErrors((prev) => {
-              if (!(ticker in prev)) return prev;
-              const next = { ...prev };
-              delete next[ticker];
-              return next;
-            });
-          },
-          onError: (ticker, message) => {
-            if (loadId !== loadIdRef.current) return;
-            setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
-          },
-          onDone: () => undefined,
-        }).catch((err) => {
-          if (loadId !== loadIdRef.current) return;
-          const message = err instanceof Error ? err.message : "Failed to load financials";
-          setFinancialsErrors((prev) => ({
-            ...prev,
-            ...Object.fromEntries(
-              tickers
-                .map((t) => t.toUpperCase())
-                .filter((t) => !(t in prev))
-                .map((t) => [t, message])
-            ),
-          }));
         });
       } catch (err) {
         if (loadId !== loadIdRef.current) return;
