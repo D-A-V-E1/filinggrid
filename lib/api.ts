@@ -157,14 +157,11 @@ async function getAuthToken(): Promise<string | null> {
   return _authTokenInflight;
 }
 
-export async function apiFetch<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function buildAuthHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
+    ...extra,
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -172,6 +169,15 @@ export async function apiFetch<T>(
   if (devTier === "free" || devTier === "professional") {
     headers["X-Dev-Tier"] = devTier;
   }
+
+  return headers;
+}
+
+export async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const headers = await buildAuthHeaders(options.headers as Record<string, string>);
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
@@ -201,17 +207,7 @@ export async function parseFilingsStream(
   fiscalYear: number | undefined,
   callbacks: ParseStreamCallbacks
 ): Promise<void> {
-  const token = await getAuthToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/x-ndjson",
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const devTier = process.env.NEXT_PUBLIC_DEV_TIER;
-  if (devTier === "free" || devTier === "professional") {
-    headers["X-Dev-Tier"] = devTier;
-  }
+  const headers = await buildAuthHeaders({ Accept: "application/x-ndjson" });
 
   const res = await fetch(`${API_URL}/parse/stream`, {
     method: "POST",
@@ -287,6 +283,33 @@ export interface FinancialsBatchCallbacks {
   onDone: () => void;
 }
 
+async function fetchFinancialsPerTicker(
+  tickers: string[],
+  fiscalYear: number | undefined,
+  options: { headlineOnly?: boolean },
+  callbacks: FinancialsBatchCallbacks
+): Promise<void> {
+  const ordered = tickers.map((t) => t.toUpperCase()).filter(Boolean);
+  const unique = [...new Set(ordered)];
+  callbacks.onStart?.(unique);
+
+  await Promise.all(
+    unique.map(async (ticker) => {
+      try {
+        const financials = await fetchFinancials(ticker, fiscalYear, options);
+        callbacks.onFinancial(financials.ticker || ticker, financials);
+      } catch (err) {
+        callbacks.onError?.(
+          ticker,
+          err instanceof Error ? err.message : "Failed to load financials"
+        );
+      }
+    })
+  );
+
+  callbacks.onDone();
+}
+
 /** Stream headline/full financials for multiple tickers in one request (shared ticker map). */
 export async function fetchFinancialsBatch(
   tickers: string[],
@@ -294,12 +317,7 @@ export async function fetchFinancialsBatch(
   options: { headlineOnly?: boolean },
   callbacks: FinancialsBatchCallbacks
 ): Promise<void> {
-  const token = await getAuthToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/x-ndjson",
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers = await buildAuthHeaders({ Accept: "application/x-ndjson" });
 
   const res = await fetch(`${API_URL}/filings/financials/batch`, {
     method: "POST",
@@ -319,7 +337,13 @@ export async function fetchFinancialsBatch(
     } catch {
       /* ignore */
     }
-    throw new ApiError(res.status, detail);
+    const err = new ApiError(res.status, detail);
+    // Older backends only expose GET /filings/{ticker}/financials.
+    if (err.status === 404 || err.status === 405) {
+      await fetchFinancialsPerTicker(tickers, fiscalYear, options, callbacks);
+      return;
+    }
+    throw err;
   }
 
   if (!res.body) {

@@ -164,17 +164,6 @@ async def parse_stream_endpoint(
     )
 
 
-@app.get("/filings/{ticker}/financials")
-async def filing_financials_endpoint(
-    ticker: str,
-    auth: Annotated[AuthContext, Depends(get_auth_context)],
-    fiscal_year: int | None = Query(None),
-    headline_only: bool = Query(False),
-):
-    check_parse_access(auth, 1, fiscal_year)
-    return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year, headline_only=headline_only)
-
-
 class FinancialsBatchRequest(BaseModel):
     tickers: list[str]
     fiscal_year: int | None = None
@@ -202,6 +191,17 @@ async def filing_financials_batch_endpoint(
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/filings/{ticker}/financials")
+async def filing_financials_endpoint(
+    ticker: str,
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+    fiscal_year: int | None = Query(None),
+    headline_only: bool = Query(False),
+):
+    check_parse_access(auth, 1, fiscal_year)
+    return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year, headline_only=headline_only)
 
 
 @app.get("/parse/section", response_model=SectionHtmlResponse)

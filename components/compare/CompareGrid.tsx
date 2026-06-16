@@ -166,61 +166,72 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
 
       setLoadingSections(true);
 
-      try {
-        await Promise.all([
-          fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: true }, {
-            onFinancial: (ticker, fin) => {
-              if (loadId !== loadIdRef.current) return;
-              applyFinancial(ticker, fin);
-            },
-            onError: (ticker) => {
-              if (loadId !== loadIdRef.current) return;
-              setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
-            },
-            onDone: () => {
-              if (loadId === loadIdRef.current) setLoadingFinancials(false);
-            },
-          }),
-          parseFilingsStream(tickers, fiscalYear, {
-            onCatalog: (sectionCatalogIn, at) => {
-              if (loadId !== loadIdRef.current) return;
-              sectionCatalog = sectionCatalogIn;
-              setData((prev) =>
-                prev ? { ...prev, section_catalog: sectionCatalogIn, parsed_at: at } : prev
-              );
-            },
-            onColumn: (column) => {
-              if (loadId !== loadIdRef.current) return;
-              const idx = columns.findIndex((c) => c.ticker === column.ticker);
-              if (idx >= 0) columns[idx] = column;
-              else columns.push(column);
+      const headlineFinancialsPromise = fetchFinancialsBatch(
+        tickers,
+        fiscalYear,
+        { headlineOnly: true },
+        {
+          onFinancial: (ticker, fin) => {
+            if (loadId !== loadIdRef.current) return;
+            applyFinancial(ticker, fin);
+          },
+          onError: (ticker) => {
+            if (loadId !== loadIdRef.current) return;
+            setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
+          },
+          onDone: () => {
+            if (loadId === loadIdRef.current) setLoadingFinancials(false);
+          },
+        }
+      ).catch(() => {
+        if (loadId === loadIdRef.current) {
+          setLoadingTickers([]);
+          setLoadingFinancials(false);
+        }
+      });
 
-              setData((prev) => {
-                if (!prev) return prev;
-                return {
-                  ...prev,
-                  columns: [...columns],
-                  section_catalog: sectionCatalog.length > 0 ? sectionCatalog : prev.section_catalog,
-                };
-              });
-              const navigable = getComparableSectionIds(columns);
-              setActiveSection((prev) => prev ?? resolveDefaultActiveSection(navigable));
-            },
-            onDone: () => {
-              if (loadId !== loadIdRef.current) return;
-              const merged: ParseResponse = {
+      try {
+        await parseFilingsStream(tickers, fiscalYear, {
+          onCatalog: (sectionCatalogIn, at) => {
+            if (loadId !== loadIdRef.current) return;
+            sectionCatalog = sectionCatalogIn;
+            setData((prev) =>
+              prev ? { ...prev, section_catalog: sectionCatalogIn, parsed_at: at } : prev
+            );
+          },
+          onColumn: (column) => {
+            if (loadId !== loadIdRef.current) return;
+            const idx = columns.findIndex((c) => c.ticker === column.ticker);
+            if (idx >= 0) columns[idx] = column;
+            else columns.push(column);
+
+            setData((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
                 columns: [...columns],
-                section_catalog: sectionCatalog,
-                parsed_at: new Date().toISOString(),
-                stateless: false,
+                section_catalog: sectionCatalog.length > 0 ? sectionCatalog : prev.section_catalog,
               };
-              setData(merged);
-              if (hasSectionIndex(merged)) saveParseMeta(cacheKey, merged);
-            },
-          }),
-        ]);
+            });
+            const navigable = getComparableSectionIds(columns);
+            setActiveSection((prev) => prev ?? resolveDefaultActiveSection(navigable));
+          },
+          onDone: () => {
+            if (loadId !== loadIdRef.current) return;
+            const merged: ParseResponse = {
+              columns: [...columns],
+              section_catalog: sectionCatalog,
+              parsed_at: new Date().toISOString(),
+              stateless: false,
+            };
+            setData(merged);
+            if (hasSectionIndex(merged)) saveParseMeta(cacheKey, merged);
+          },
+        });
 
         if (loadId !== loadIdRef.current) return;
+
+        await headlineFinancialsPromise;
 
         void fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: false }, {
           onFinancial: (ticker, fin) => {
@@ -228,7 +239,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
             setFinancialsByTicker((prev) => ({ ...prev, [ticker]: fin }));
           },
           onDone: () => undefined,
-        });
+        }).catch(() => undefined);
       } catch (err) {
         if (loadId !== loadIdRef.current) return;
         if (err instanceof ApiError && err.isPaywall) {
