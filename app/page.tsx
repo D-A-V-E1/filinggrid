@@ -1,6 +1,7 @@
 import TickerSearchBar from "@/components/TickerSearchBar";
 import PrivacyStrip from "@/components/PrivacyStrip";
 import Link from "next/link";
+import { Suspense } from "react";
 
 const FEATURES = [
   {
@@ -44,7 +45,9 @@ export default function HomePage() {
             data are stored in our database.
           </p>
           <div className="mx-auto mt-10">
-            <TickerSearchBar />
+            <Suspense fallback={<div className="mx-auto h-12 max-w-xl animate-pulse rounded-lg bg-slate-100" />}>
+              <TickerSearchBar />
+            </Suspense>
           </div>
         </div>
       </section>

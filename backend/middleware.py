@@ -249,10 +249,8 @@ def validate_corporate_email(email: str) -> None:
 def check_parse_access(
     auth: AuthContext,
     ticker_count: int,
-    fiscal_year: Optional[int] = None,
 ) -> None:
     limits = auth.limits
-    current_year = datetime.now().year
 
     if ticker_count > limits["max_columns"]:
         if auth.tier == "professional":
@@ -276,16 +274,33 @@ def check_parse_access(
             },
         )
 
-    if fiscal_year and fiscal_year < current_year and not limits["historical"]:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "code": "PAYWALL",
-                "reason": "historical_data",
-                "message": "Historical filings require a Professional subscription.",
-                "requested_year": fiscal_year,
-            },
-        )
+
+async def check_free_period_access(
+    auth: AuthContext,
+    tickers: list[str],
+    fiscal_year: Optional[int] = None,
+    period: Optional[str] = None,
+) -> None:
+    if auth.tier == "professional" or auth.limits.get("historical"):
+        return
+
+    from filing_parser import list_periods_for_tickers
+    from sec.filing_periods import filter_free_tier_periods, period_in_free_allowlist
+
+    all_periods = await list_periods_for_tickers(tickers)
+    allowed = filter_free_tier_periods(all_periods)
+    if period_in_free_allowlist(fiscal_year, period, allowed):
+        return
+
+    raise HTTPException(
+        status_code=402,
+        detail={
+            "code": "PAYWALL",
+            "reason": "historical_data",
+            "message": "Historical filings require a Professional subscription.",
+            "requested_year": fiscal_year,
+        },
+    )
 
 
 def check_professional_access(auth: AuthContext) -> None:

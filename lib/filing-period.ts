@@ -1,0 +1,75 @@
+/** Filing period URL helpers for 10-K / 10-Q / 20-F / 6-K compare. */
+
+export interface ComparePeriod {
+  fiscalYear?: number;
+  period?: string;
+}
+
+export const CURRENT_YEAR = new Date().getFullYear();
+
+export function annualPeriodId(year: number): string {
+  return `annual-${year}`;
+}
+
+export function resolveComparePeriod(yearParam?: string, periodParam?: string): ComparePeriod {
+  if (periodParam?.trim()) {
+    const period = periodParam.trim();
+    return {
+      period,
+      fiscalYear: fiscalYearFromPeriod(period),
+    };
+  }
+  if (yearParam) {
+    const year = parseInt(yearParam, 10);
+    if (!Number.isNaN(year)) {
+      return { fiscalYear: year };
+    }
+  }
+  return {};
+}
+
+export function fiscalYearFromPeriod(period?: string, fiscalYear?: number): number | undefined {
+  if (fiscalYear != null) return fiscalYear;
+  if (!period) return undefined;
+  if (period.startsWith("annual-")) {
+    const year = parseInt(period.slice("annual-".length), 10);
+    return Number.isNaN(year) ? undefined : year;
+  }
+  if (period.startsWith("interim-")) {
+    const rest = period.slice("interim-".length);
+    const year = parseInt(rest.slice(0, 4), 10);
+    return Number.isNaN(year) ? undefined : year;
+  }
+  return undefined;
+}
+
+export function buildCompareSearchParams(period: ComparePeriod): URLSearchParams {
+  const params = new URLSearchParams();
+  const periodId = period.period;
+  const year = period.fiscalYear ?? CURRENT_YEAR;
+
+  if (periodId?.startsWith("interim-")) {
+    params.set("period", periodId);
+    return params;
+  }
+
+  if (year < CURRENT_YEAR) {
+    params.set("year", String(year));
+  }
+  if (periodId && periodId !== annualPeriodId(CURRENT_YEAR)) {
+    params.set("period", periodId);
+  }
+  return params;
+}
+
+export function comparePathWithPeriod(slug: string, period: ComparePeriod): string {
+  const params = buildCompareSearchParams(period);
+  const query = params.toString();
+  return query ? `/compare/${slug}?${query}` : `/compare/${slug}`;
+}
+
+export function parseMetaPeriodKey(period?: ComparePeriod): string {
+  if (period?.period) return period.period;
+  if (period?.fiscalYear != null) return annualPeriodId(period.fiscalYear);
+  return "current";
+}

@@ -17,13 +17,21 @@ from config import get_settings
 from database import get_db, init_db
 from dev_routes import router as dev_router
 from sqlalchemy.orm import Session
-from middleware import AuthContext, check_parse_access, get_auth_context, get_peer_group_auth, require_auth
+from middleware import AuthContext, check_free_period_access, check_parse_access, get_auth_context, get_peer_group_auth, require_auth
 from peer_groups_service import (
     create_peer_group_for_org,
     delete_peer_group_for_org,
     list_peer_groups_for_org,
 )
-from filing_parser import ParseRequest, ParseResponse, SectionHtmlResponse, get_section_html, parse_filings, parse_filings_stream
+from filing_parser import (
+    ParseRequest,
+    ParseResponse,
+    SectionHtmlResponse,
+    get_section_html,
+    list_periods_for_tickers,
+    parse_filings,
+    parse_filings_stream,
+)
 from sec.client import fetch_ticker_map
 from sec.xbrl_client import fetch_ticker_financials, fetch_tickers_financials_stream
 
@@ -111,6 +119,37 @@ class SavedPeerGroupResponse(BaseModel):
     tickers_list: list[str]
 
 
+class FilingPeriodOption(BaseModel):
+    id: str
+    kind: str
+    fiscal_year: int
+    report_date: str | None = None
+    fp: str | None = None
+    period_end: str | None = None
+    form: str
+    label: str
+    filing_date: str | None = None
+
+
+@app.get("/filings/periods", response_model=list[FilingPeriodOption])
+async def filing_periods_endpoint(
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+    tickers: str = Query(..., description="Comma-separated tickers"),
+):
+    from sec.filing_periods import filter_free_tier_periods
+
+    symbols = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not symbols:
+        raise HTTPException(status_code=400, detail="At least one ticker is required")
+    if len(symbols) > 8:
+        raise HTTPException(status_code=400, detail="Maximum 8 tickers")
+
+    periods = await list_periods_for_tickers(symbols)
+    if auth.tier != "professional":
+        periods = filter_free_tier_periods(periods)
+    return periods
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "filinggrid-api"}
@@ -147,7 +186,8 @@ async def parse_endpoint(
     request: ParseRequest,
     auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
-    check_parse_access(auth, len(request.tickers), request.fiscal_year)
+    check_parse_access(auth, len(request.tickers))
+    await check_free_period_access(auth, request.tickers, request.fiscal_year, request.period)
     return await parse_filings(request)
 
 
@@ -156,7 +196,8 @@ async def parse_stream_endpoint(
     request: ParseRequest,
     auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
-    check_parse_access(auth, len(request.tickers), request.fiscal_year)
+    check_parse_access(auth, len(request.tickers))
+    await check_free_period_access(auth, request.tickers, request.fiscal_year, request.period)
 
     async def event_stream():
         async for line in parse_filings_stream(request):
@@ -211,9 +252,11 @@ async def parse_section_endpoint(
     ticker: str = Query(..., min_length=1, max_length=10),
     section_id: str = Query(..., min_length=1, max_length=64),
     fiscal_year: int | None = Query(None),
+    period: str | None = Query(None),
     format: Literal["html", "text"] = Query("html", alias="format"),
 ):
-    check_parse_access(auth, 1, fiscal_year)
+    check_parse_access(auth, 1)
+    await check_free_period_access(auth, [ticker], fiscal_year, period)
     try:
         return await get_section_html(ticker, section_id, fiscal_year, content_format=format)
     except ValueError as exc:
