@@ -1402,16 +1402,26 @@ def _pick_observation_for_period(
 
     if period_filter.kind == "annual":
         annual = _filter_annual(entries, period_filter.fiscal_year)
-        return annual[0] if annual else None
+        if annual:
+            return annual[0]
+        # FY 10-K not filed yet (e.g. current fiscal year) — use latest interim quarter.
+        quarterly = _filter_quarterly(entries, period_filter.fiscal_year)
+        return quarterly[0] if quarterly else None
 
-    quarterly = [
-        e
-        for e in entries
-        if e.get("fp") in ("Q1", "Q2", "Q3", "Q4") and e.get("form") in ("10-Q", "10-Q/A")
-    ]
-    quarterly = _dedupe_observations(_sort_observations(quarterly))
-    if period_filter.fiscal_year is not None:
-        quarterly = [e for e in quarterly if e.get("fy") == period_filter.fiscal_year]
+    quarterly = _filter_quarterly(entries, period_filter.fiscal_year)
+    if period_filter.fp:
+        by_fp = [e for e in quarterly if e.get("fp") == period_filter.fp]
+        if by_fp:
+            quarterly = by_fp
+    if period_filter.form:
+        form_norm = period_filter.form.replace("/A", "").upper()
+        by_form = [
+            e
+            for e in quarterly
+            if (e.get("form") or "").replace("/A", "").upper() == form_norm
+        ]
+        if by_form:
+            quarterly = by_form
     if period_filter.report_date:
         exact = [e for e in quarterly if e.get("end") == period_filter.report_date]
         if exact:
@@ -1474,7 +1484,9 @@ def _period_meta_from_filter(period_filter: Any | None, rows: list[dict[str, Any
     return {
         "kind": "interim",
         "fy": period_filter.fiscal_year,
+        "fp": period_filter.fp,
         "end": period_filter.report_date,
+        "form": period_filter.form,
     }
 
 
@@ -1502,10 +1514,11 @@ def extract_statement_tables(
         statements[stmt_key] = {"label": label, "rows": rows}
         all_rows.extend(rows)
 
-    return {
+    result = {
         "period": _period_meta_from_filter(period_filter, all_rows),
         "statements": statements,
     }
+    return result
 
 
 def extract_financial_metrics(

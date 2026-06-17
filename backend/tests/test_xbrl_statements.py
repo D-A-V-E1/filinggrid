@@ -117,6 +117,46 @@ def test_extract_statement_tables_filters_interim_period():
     assert ocf["value"] == 40
 
 
+def test_extract_statement_tables_annual_fy_falls_back_to_interim():
+    """When FY 10-K is not filed yet, fiscal_year alone should use latest interim quarter."""
+    facts = {
+        "facts": {
+            "us-gaap": {
+                "Revenues": _concept(
+                    {
+                        "USD": [
+                            _obs(500, fy=2026, fp="Q1", end="2026-03-31", form="10-Q"),
+                            _obs(400, fy=2025, fp="FY", end="2025-12-31", form="10-K"),
+                        ]
+                    }
+                ),
+                "NetIncomeLoss": _concept(
+                    {
+                        "USD": [
+                            _obs(50, fy=2026, fp="Q1", end="2026-03-31", form="10-Q"),
+                        ]
+                    }
+                ),
+            }
+        }
+    }
+    result = extract_statement_tables(facts, fiscal_year=2026)
+    income = result["statements"]["income_statement"]["rows"]
+    assert len(income) >= 1
+    revenue = next(r for r in income if r["key"] == "revenue")
+    assert revenue["value"] == 500
+    assert revenue["fp"] == "Q1"
+
+
+def test_extract_statement_tables_interim_fp_slot():
+    facts = SAMPLE_COMPANYFACTS
+    result = extract_statement_tables(facts, period="interim-2024-Q3-10-Q")
+    income = result["statements"]["income_statement"]["rows"]
+    revenue = next(r for r in income if r["key"] == "revenue")
+    assert revenue["fp"] == "Q3"
+    assert revenue["value"] == 250
+
+
 def test_extract_statement_tables_includes_balance_sheet_rows():
     result = extract_statement_tables(SAMPLE_COMPANYFACTS, fiscal_year=2024)
     balance = result["statements"]["balance_sheet"]["rows"]
