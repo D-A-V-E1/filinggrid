@@ -1,14 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
-import { createPeerGroup, deletePeerGroup, listPeerGroups, type PeerGroup } from "@/lib/api";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import SignInModal from "@/components/auth/SignInModal";
+import {
+  ApiError,
+  createPeerGroup,
+  deletePeerGroup,
+  formatApiError,
+  listPeerGroups,
+  type PeerGroup,
+} from "@/lib/api";
+import { isDevTierToggleEnabled } from "@/lib/dev-tier";
 import { buildPeerSlug } from "@/lib/utils";
 
 interface PeerGroupsMenuProps {
   tickers: string[];
   fiscalYear?: number;
   tier: string;
+  isSignedIn: boolean;
+  authConfigured: boolean;
   onPaywall: (reason: string, message: string) => void;
 }
 
@@ -16,9 +27,16 @@ export default function PeerGroupsMenu({
   tickers,
   fiscalYear,
   tier,
+  isSignedIn,
+  authConfigured,
   onPaywall,
 }: PeerGroupsMenuProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnPath =
+    pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
+
   const [open, setOpen] = useState(false);
   const [groups, setGroups] = useState<PeerGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,8 +44,31 @@ export default function PeerGroupsMenu({
   const [error, setError] = useState("");
   const [saveOpen, setSaveOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [signInOpen, setSignInOpen] = useState(false);
 
   const isPro = tier === "professional";
+  const devProLocal = isDevTierToggleEnabled() && isPro;
+  const needsSignIn = isPro && !isSignedIn && authConfigured && !devProLocal;
+
+  const handleApiError = useCallback(
+    (err: unknown, fallback: string) => {
+      if (err instanceof ApiError && err.isPaywall) {
+        const detail = err.detail as { reason?: string; message?: string };
+        onPaywall(
+          detail.reason || "subscription_required",
+          detail.message || "This feature requires a Professional subscription."
+        );
+        return;
+      }
+      if (err instanceof ApiError && err.isUnauthorized) {
+        setSignInOpen(true);
+        setError("Sign in to save and load peer groups.");
+        return;
+      }
+      setError(formatApiError(err, fallback));
+    },
+    [onPaywall]
+  );
 
   const loadGroups = useCallback(async () => {
     if (!isPro) return;
@@ -36,17 +77,17 @@ export default function PeerGroupsMenu({
     try {
       setGroups(await listPeerGroups());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load groups");
+      handleApiError(err, "Failed to load groups");
     } finally {
       setLoading(false);
     }
-  }, [isPro]);
+  }, [handleApiError, isPro]);
 
   useEffect(() => {
-    if (open && isPro) {
-      loadGroups();
+    if (open && isPro && !needsSignIn) {
+      void loadGroups();
     }
-  }, [open, isPro, loadGroups]);
+  }, [open, isPro, needsSignIn, loadGroups]);
 
   function handleOpen() {
     if (!isPro) {
@@ -54,6 +95,10 @@ export default function PeerGroupsMenu({
         "subscription_required",
         "Saved peer groups are available on the Professional plan."
       );
+      return;
+    }
+    if (needsSignIn) {
+      setSignInOpen(true);
       return;
     }
     setOpen((prev) => !prev);
@@ -80,7 +125,7 @@ export default function PeerGroupsMenu({
       setSaveOpen(false);
       await loadGroups();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save group");
+      handleApiError(err, "Failed to save group");
     } finally {
       setSaving(false);
     }
@@ -94,7 +139,7 @@ export default function PeerGroupsMenu({
       await deletePeerGroup(groupId);
       await loadGroups();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete group");
+      handleApiError(err, "Failed to delete group");
     }
   }
 
@@ -108,7 +153,7 @@ export default function PeerGroupsMenu({
         Saved groups
       </button>
 
-      {open && isPro && (
+      {open && isPro && !needsSignIn && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
@@ -121,6 +166,12 @@ export default function PeerGroupsMenu({
               >
                 + Save current comparison
               </button>
+              {devProLocal && !isSignedIn && (
+                <p className="mt-1 text-[10px] leading-relaxed text-amber-800/80">
+                  Dev mode: groups are stored in memory until the API restarts. Sign in to persist in
+                  PostgreSQL.
+                </p>
+              )}
             </div>
 
             {saveOpen && (
@@ -131,10 +182,13 @@ export default function PeerGroupsMenu({
                   onChange={(e) => setGroupName(e.target.value)}
                   placeholder="Group name (e.g. Mega-cap tech)"
                   className="w-full rounded border border-slate-200 px-2 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleSave();
+                  }}
                 />
                 <button
                   type="button"
-                  onClick={handleSave}
+                  onClick={() => void handleSave()}
                   disabled={saving || !groupName.trim()}
                   className="w-full rounded bg-brand-600 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
                 >
@@ -143,9 +197,7 @@ export default function PeerGroupsMenu({
               </div>
             )}
 
-            {loading && (
-              <p className="px-3 py-2 text-xs text-slate-400">Loading…</p>
-            )}
+            {loading && <p className="px-3 py-2 text-xs text-slate-400">Loading…</p>}
 
             {!loading && groups.length === 0 && (
               <p className="px-3 py-2 text-xs text-slate-400">No saved groups yet.</p>
@@ -153,10 +205,7 @@ export default function PeerGroupsMenu({
 
             {!loading &&
               groups.map((group) => (
-                <div
-                  key={group.id}
-                  className="flex items-center hover:bg-slate-50"
-                >
+                <div key={group.id} className="flex items-center hover:bg-slate-50">
                   <button
                     type="button"
                     onClick={() => loadGroup(group)}
@@ -169,7 +218,7 @@ export default function PeerGroupsMenu({
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => handleDelete(group.id, e)}
+                    onClick={(e) => void handleDelete(group.id, e)}
                     className="shrink-0 px-2 text-slate-400 hover:text-red-600"
                     aria-label={`Delete ${group.group_name}`}
                   >
@@ -182,6 +231,17 @@ export default function PeerGroupsMenu({
           </div>
         </>
       )}
+
+      <SignInModal
+        open={signInOpen}
+        returnPath={returnPath}
+        onClose={() => setSignInOpen(false)}
+        onSignedIn={() => {
+          setSignInOpen(false);
+          setOpen(true);
+          void loadGroups();
+        }}
+      />
     </div>
   );
 }

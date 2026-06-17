@@ -29,6 +29,8 @@ interface FilingColumnProps {
   financialsPending?: boolean;
   financialsError?: string | null;
   sectionsPending?: boolean;
+  columnCount?: number;
+  fiscalYearFilter?: number | null;
 }
 
 function formatSectionLabel(label: string): string {
@@ -74,17 +76,41 @@ interface XbrlPanelProps {
   fetchMs?: number;
   fromCache?: boolean;
   subtitle?: string;
+  fiscalYearFilter?: number | null;
+  compact?: boolean;
 }
 
-function XbrlMetricsPanel({ rows, annualSummary, fetchMs, fromCache, subtitle }: XbrlPanelProps) {
-  const tableRows = annualSummary.slice(0, 4);
+function pickAnnualRows(
+  annualSummary: XbrlPanelProps["annualSummary"],
+  fiscalYearFilter?: number | null,
+  compact?: boolean
+): XbrlPanelProps["annualSummary"] {
+  if (fiscalYearFilter != null) {
+    const match = annualSummary.filter((r) => r.fy === fiscalYearFilter);
+    if (match.length > 0) return match;
+  }
+  const sorted = [...annualSummary].sort((a, b) => b.fy - a.fy);
+  if (compact) return sorted.slice(0, 1);
+  return sorted.slice(0, 4);
+}
+
+function XbrlMetricsPanel({
+  rows,
+  annualSummary,
+  fetchMs,
+  fromCache,
+  subtitle,
+  fiscalYearFilter,
+  compact,
+}: XbrlPanelProps) {
+  const tableRows = pickAnnualRows(annualSummary, fiscalYearFilter, compact);
   if (tableRows.length === 0) return null;
 
   const visibleRows = rows.filter(({ key }) => tableRows.some((r) => r[key] != null));
   if (visibleRows.length === 0) return null;
 
   return (
-    <article className="mb-4 rounded-lg border border-brand-200 bg-brand-50/40 px-4 py-4 shadow-sm">
+    <article className="mb-4 rounded-lg border border-brand-200 bg-brand-50/40 px-3 py-4 shadow-sm sm:px-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-brand-800">
           SEC XBRL (fast path)
@@ -96,12 +122,12 @@ function XbrlMetricsPanel({ rows, annualSummary, fetchMs, fromCache, subtitle }:
         )}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[280px] border-collapse text-left text-xs">
+        <table className="w-full table-fixed border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-brand-200/80">
-              <th className="py-1.5 pr-3 font-medium text-slate-600">Metric</th>
+              <th className="w-[42%] py-1.5 pr-2 font-medium text-slate-600">Metric</th>
               {tableRows.map((r) => (
-                <th key={r.fy} className="py-1.5 px-2 text-right font-mono font-semibold text-slate-700">
+                <th key={r.fy} className="py-1.5 px-1 text-right font-mono font-semibold text-slate-700">
                   FY {r.fy}
                 </th>
               ))}
@@ -110,11 +136,11 @@ function XbrlMetricsPanel({ rows, annualSummary, fetchMs, fromCache, subtitle }:
           <tbody>
             {visibleRows.map(({ key, label, unit }) => (
               <tr key={key} className="border-b border-brand-100/80 last:border-0">
-                <td className="py-1.5 pr-3 text-slate-600">{label}</td>
+                <td className="py-1.5 pr-2 text-slate-600">{label}</td>
                 {tableRows.map((r) => {
                   const val = r[key];
                   return (
-                    <td key={r.fy} className="py-1.5 px-2 text-right font-mono tabular-nums text-slate-800">
+                    <td key={r.fy} className="py-1.5 px-1 text-right font-mono tabular-nums text-slate-800">
                       {typeof val === "number" ? formatMetricValue(val, unit) : "—"}
                     </td>
                   );
@@ -213,7 +239,12 @@ function FilingColumn({
   financialsPending = false,
   financialsError = null,
   sectionsPending = false,
+  columnCount = 1,
+  fiscalYearFilter = null,
 }: FilingColumnProps) {
+  const compactMetrics = columnCount >= 4;
+  const resolvedFiscalYear =
+    fiscalYearFilter ?? financialsXbrl?.fiscal_year_filter ?? fiscalYear ?? null;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
   const [loadingHtml, setLoadingHtml] = useState(false);
@@ -268,6 +299,8 @@ function FilingColumn({
           fetchMs={financialsXbrl.fetch_ms}
           fromCache={financialsXbrl.from_cache}
           subtitle="Headline GAAP metrics from SEC companyfacts."
+          fiscalYearFilter={resolvedFiscalYear}
+          compact={compactMetrics}
         />
       );
     }
@@ -283,6 +316,8 @@ function FilingColumn({
           fetchMs={financialsXbrl.fetch_ms}
           fromCache={financialsXbrl.from_cache}
           subtitle="Tagged GAAP facts from SEC companyfacts."
+          fiscalYearFilter={resolvedFiscalYear}
+          compact={compactMetrics}
         />
       ) : null;
 
@@ -299,7 +334,7 @@ function FilingColumn({
         {metricsPanel}
       </>
     );
-  }, [financialsXbrl, activeSection]);
+  }, [financialsXbrl, activeSection, resolvedFiscalYear, compactMetrics]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });

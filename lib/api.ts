@@ -127,6 +127,28 @@ export class ApiError extends Error {
   get isPaywall(): boolean {
     return this.status === 402;
   }
+
+  get isUnauthorized(): boolean {
+    return this.status === 401;
+  }
+}
+
+/** User-facing message from an API error. */
+export function formatApiError(err: unknown, fallback = "Request failed"): string {
+  if (err instanceof ApiError) {
+    if (typeof err.detail === "object" && err.detail !== null && "message" in err.detail) {
+      return String(err.detail.message);
+    }
+    if (typeof err.detail === "string" && err.detail.trim()) {
+      return err.detail;
+    }
+    if (err.isUnauthorized) {
+      return "Sign in to save and load peer groups.";
+    }
+    return err.message || fallback;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
 }
 
 let _authTokenCache: { token: string | null; expiresAt: number } | null = null;

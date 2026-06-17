@@ -23,6 +23,8 @@ if /i "%~1"=="api" (
         pause
         exit /b 1
     )
+    :: Honor frontend dev tier toggle (X-Dev-Tier) during local development
+    if not defined ALLOW_DEV_TIER_TOGGLE set "ALLOW_DEV_TIER_TOGGLE=true"
     "%VENV_PY%" -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
     goto :eof
 )

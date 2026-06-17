@@ -154,6 +154,28 @@ async def require_auth(auth: Annotated[AuthContext, Depends(get_auth_context)]) 
     return auth
 
 
+async def get_peer_group_auth(
+    request: Request,
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)] = None,
+    db: Session = Depends(get_db),
+) -> AuthContext:
+    """Auth for saved peer groups — signed-in users, or anonymous dev Pro when toggle is enabled."""
+    auth = await get_auth_context(request, credentials, db)
+    if auth.is_authenticated and auth.organization:
+        return auth
+
+    if settings.allow_dev_tier_toggle and resolve_effective_tier(request, "free") == "professional":
+        from peer_groups_service import DevPeerOrganization
+
+        return AuthContext(
+            organization=DevPeerOrganization(),
+            tier="professional",
+            is_authenticated=True,
+        )
+
+    raise HTTPException(status_code=401, detail="Authentication required")
+
+
 def validate_corporate_email(email: str) -> None:
     domain = email.split("@")[-1].lower()
     if domain in CONSUMER_EMAIL_DOMAINS:

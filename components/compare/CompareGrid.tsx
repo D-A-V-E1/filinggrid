@@ -52,7 +52,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     reason: "",
     message: "",
   });
-  const { auth, loading: authLoading, refresh: refreshAuth } = useAuth();
+  const { auth, loading: authLoading, refresh: refreshAuth, isSignedIn, configured } = useAuth();
   const { tier, isPro, maxColumns } = useEffectiveTier(auth);
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -61,7 +61,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
   const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>({});
   const loadIdRef = useRef(0);
 
-  const columnMinWidth = 300;
+  const columnMinWidth = tickers.length <= 3 ? 300 : tickers.length <= 5 ? 280 : 260;
 
   const buildPlaceholderColumn = useCallback(
     (ticker: string, fin?: FinancialsXbrl): FilingColumn => ({
@@ -265,11 +265,15 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           const detail = err.detail as { reason?: string; message?: string };
           const reason = detail.reason || "subscription_required";
           const message = detail.message || "Upgrade to Professional to continue.";
-          if (!isPro || reason === "column_limit") {
+          if (!isPro) {
             setPaywall({ open: true, reason, message });
-          }
-          if (reason === "column_limit") {
-            setSectionsParseError(message);
+            if (reason === "column_limit") {
+              setSectionsParseError(message);
+            }
+          } else if (reason === "column_limit") {
+            setSectionsParseError(
+              "Filing sections could not load for all tickers. Restart the API via start.bat so ALLOW_DEV_TIER_TOGGLE is enabled, or sign in with a Professional subscription."
+            );
           }
         } else if (!anyFinancials) {
           setError(err instanceof Error ? err.message : "Failed to load filings");
@@ -295,8 +299,8 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       const message = compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length);
       if (!isPro) {
         setPaywall({ open: true, reason: "column_limit", message });
+        setSectionsParseError(message);
       }
-      setSectionsParseError(message);
       setData(null);
       setLoadingFinancials(false);
       setLoadingSections(false);
@@ -349,6 +353,8 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           tickers={tickers}
           fiscalYear={fiscalYear}
           tier={tier}
+          isSignedIn={isSignedIn}
+          authConfigured={configured}
           onPaywall={handlePaywall}
         />
         <div className="ml-auto flex items-center gap-3">
@@ -495,6 +501,8 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
                         financialsPending={loadingFinancials && !(col.ticker in financialsByTicker)}
                         financialsError={financialsErrors[col.ticker] ?? null}
                         sectionsPending={loadingSections && col.sections.length === 0}
+                        columnCount={tickers.length}
+                        fiscalYearFilter={fiscalYear ?? col.fiscal_year}
                       />
                     );
                   })}

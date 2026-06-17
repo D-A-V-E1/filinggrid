@@ -14,10 +14,15 @@ from typing import Annotated, Literal, Optional
 
 from billing.stripe_routes import router as billing_router
 from config import get_settings
-from database import SavedPeerGroup, get_db, init_db
+from database import get_db, init_db
 from dev_routes import router as dev_router
 from sqlalchemy.orm import Session
-from middleware import AuthContext, check_parse_access, get_auth_context, require_auth
+from middleware import AuthContext, check_parse_access, get_auth_context, get_peer_group_auth, require_auth
+from peer_groups_service import (
+    create_peer_group_for_org,
+    delete_peer_group_for_org,
+    list_peer_groups_for_org,
+)
 from filing_parser import ParseRequest, ParseResponse, SectionHtmlResponse, get_section_html, parse_filings, parse_filings_stream
 from sec.client import fetch_ticker_map
 from sec.xbrl_client import fetch_ticker_financials, fetch_tickers_financials_stream
@@ -217,61 +222,40 @@ async def parse_section_endpoint(
 
 @app.get("/peer-groups", response_model=list[SavedPeerGroupResponse])
 async def list_peer_groups(
-    auth: Annotated[AuthContext, Depends(require_auth)],
+    auth: Annotated[AuthContext, Depends(get_peer_group_auth)],
     db: Session = Depends(get_db),
 ):
     from middleware import check_professional_access
 
     check_professional_access(auth)
-    db.info["current_org_id"] = auth.organization.id
-    groups = db.query(SavedPeerGroup).filter(
-        SavedPeerGroup.organization_id == auth.organization.id
-    ).all()
-    return [
-        SavedPeerGroupResponse(id=g.id, group_name=g.group_name, tickers_list=g.tickers_list or [])
-        for g in groups
-    ]
+    return list_peer_groups_for_org(db, auth.organization.id)
 
 
 @app.post("/peer-groups", response_model=SavedPeerGroupResponse)
 async def create_peer_group(
     body: SavedPeerGroupRequest,
-    auth: Annotated[AuthContext, Depends(require_auth)],
+    auth: Annotated[AuthContext, Depends(get_peer_group_auth)],
     db: Session = Depends(get_db),
 ):
     from middleware import check_professional_access
 
     check_professional_access(auth)
-    db.info["current_org_id"] = auth.organization.id
-    group = SavedPeerGroup(
-        organization_id=auth.organization.id,
-        group_name=body.group_name,
-        tickers_list=[t.upper() for t in body.tickers_list],
-    )
-    db.add(group)
-    db.commit()
-    db.refresh(group)
-    return SavedPeerGroupResponse(
-        id=group.id, group_name=group.group_name, tickers_list=group.tickers_list
+    return create_peer_group_for_org(
+        db,
+        auth.organization.id,
+        body.group_name,
+        body.tickers_list,
     )
 
 
 @app.delete("/peer-groups/{group_id}")
 async def delete_peer_group(
     group_id: str,
-    auth: Annotated[AuthContext, Depends(require_auth)],
+    auth: Annotated[AuthContext, Depends(get_peer_group_auth)],
     db: Session = Depends(get_db),
 ):
     from middleware import check_professional_access
 
     check_professional_access(auth)
-    db.info["current_org_id"] = auth.organization.id
-    group = db.query(SavedPeerGroup).filter(
-        SavedPeerGroup.id == group_id,
-        SavedPeerGroup.organization_id == auth.organization.id,
-    ).first()
-    if not group:
-        raise HTTPException(status_code=404, detail="Peer group not found")
-    db.delete(group)
-    db.commit()
+    delete_peer_group_for_org(db, auth.organization.id, group_id)
     return {"status": "deleted"}
