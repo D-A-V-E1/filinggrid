@@ -1599,9 +1599,7 @@ def _pick_observation_for_period(
         annual = _filter_annual(entries, period_filter.fiscal_year)
         if annual:
             return annual[0]
-        # FY 10-K not filed yet (e.g. current fiscal year) — use latest interim quarter.
-        quarterly = _filter_quarterly(entries, period_filter.fiscal_year)
-        return quarterly[0] if quarterly else None
+        return None
 
     quarterly = _filter_quarterly(entries, period_filter.fiscal_year)
     if period_filter.fp:
@@ -1663,6 +1661,19 @@ def _extract_statement_rows(
 
 
 def _period_meta_from_filter(period_filter: Any | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if period_filter and period_filter.kind == "annual":
+        annual_rows = [r for r in rows if r.get("fp") == "FY"]
+        ref = annual_rows[0] if annual_rows else (rows[0] if rows else None)
+        meta: dict[str, Any] = {
+            "kind": "annual",
+            "fy": period_filter.fiscal_year,
+            "fp": "FY",
+        }
+        if ref:
+            meta["end"] = ref.get("end")
+            meta["form"] = ref.get("form")
+        return meta
+
     if rows:
         first = rows[0]
         return {
@@ -1697,15 +1708,32 @@ def extract_statement_tables(
     gaap = (facts.get("facts") or {}).get("us-gaap") or {}
     period_filter = resolve_period_filter(fiscal_year, period)
 
-    statements: dict[str, Any] = {}
-    all_rows: list[dict[str, Any]] = []
-    for stmt_key, lines, label in STATEMENT_TABLE_DEFS:
-        rows = _extract_statement_rows(gaap, lines, period_filter)
-        statements[stmt_key] = {"label": label, "rows": rows}
-        all_rows.extend(rows)
+    def _build_tables(pf: Any | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        built: dict[str, Any] = {}
+        rows_out: list[dict[str, Any]] = []
+        for stmt_key, lines, label in STATEMENT_TABLE_DEFS:
+            rows = _extract_statement_rows(gaap, lines, pf)
+            built[stmt_key] = {"label": label, "rows": rows}
+            rows_out.extend(rows)
+        return built, rows_out
+
+    statements, all_rows = _build_tables(period_filter)
+    used_filter = period_filter
+
+    if (
+        period_filter
+        and period_filter.kind == "annual"
+        and not all_rows
+        and period_filter.fiscal_year is not None
+    ):
+        from sec.filing_periods import PeriodFilter
+
+        interim_filter = PeriodFilter(kind="interim", fiscal_year=period_filter.fiscal_year)
+        statements, all_rows = _build_tables(interim_filter)
+        used_filter = interim_filter
 
     result = {
-        "period": _period_meta_from_filter(period_filter, all_rows),
+        "period": _period_meta_from_filter(used_filter, all_rows),
         "statements": statements,
     }
     return result

@@ -159,6 +159,36 @@ def test_extract_statement_tables_filters_interim_period():
     assert ocf["value"] == 40
 
 
+def test_extract_statement_tables_annual_skips_quarterly_only_lines():
+    """Annual 10-K request must not mix in 10-Q-only concepts or label period as quarterly."""
+    facts = {
+        "facts": {
+            "us-gaap": {
+                "Revenues": _concept(
+                    {
+                        "USD": [
+                            _obs(1000, fy=2024, fp="FY", end="2024-12-31", form="10-K"),
+                        ]
+                    }
+                ),
+                "InterestExpense": _concept(
+                    {
+                        "USD": [
+                            _obs(100, fy=2024, fp="Q1", end="2024-03-31", form="10-Q"),
+                        ]
+                    }
+                ),
+            }
+        }
+    }
+    result = extract_statement_tables(facts, fiscal_year=2024, period="annual-2024")
+    assert result["period"]["kind"] == "annual"
+    assert result["period"]["fp"] == "FY"
+    income = result["statements"]["income_statement"]["rows"]
+    assert all(r["fp"] == "FY" for r in income)
+    assert not any(r["key"] == "interest_expense" for r in income)
+
+
 def test_extract_statement_tables_annual_fy_falls_back_to_interim():
     """When FY 10-K is not filed yet, fiscal_year alone should use latest interim quarter."""
     facts = {
