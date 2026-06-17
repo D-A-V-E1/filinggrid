@@ -41,6 +41,7 @@ def test_pro_blocks_ninth_column():
         check_parse_access(auth, 9)
     assert exc.value.status_code == 402
     assert exc.value.detail["reason"] == "column_limit"
+    assert "Professional supports up to 8" in exc.value.detail["message"]
 
 
 def test_free_blocks_historical_year():

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getAuthMe, type AuthMe } from "@/lib/api";
 import { isSupabaseConfigured } from "@/lib/auth-config";
+import { DEV_TIER_CHANGE_EVENT, isDevTierToggleEnabled } from "@/lib/dev-tier";
 
 const EMPTY_AUTH: AuthMe = {
   email: null,
@@ -61,6 +62,15 @@ export function useAuth() {
     });
     return () => subscription.unsubscribe();
   }, [configured, refresh]);
+
+  useEffect(() => {
+    if (!isDevTierToggleEnabled()) return;
+    const onDevTierChange = () => {
+      void refresh();
+    };
+    window.addEventListener(DEV_TIER_CHANGE_EVENT, onDevTierChange);
+    return () => window.removeEventListener(DEV_TIER_CHANGE_EVENT, onDevTierChange);
+  }, [refresh]);
 
   const isSignedIn = Boolean(auth?.is_authenticated);
 

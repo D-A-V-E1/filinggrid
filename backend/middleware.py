@@ -172,12 +172,22 @@ def check_parse_access(
     current_year = datetime.now().year
 
     if ticker_count > limits["max_columns"]:
+        if auth.tier == "professional":
+            message = (
+                f"Professional supports up to {limits['max_columns']} tickers. "
+                "Remove a ticker before adding another."
+            )
+        else:
+            message = (
+                f"Free tier supports up to {limits['max_columns']} tickers. "
+                "Upgrade to Professional for up to 8."
+            )
         raise HTTPException(
             status_code=402,
             detail={
                 "code": "PAYWALL",
                 "reason": "column_limit",
-                "message": f"Free tier supports up to {limits['max_columns']} tickers. Upgrade to Professional for up to 8.",
+                "message": message,
                 "max_columns": limits["max_columns"],
                 "requested": ticker_count,
             },

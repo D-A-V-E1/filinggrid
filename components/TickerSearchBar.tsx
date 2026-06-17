@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
 import { searchTickers } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
+import { addTickerLimitMessage, getMaxColumns } from "@/lib/tier-limits";
+import PaywallModal from "./billing/PaywallModal";
 import PrivacyStrip from "./PrivacyStrip";
 
 interface TickerChip {
@@ -15,14 +18,23 @@ export default function TickerSearchBar({
   initialTickers = [],
   compact = false,
   fiscalYear,
+  onPaywall,
 }: {
   initialTickers?: string[];
   compact?: boolean;
   fiscalYear?: number;
+  onPaywall?: (reason: string, message: string) => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { auth } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
+  const [limitMessage, setLimitMessage] = useState("");
+  const [internalPaywall, setInternalPaywall] = useState({
+    open: false,
+    reason: "",
+    message: "",
+  });
   const [tickers, setTickers] = useState<TickerChip[]>(
     initialTickers.map((t) => ({ ticker: t.toUpperCase() }))
   );
@@ -32,13 +44,26 @@ export default function TickerSearchBar({
   const [searchError, setSearchError] = useState("");
   const queryRequestIdRef = useRef(0);
 
+  const maxColumns = useMemo(
+    () => getMaxColumns(auth?.tier, auth?.limits.max_columns),
+    [auth?.tier, auth?.limits.max_columns]
+  );
+
   const compareUrl = useMemo(() => {
-    if (tickers.length < 2) return null;
+    if (tickers.length < 2 || tickers.length > maxColumns) return null;
     const slug = buildPeerSlug(tickers.map((t) => t.ticker));
     const currentYear = new Date().getFullYear();
     const year = fiscalYear ?? currentYear;
     return year < currentYear ? `/compare/${slug}?year=${year}` : `/compare/${slug}`;
-  }, [tickers, fiscalYear]);
+  }, [tickers, fiscalYear, maxColumns]);
+
+  function showColumnLimitPaywall(message: string) {
+    if (onPaywall) {
+      onPaywall("column_limit", message);
+      return;
+    }
+    setInternalPaywall({ open: true, reason: "column_limit", message });
+  }
 
   useEffect(() => {
     if (!compareUrl) return;
@@ -84,6 +109,17 @@ export default function TickerSearchBar({
   function addTicker(ticker: string, name?: string) {
     const upper = ticker.toUpperCase();
     if (tickers.some((t) => t.ticker === upper)) return;
+
+    if (tickers.length >= maxColumns) {
+      const message = addTickerLimitMessage(auth?.tier ?? "free", maxColumns);
+      setLimitMessage(message);
+      if ((auth?.tier ?? "free") !== "professional") {
+        showColumnLimitPaywall(message);
+      }
+      return;
+    }
+
+    setLimitMessage("");
     setTickers([...tickers, { ticker: upper, name }]);
     setQuery("");
     setSuggestions([]);
@@ -95,7 +131,16 @@ export default function TickerSearchBar({
   }
 
   function handleCompare() {
-    if (!compareUrl || isNavigating) return;
+    if (isNavigating) return;
+    if (tickers.length > maxColumns) {
+      const message = addTickerLimitMessage(auth?.tier ?? "free", maxColumns);
+      setLimitMessage(message);
+      if ((auth?.tier ?? "free") !== "professional") {
+        showColumnLimitPaywall(message);
+      }
+      return;
+    }
+    if (!compareUrl) return;
     setIsNavigating(true);
     router.push(compareUrl);
   }
@@ -176,6 +221,19 @@ export default function TickerSearchBar({
         <p className="mt-2 px-1 text-xs text-amber-700" role="alert">
           {searchError}
         </p>
+      )}
+      {limitMessage && (
+        <p className="mt-2 px-1 text-xs font-medium text-amber-800" role="alert">
+          {limitMessage}
+        </p>
+      )}
+      {!onPaywall && (
+        <PaywallModal
+          open={internalPaywall.open}
+          reason={internalPaywall.reason}
+          message={internalPaywall.message}
+          onClose={() => setInternalPaywall((p) => ({ ...p, open: false }))}
+        />
       )}
     </div>
   );

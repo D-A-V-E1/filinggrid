@@ -28,6 +28,7 @@ interface FilingColumnProps {
   financialsXbrl?: FinancialsXbrl | null;
   financialsPending?: boolean;
   financialsError?: string | null;
+  sectionsPending?: boolean;
 }
 
 function formatSectionLabel(label: string): string {
@@ -211,6 +212,7 @@ function FilingColumn({
   financialsXbrl,
   financialsPending = false,
   financialsError = null,
+  sectionsPending = false,
 }: FilingColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
@@ -386,6 +388,12 @@ function FilingColumn({
               <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
               <div className="h-4 w-5/6 animate-pulse rounded bg-brand-100" />
               <p className="text-[10px] text-brand-700/70">Loading SEC XBRL financials…</p>
+            </div>
+          ) : sectionsPending && activeSection && activeSection !== "financial-statements" ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+              <p className="text-[10px] text-slate-500">Loading filing section…</p>
             </div>
           ) : !activeSection && sections.length === 0 && !showFinancialsBootstrap ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>

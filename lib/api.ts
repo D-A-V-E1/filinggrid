@@ -1,3 +1,5 @@
+import { getDevTierForApiHeader } from "@/lib/dev-tier";
+
 const API_URL =
   typeof window !== "undefined"
     ? "/api/backend"
@@ -171,8 +173,8 @@ async function buildAuthHeaders(extra: Record<string, string> = {}): Promise<Rec
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const devTier = process.env.NEXT_PUBLIC_DEV_TIER;
-  if (devTier === "free" || devTier === "professional") {
+  const devTier = getDevTierForApiHeader();
+  if (devTier) {
     headers["X-Dev-Tier"] = devTier;
   }
 

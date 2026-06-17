@@ -293,8 +293,9 @@ Copy `.env.example` to `.env` and fill in:
 | `APP_URL` | Used in Stripe redirect URLs |
 | `CORS_ORIGINS` | Allowed frontend origin |
 | `ALLOW_DEV_TIER_TOGGLE` | Enable dev tier overrides (`true` local only) |
+| `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` | Show in-app Free/Pro toggle in compare header (local only) |
 | `DEV_PRO_TIER` | Force Professional tier when toggle enabled |
-| `NEXT_PUBLIC_DEV_TIER` | Browser sends `X-Dev-Tier` (`free` or `professional`) |
+| `NEXT_PUBLIC_DEV_TIER` | Legacy: browser sends `X-Dev-Tier` without UI toggle |
 
 ---
 

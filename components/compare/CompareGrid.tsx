@@ -21,6 +21,8 @@ import {
 import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
+import { compareUrlLimitMessage, getMaxColumns } from "@/lib/tier-limits";
+import { isDevTierToggleEnabled } from "@/lib/dev-tier";
 import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
 import SectionNav from "./SectionNav";
@@ -28,6 +30,7 @@ import YearPicker from "./YearPicker";
 import PeerGroupsMenu from "./PeerGroupsMenu";
 import PaywallModal from "../billing/PaywallModal";
 import TickerSearchBar from "../TickerSearchBar";
+import DevTierToggle from "../DevTierToggle";
 
 interface CompareGridProps {
   tickers: string[];
@@ -49,9 +52,10 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     message: "",
   });
   const [tier, setTier] = useState("free");
-  const { auth } = useAuth();
+  const { auth, loading: authLoading, refresh: refreshAuth } = useAuth();
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [sectionsParseError, setSectionsParseError] = useState("");
   const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>({});
   const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>({});
   const loadIdRef = useRef(0);
@@ -88,6 +92,13 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     setError("");
   }, [slugError]);
 
+  const maxColumns = useMemo(
+    () => getMaxColumns(auth?.tier, auth?.limits.max_columns),
+    [auth?.tier, auth?.limits.max_columns]
+  );
+
+  const overColumnLimit = tickers.length > maxColumns;
+
   const isBootstrapMode = useMemo(() => {
     if (!data) return false;
     return data.columns.every((c) => c.sections.length === 0);
@@ -99,7 +110,10 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     for (const col of data.columns) {
       for (const s of col.sections) ids.add(s.id);
     }
-    if (ids.size === 0 && isBootstrapMode) {
+    const hasFullCatalog = data.section_catalog.length > FINANCIALS_BOOTSTRAP_CATALOG.length;
+    if (ids.size === 0 && hasFullCatalog) {
+      for (const s of data.section_catalog) ids.add(s.id);
+    } else if (ids.size === 0 && isBootstrapMode) {
       ids.add(DEFAULT_ACTIVE_SECTION);
     }
     return ids;
@@ -109,6 +123,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     const loadId = ++loadIdRef.current;
     setActiveSection(DEFAULT_ACTIVE_SECTION);
     setError("");
+    setSectionsParseError("");
     setFinancialsByTicker({});
     setFinancialsErrors({});
     setLoadingTickers(tickers);
@@ -248,14 +263,19 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
         if (loadId !== loadIdRef.current) return;
         if (err instanceof ApiError && err.isPaywall) {
           const detail = err.detail as { reason?: string; message?: string };
-          setPaywall({
-            open: true,
-            reason: detail.reason || "subscription_required",
-            message: detail.message || "Upgrade to Professional to continue.",
-          });
+          const reason = detail.reason || "subscription_required";
+          const message = detail.message || "Upgrade to Professional to continue.";
+          setPaywall({ open: true, reason, message });
+          if (reason === "column_limit") {
+            setSectionsParseError(message);
+          }
         } else if (!anyFinancials) {
           setError(err instanceof Error ? err.message : "Failed to load filings");
           setData(null);
+        } else {
+          setSectionsParseError(
+            err instanceof Error ? err.message : "Filing sections could not be loaded."
+          );
         }
         setLoadingTickers([]);
         setLoadingFinancials(false);
@@ -268,9 +288,19 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
   }, [buildPlaceholderColumn, cacheKey, tickers, fiscalYear]);
 
   useEffect(() => {
-    if (slugError) return;
+    if (slugError || authLoading) return;
+    if (overColumnLimit) {
+      const message = compareUrlLimitMessage(auth?.tier ?? "free", maxColumns, tickers.length);
+      setPaywall({ open: true, reason: "column_limit", message });
+      setSectionsParseError(message);
+      setData(null);
+      setLoadingFinancials(false);
+      setLoadingSections(false);
+      setLoadingTickers([]);
+      return;
+    }
     loadFilings();
-  }, [loadFilings, slugError]);
+  }, [loadFilings, slugError, authLoading, overColumnLimit, auth?.tier, maxColumns, tickers.length]);
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
@@ -300,7 +330,12 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-x-hidden">
       <ApiHealthBanner healthy={apiHealthy} />
       <div className="relative z-30 flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
-        <TickerSearchBar initialTickers={tickers} compact fiscalYear={fiscalYear} />
+        <TickerSearchBar
+          initialTickers={tickers}
+          compact
+          fiscalYear={fiscalYear}
+          onPaywall={handlePaywall}
+        />
         <YearPicker fiscalYear={fiscalYear} tier={tier} onPaywall={handlePaywall} />
         <PeerGroupsMenu
           tickers={tickers}
@@ -309,11 +344,21 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           onPaywall={handlePaywall}
         />
         <div className="ml-auto flex items-center gap-3">
-          {tier === "professional" && (
+          <DevTierToggle
+            currentTier={auth?.tier ?? tier}
+            onChange={() => {
+              void refreshAuth();
+            }}
+          />
+          {tier === "professional" ? (
             <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
               Professional
             </span>
-          )}
+          ) : isDevTierToggleEnabled() ? (
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+              Free
+            </span>
+          ) : null}
           {loadingFinancials && (
             <span className="text-xs text-slate-400">
               {loadingTickers.length > 0
@@ -336,7 +381,18 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {error && !data && (
+        {overColumnLimit && (
+          <div className="flex flex-1 items-center justify-center p-8">
+            <div className="max-w-md text-center">
+              <p className="text-sm font-medium text-slate-800">Too many tickers for your plan</p>
+              <p className="mt-2 text-sm text-slate-600">
+                {compareUrlLimitMessage(auth?.tier ?? "free", maxColumns, tickers.length)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {error && !data && !overColumnLimit && (
           <div className="flex flex-1 items-center justify-center p-6">
             <div className="max-w-md text-center">
               <p className="text-sm font-medium text-red-700">Could not load filings</p>
@@ -364,7 +420,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           </div>
         )}
 
-        {canShowCompare && data && availableSectionIds.size > 0 && (
+        {canShowCompare && data && availableSectionIds.size > 0 && !overColumnLimit && (
           <div className="flex h-full min-h-0 w-full overflow-hidden">
             <SectionNav
               availableSectionIds={availableSectionIds}
@@ -375,6 +431,11 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
               onMobileClose={() => setNavOpen(false)}
             />
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              {sectionsParseError && (
+                <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+                  {sectionsParseError}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setNavOpen(true)}
@@ -425,6 +486,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
                         financialsXbrl={financialsByTicker[col.ticker] ?? null}
                         financialsPending={loadingFinancials && !(col.ticker in financialsByTicker)}
                         financialsError={financialsErrors[col.ticker] ?? null}
+                        sectionsPending={loadingSections && col.sections.length === 0}
                       />
                     );
                   })}

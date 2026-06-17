@@ -58,7 +58,22 @@ curl http://localhost:8000/auth/me -H "X-Dev-Tier: free"
 curl http://localhost:8000/auth/me -H "X-Dev-Tier: professional"
 ```
 
-**From the browser**, set in project root `.env` and restart `npm run dev`:
+**From the browser (in-app toggle — recommended)**
+
+1. Set in project root `.env`:
+   ```env
+   NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE=true
+   ```
+2. Ensure backend `.env` has `ALLOW_DEV_TIER_TOGGLE=true`.
+3. Restart `npm run dev` (and the API if you changed backend env).
+4. Open any compare page — a **Dev** segmented control appears in the compare toolbar (Free / Professional) with a max-columns hint (3 vs 8).
+5. The choice is stored in `sessionStorage` for the tab and sent as `X-Dev-Tier` on all API calls via `lib/api.ts`. Changing tier refreshes `/auth/me` and reloads compare data when limits change.
+
+The toggle also appears automatically when `NODE_ENV=development` (`npm run dev`) without setting `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE`.
+
+**Production:** leave `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` unset/false and `ALLOW_DEV_TIER_TOGGLE` unset/false so the toggle is not rendered and header overrides are ignored.
+
+**Legacy env var** (no UI): set in project root `.env` and restart `npm run dev`:
 
 ```env
 NEXT_PUBLIC_DEV_TIER=professional
@@ -162,5 +177,6 @@ Use **test keys only** (`sk_test_...`, `pk_test_...`) in `.env`. Never use live 
 ## Safety notes
 
 - `ALLOW_DEV_TIER_TOGGLE` must **never** be `true` in production unless you explicitly accept the risk; `/dev/tier` and header overrides would be exposed.
+- `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` must **never** be `true` in production CI/builds — the in-app dev toggle must not ship to users.
 - `DEV_PRO_TIER` and `NEXT_PUBLIC_DEV_TIER` are for local QA only.
 - Real charges require live Stripe keys; this project defaults to test keys in `.env.example`.
