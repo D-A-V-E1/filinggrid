@@ -39,6 +39,25 @@
     min-width: 0;
     max-width: 100%;
     -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+  }
+
+  /* Full GAAP statement tables: size to content so value column is not clipped in narrow compare columns */
+  .xbrl-statement-table {
+    width: max-content;
+    min-width: 0;
+  }
+
+  .xbrl-statement-table th:first-child,
+  .xbrl-statement-table td:first-child {
+    min-width: 0;
+    max-width: 8.5rem;
+  }
+
+  .xbrl-statement-table th:last-child,
+  .xbrl-statement-table td:last-child {
+    min-width: 5.25rem;
+    padding-left: 0.75rem;
   }
 
   .xbrl-metrics-table th:not(:first-child),

@@ -214,14 +214,12 @@ function StatementRowsTable({
   }
 
   return (
-    <div className="xbrl-metrics-scroll overflow-x-auto">
-      <table className="xbrl-metrics-table w-max min-w-full border-collapse text-left text-xs">
+    <div className="xbrl-metrics-scroll -mx-1 px-1">
+      <table className="xbrl-metrics-table xbrl-statement-table border-collapse text-left text-xs">
         <thead>
           <tr className="border-b border-brand-200/80">
-            <th className="min-w-[9rem] max-w-[14rem] py-1.5 pr-3 font-medium text-slate-600">
-              Line item
-            </th>
-            <th className="whitespace-nowrap py-1.5 px-2 text-right font-mono font-semibold text-slate-700">
+            <th className="py-1.5 pr-2 font-medium text-slate-600">Line item</th>
+            <th className="whitespace-nowrap py-1.5 pl-2 text-right font-mono font-semibold text-slate-700">
               {periodLabel}
             </th>
           </tr>
@@ -229,8 +227,8 @@ function StatementRowsTable({
         <tbody>
           {table.rows.map((row) => (
             <tr key={row.key} className="border-b border-brand-100/80 last:border-0">
-              <td className="min-w-[9rem] max-w-[14rem] py-1.5 pr-3 text-slate-600">{row.label}</td>
-              <td className="whitespace-nowrap py-1.5 px-2 text-right font-mono tabular-nums text-slate-800">
+              <td className="py-1.5 pr-2 text-slate-600">{row.label}</td>
+              <td className="whitespace-nowrap py-1.5 pl-2 text-right font-mono tabular-nums text-slate-800">
                 {formatMetricValue(row.value, row.unit)}
               </td>
             </tr>
