@@ -41,7 +41,7 @@ export function validateCompareTickers(tickers: string[]): string | null {
 
 export const CONSUMER_DOMAINS = [
   "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
-  "icloud.com", "aol.com", "protonmail.com",
+  "icloud.com", "aol.com", "protonmail.com", "mail.com",
 ];
 
 export function isCorporateEmail(email: string): boolean {

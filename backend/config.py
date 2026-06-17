@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,8 +31,14 @@ class Settings(BaseSettings):
     # Stripe
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_price_professional: str = ""
-    app_url: str = "http://localhost:3000"
+    stripe_price_professional: str = Field(
+        default="",
+        validation_alias=AliasChoices("STRIPE_PRICE_PROFESSIONAL", "STRIPE_PRICE_ID_PRO"),
+    )
+    app_url: str = Field(
+        default="http://localhost:3000",
+        validation_alias=AliasChoices("APP_URL", "FRONTEND_URL"),
+    )
 
     # CORS
     cors_origins: str = "http://localhost:3000"

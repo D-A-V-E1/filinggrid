@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getAuthMe } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 type BannerVariant = "success" | "error" | "info";
 
@@ -22,6 +24,41 @@ export default function QueryStatusBanner() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
+  const { refresh } = useAuth();
+  const [checkoutPending, setCheckoutPending] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("checkout") !== "success") {
+      setCheckoutPending(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckoutPending(true);
+
+    (async () => {
+      for (let attempt = 0; attempt < 15 && !cancelled; attempt++) {
+        try {
+          const me = await getAuthMe();
+          if (me.tier === "professional") {
+            await refresh();
+            setCheckoutPending(false);
+            return;
+          }
+        } catch {
+          /* webhook may still be processing */
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      if (!cancelled) {
+        setCheckoutPending(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, refresh]);
 
   const banner = useMemo((): BannerConfig | null => {
     if (searchParams.get("auth") === "error") {
@@ -43,7 +80,9 @@ export default function QueryStatusBanner() {
     if (searchParams.get("checkout") === "success") {
       return {
         variant: "success",
-        message: "Subscription active — Professional features are now unlocked.",
+        message: checkoutPending
+          ? "Payment received — activating Professional…"
+          : "Subscription active — Professional features are now unlocked.",
         paramKey: "checkout",
         paramValue: "success",
       };
@@ -57,7 +96,7 @@ export default function QueryStatusBanner() {
       };
     }
     return null;
-  }, [searchParams]);
+  }, [searchParams, checkoutPending]);
 
   const dismiss = useCallback(() => {
     if (!banner) return;

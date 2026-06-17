@@ -301,7 +301,9 @@ Copy `.env.example` to `.env` and fill in:
 
 ## Stripe setup
 
-### 1. Create a product and price
+See **[docs/STRIPE_SETUP.md](docs/STRIPE_SETUP.md)** for full Dashboard steps (product, webhooks, Customer Portal, test vs live).
+
+### Quick reference
 
 In [Stripe Dashboard → Products](https://dashboard.stripe.com/products):
 
@@ -460,12 +462,15 @@ alembic upgrade head
 
 ### Checklist
 
+See **[docs/GO_LIVE_CHECKLIST.md](docs/GO_LIVE_CHECKLIST.md)** for the full week-by-week launch plan.
+
 - Set `NEXT_PUBLIC_APP_URL` and `APP_URL` to your production domain
 - Use a managed PostgreSQL instance (Supabase DB, RDS, etc.)
 - Run `alembic upgrade head` before first deploy
-- Register production Stripe webhook endpoint (`/webhooks/stripe`)
+- Register production Stripe webhook endpoint (`/webhooks/stripe`) — see [docs/STRIPE_SETUP.md](docs/STRIPE_SETUP.md)
 - Update Supabase redirect URLs for production domain
 - Set a real `SEC_USER_AGENT` with your company contact email
+- Set `ALLOW_DEV_TIER_TOGGLE=false` (or omit) in production
 - Optional: run `python backend/scripts/prewarm_cache.py` to warm filing cache
 
 ---

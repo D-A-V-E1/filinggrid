@@ -8,6 +8,7 @@ from typing import Annotated, Optional
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config import get_settings
@@ -196,12 +197,16 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    existing = db.query(StripeEvent).filter(StripeEvent.event_id == event.id).first()
+    existing = db.query(StripeEvent).filter(StripeEvent.event_id == event["id"]).first()
     if existing:
         return {"status": "already_processed"}
 
-    db.add(StripeEvent(event_id=event.id))
-    db.commit()
+    try:
+        db.add(StripeEvent(event_id=event["id"]))
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        return {"status": "already_processed"}
 
     event_type = event["type"]
     data = event["data"]["object"]
@@ -244,4 +249,5 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 sub.status = "past_due"
                 db.commit()
 
+    db.commit()
     return {"status": "ok"}
