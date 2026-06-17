@@ -344,7 +344,10 @@ def _dedupe_period_options(options: list[dict[str, Any]]) -> list[dict[str, Any]
     for opt in options:
         key = _period_canonical_key(opt)
         if _better_period_option(opt, best.get(key)):
-            best[key] = opt
+            normalized = dict(opt)
+            if key.startswith(("annual-", "interim-")):
+                normalized["id"] = key
+            best[key] = normalized
     result = list(best.values())
     result.sort(key=_sort_key_period)
     return result
@@ -441,7 +444,7 @@ def _build_period_option(
     option_id = _period_option_id(
         kind,
         form,
-        fiscal_year if kind == "annual" else (int(period_end[:4]) if period_end else fiscal_year),
+        fiscal_year,
         period_end if kind == "interim" else period_end,
         fp=fp,
     )
@@ -625,11 +628,21 @@ def list_comparable_filings(
 
 
 def merge_filing_periods(period_lists: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    """Union period options across tickers; newest reporting period first."""
+    """Merge period options for compare: intersection across tickers when multiple."""
+    if not period_lists:
+        return []
+
+    key_sets = [{_period_merge_key(o) for o in periods} for periods in period_lists]
+    allowed_keys = key_sets[0]
+    for keys in key_sets[1:]:
+        allowed_keys &= keys
+
     merged: dict[str, dict[str, Any]] = {}
     for periods in period_lists:
         for opt in periods:
             key = _period_merge_key(opt)
+            if key not in allowed_keys:
+                continue
             if _better_period_option(opt, merged.get(key)):
                 merged[key] = opt
 
@@ -646,6 +659,7 @@ def find_filing_for_period(
     fiscal_year: int | None = None,
     period_id: str | None = None,
     interim_slot: InterimSlot | None = None,
+    xbrl_periods: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Resolve a single filing for the given annual or interim period."""
     pf = period_filter or (
@@ -669,7 +683,7 @@ def find_filing_for_period(
     else:
         slot = interim_slot or interim_slot_from_period_filter(pf)
         if slot:
-            filing = _find_filing_for_interim_slot(submissions, slot)
+            filing = _find_filing_for_interim_slot(submissions, slot, xbrl_periods=xbrl_periods)
             if filing:
                 return filing
 
@@ -691,10 +705,12 @@ def find_filing_for_period(
 def _find_filing_for_interim_slot(
     submissions: dict[str, Any],
     slot: InterimSlot,
+    *,
+    xbrl_periods: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Match issuer interim filing by fiscal year + fp + form (cross-ticker safe)."""
     fy, fp, form = slot
-    opts = list_comparable_filings(submissions)
+    opts = list_comparable_filings(submissions, xbrl_periods=xbrl_periods)
     matches = [
         o
         for o in opts
@@ -746,9 +762,17 @@ async def resolve_interim_slot_for_tickers(
         try:
             resolved = await resolve_ticker(ticker, ticker_map)
             submissions = await fetch_submissions(resolved["cik"])
+            xbrl_periods: list[dict[str, Any]] | None = None
+            try:
+                from sec.xbrl_client import fetch_company_facts, list_reporting_periods
+
+                facts, _ = await fetch_company_facts(resolved["cik"])
+                xbrl_periods = list_reporting_periods(facts)
+            except Exception:
+                xbrl_periods = None
         except Exception:
             continue
-        for opt in list_comparable_filings(submissions):
+        for opt in list_comparable_filings(submissions, xbrl_periods=xbrl_periods):
             if opt.get("id") == stripped:
                 return interim_slot_from_option(opt)
             if legacy_report_date:

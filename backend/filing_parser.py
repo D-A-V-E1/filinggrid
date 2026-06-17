@@ -124,8 +124,23 @@ async def _parse_single_ticker(
         resolved = await resolve_ticker(ticker, ticker_map)
         submissions = await fetch_submissions(resolved["cik"])
 
+        xbrl_periods = None
         if period:
-            filing = find_filing(submissions, period=period, interim_slot=interim_slot)
+            try:
+                from sec.xbrl_client import fetch_company_facts, list_reporting_periods
+
+                facts, _ = await fetch_company_facts(resolved["cik"])
+                xbrl_periods = list_reporting_periods(facts)
+            except Exception:
+                xbrl_periods = None
+
+        if period:
+            filing = find_filing(
+                submissions,
+                period=period,
+                interim_slot=interim_slot,
+                xbrl_periods=xbrl_periods,
+            )
         elif requested_year is not None:
             filing = find_filing(submissions, fiscal_year=requested_year)
         else:

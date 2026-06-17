@@ -66,6 +66,36 @@ def test_find_filing_with_interim_period():
     assert filing["form"] == "10-Q"
 
 
+def test_find_filing_interim_slot_requires_xbrl_fiscal_fp():
+    """June-year fiscal Q2 (e.g. MSFT) is only discoverable with XBRL fy/fp tags."""
+    subs = _submissions(
+        [
+            {
+                "form": "10-Q",
+                "accession": "0000950170-24-008814",
+                "filing_date": "2024-01-30",
+                "report_date": "2023-12-31",
+            },
+        ]
+    )
+    xbrl_q2 = [
+        {
+            "kind": "interim",
+            "fiscal_year": 2024,
+            "fp": "Q2",
+            "end": "2023-12-31",
+            "form": "10-Q",
+            "filed": "2024-01-30",
+            "accn": "0000950170-24-008814",
+        },
+    ]
+    without_xbrl = find_filing(subs, period="interim-2024-Q2-10-Q")
+    assert without_xbrl is None
+    with_xbrl = find_filing(subs, period="interim-2024-Q2-10-Q", xbrl_periods=xbrl_q2)
+    assert with_xbrl is not None
+    assert with_xbrl["report_date"] == "2023-12-31"
+
+
 def test_find_filing_cross_ticker_via_interim_slot():
     """Legacy date id from one issuer must resolve via fiscal slot on another."""
     aapl = _submissions(
@@ -104,8 +134,12 @@ def test_find_filing_cross_ticker_via_interim_slot():
     assert slot == (2025, "Q4", "10-Q")
 
     msft_xbrl = [{**xbrl_q4[0], "end": "2025-12-31", "accn": "0001193125-26-000010"}]
-    msft_opts = list_comparable_filings(msft, xbrl_periods=msft_xbrl)
-    filing = find_filing(msft, period="interim-2025-12-27", interim_slot=slot)
+    filing = find_filing(
+        msft,
+        period="interim-2025-12-27",
+        interim_slot=slot,
+        xbrl_periods=msft_xbrl,
+    )
     assert filing is not None
     assert filing["report_date"] == "2025-12-31"
 
@@ -202,6 +236,7 @@ def test_list_comparable_filings_uses_xbrl_fy_and_fp():
     options = list_comparable_filings(subs, xbrl_periods=xbrl_periods)
     assert options[0]["fiscal_year"] == 2025
     assert options[0]["fp"] == "Q1"
+    assert options[0]["id"] == "interim-2025-Q1-10-Q"
     assert "FY25" in options[0]["label"]
     assert "Q1" in options[0]["label"]
 
@@ -209,17 +244,17 @@ def test_list_comparable_filings_uses_xbrl_fy_and_fp():
 def test_merge_filing_periods_keeps_10k_and_20f_separate():
     us = [{"id": "annual-2024", "kind": "annual", "fiscal_year": 2024, "form": "10-K", "label": "FY24 · 10-K"}]
     foreign = [{"id": "annual-2024-20f", "kind": "annual", "fiscal_year": 2024, "form": "20-F", "label": "FY24 · 20-F"}]
-    merged = merge_filing_periods([us, foreign])
-    ids = {o["id"] for o in merged}
+    merged_same_form = merge_filing_periods([us, us])
+    ids = {o["id"] for o in merged_same_form}
     assert "annual-2024" in ids
-    assert "annual-2024-20f" in ids
+    assert merge_filing_periods([us, foreign]) == []
 
 
 def test_dedupe_period_options_collapses_duplicate_labels():
     """XBRL + submissions can surface the same fiscal quarter under different period-end ids."""
     options = [
         {
-            "id": "interim-2025-06-28",
+            "id": "interim-2025-Q3-10-Q",
             "kind": "interim",
             "fiscal_year": 2025,
             "fp": "Q3",
@@ -229,7 +264,7 @@ def test_dedupe_period_options_collapses_duplicate_labels():
             "period_end": "2025-06-28",
         },
         {
-            "id": "interim-2024-06-29",
+            "id": "interim-2025-Q3-10-Q",
             "kind": "interim",
             "fiscal_year": 2025,
             "fp": "Q3",
@@ -239,7 +274,7 @@ def test_dedupe_period_options_collapses_duplicate_labels():
             "period_end": "2024-06-29",
         },
         {
-            "id": "interim-2024-09-28",
+            "id": "interim-2025-Q3-10-Q",
             "kind": "interim",
             "fiscal_year": 2025,
             "fp": "Q3",
@@ -254,7 +289,7 @@ def test_dedupe_period_options_collapses_duplicate_labels():
     deduped = _dedupe_period_options(options)
     labels = [o["label"] for o in deduped]
     assert labels.count("FY25 · Q3 · 10-Q") == 1
-    assert deduped[0]["id"] == "interim-2025-06-28"
+    assert deduped[0]["id"] == "interim-2025-Q3-10-Q"
 
 
 def test_merge_filing_periods_unions_by_fiscal_slot():
@@ -288,6 +323,15 @@ def test_merge_filing_periods_unions_by_fiscal_slot():
     merged = merge_filing_periods([aapl, msft])
     ids = {o["id"] for o in merged}
     assert ids == {"interim-2025-Q3-10-Q"}
+
+
+def test_merge_filing_periods_intersection_drops_single_ticker_only():
+    only_aapl = [{"id": "interim-2023-07-01", "kind": "interim", "fiscal_year": 2023, "form": "10-Q", "label": "x"}]
+    shared = [{"id": "annual-2024", "kind": "annual", "fiscal_year": 2024, "form": "10-K", "label": "FY24"}]
+    merged = merge_filing_periods([only_aapl + shared, shared])
+    ids = {o["id"] for o in merged}
+    assert "interim-2023-07-01" not in ids
+    assert "annual-2024" in ids
 
 
 def test_filter_free_tier_periods_latest_plus_completed_year():

@@ -221,6 +221,7 @@ def find_filing(
     *,
     period: str | None = None,
     interim_slot: tuple[int, str, str] | None = None,
+    xbrl_periods: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     from sec.filing_periods import find_filing_for_period, resolve_period_filter
 
@@ -232,6 +233,7 @@ def find_filing(
                 period_filter,
                 period_id=period,
                 interim_slot=interim_slot,
+                xbrl_periods=xbrl_periods,
             )
         return None
 
