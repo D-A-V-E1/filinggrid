@@ -341,10 +341,11 @@ export async function parseFilingsStream(
 export async function fetchFinancials(
   ticker: string,
   fiscalYear?: number | null,
-  options?: { headlineOnly?: boolean }
+  options?: { headlineOnly?: boolean; period?: string }
 ): Promise<FinancialsXbrl> {
   const params = new URLSearchParams();
   if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+  if (options?.period) params.set("period", options.period);
   if (options?.headlineOnly) params.set("headline_only", "true");
   const qs = params.toString();
   return apiFetch<FinancialsXbrl>(
@@ -404,7 +405,7 @@ async function fetchFinancialsPerTicker(
 export async function fetchFinancialsBatch(
   tickers: string[],
   fiscalYear: number | undefined,
-  options: { headlineOnly?: boolean },
+  options: { headlineOnly?: boolean; period?: string },
   callbacks: FinancialsBatchCallbacks
 ): Promise<void> {
   const headers = await buildAuthHeaders({ Accept: "application/x-ndjson" });
@@ -415,6 +416,7 @@ export async function fetchFinancialsBatch(
     body: JSON.stringify({
       tickers: tickers.map((t) => t.toUpperCase()),
       fiscal_year: fiscalYear ?? null,
+      period: options.period ?? null,
       headline_only: options.headlineOnly ?? false,
     }),
   });

@@ -217,6 +217,7 @@ async def parse_stream_endpoint(
 class FinancialsBatchRequest(BaseModel):
     tickers: list[str]
     fiscal_year: int | None = None
+    period: str | None = None
     headline_only: bool = False
 
 
@@ -230,6 +231,7 @@ async def filing_financials_batch_endpoint(
         async for line in fetch_tickers_financials_stream(
             tickers,
             request.fiscal_year,
+            period=request.period,
             headline_only=request.headline_only,
         ):
             yield line
@@ -245,9 +247,15 @@ async def filing_financials_batch_endpoint(
 async def filing_financials_endpoint(
     ticker: str,
     fiscal_year: int | None = Query(None),
+    period: str | None = Query(None),
     headline_only: bool = Query(False),
 ):
-    return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year, headline_only=headline_only)
+    return await fetch_ticker_financials(
+        ticker,
+        fiscal_year=fiscal_year,
+        period=period,
+        headline_only=headline_only,
+    )
 
 
 @app.get("/filings/{ticker}/financials/statements")

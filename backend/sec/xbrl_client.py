@@ -47,6 +47,7 @@ METRIC_CONCEPTS: dict[str, list[str]] = {
         "Revenues",
         "SalesRevenueNet",
         "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "Revenue",
     ],
     "net_income": ["NetIncomeLoss", "ProfitLoss"],
     "total_assets": ["Assets"],
@@ -54,13 +55,16 @@ METRIC_CONCEPTS: dict[str, list[str]] = {
     "stockholders_equity": [
         "StockholdersEquity",
         "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        "Equity",
     ],
-    "operating_income": ["OperatingIncomeLoss"],
-    "eps_basic": ["EarningsPerShareBasic"],
-    "eps_diluted": ["EarningsPerShareDiluted"],
+    "operating_income": ["OperatingIncomeLoss", "ProfitLossFromOperatingActivities"],
+    "eps_basic": ["EarningsPerShareBasic", "BasicEarningsLossPerShare"],
+    "eps_diluted": ["EarningsPerShareDiluted", "DilutedEarningsLossPerShare"],
     "cash": [
         "CashAndCashEquivalentsAtCarryingValue",
         "CashCashEquivalentsAndShortTermInvestments",
+        "CashAndCashEquivalents",
+        "Cash",
     ],
 }
 
@@ -422,6 +426,12 @@ STATEMENT_TABLE_DEFS: tuple[tuple[str, list[dict[str, Any]], str], ...] = (
     ("cash_flow", CASH_FLOW_LINES, "Cash Flow"),
     ("stockholders_equity", STOCKHOLDERS_EQUITY_LINES, "Stockholders' Equity"),
 )
+
+ANNUAL_XBRL_FORMS: tuple[str, ...] = ("10-K", "10-K/A", "20-F", "20-F/A")
+INTERIM_XBRL_FORMS: tuple[str, ...] = ("10-Q", "10-Q/A", "6-K", "6-K/A")
+ALL_XBRL_FORMS: tuple[str, ...] = ANNUAL_XBRL_FORMS + INTERIM_XBRL_FORMS
+
+TAXONOMY_KEYS: tuple[str, ...] = ("us-gaap", "ifrs-full")
 
 # Note section id -> metric definitions (key, label, candidate us-gaap concepts)
 NOTE_SECTION_METRICS: dict[str, list[dict[str, Any]]] = {
@@ -1296,8 +1306,22 @@ async def fetch_company_facts(cik: str) -> tuple[dict[str, Any], bool]:
         _companyfacts_inflight.pop(cik, None)
 
 
+def _taxonomy_maps(facts: dict[str, Any]) -> list[dict[str, Any]]:
+    """Ordered taxonomy concept maps: US GAAP first, then IFRS for foreign 20-F filers."""
+    raw = facts.get("facts") or {}
+    return [raw[key] for key in TAXONOMY_KEYS if raw.get(key)]
+
+
+def _pick_concept_from_facts(facts: dict[str, Any], candidates: list[str]) -> dict[str, Any] | None:
+    for taxonomy in _taxonomy_maps(facts):
+        concept = _pick_concept(taxonomy, candidates)
+        if concept:
+            return concept
+    return None
+
+
 def _pick_concept(gaap: dict[str, Any], candidates: list[str]) -> dict[str, Any] | None:
-    """Pick the candidate concept with the most recent 10-K annual observation."""
+    """Pick the candidate concept with the most recent annual observation."""
     best: dict[str, Any] | None = None
     best_end = ""
     for name in candidates:
@@ -1306,9 +1330,16 @@ def _pick_concept(gaap: dict[str, Any], candidates: list[str]) -> dict[str, Any]
             continue
         _, entries = _unit_entries(concept)
         annual = _filter_annual(entries, None)
-        if not annual:
+        candidates_obs = annual
+        if not candidates_obs:
+            candidates_obs = _dedupe_observations(
+                _sort_observations(
+                    [e for e in entries if (e.get("form") or "") in ALL_XBRL_FORMS and e.get("end")]
+                )
+            )
+        if not candidates_obs:
             continue
-        latest_end = annual[0].get("end") or ""
+        latest_end = candidates_obs[0].get("end") or ""
         if latest_end > best_end:
             best_end = latest_end
             best = concept
@@ -1350,50 +1381,65 @@ def _sort_observations(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 PERIOD_DISCOVERY_CONCEPTS: tuple[str, ...] = (
     "Assets",
     "Revenues",
+    "Revenue",
     "SalesRevenueNet",
     "RevenueFromContractWithCustomerExcludingAssessedTax",
     "NetIncomeLoss",
+    "ProfitLoss",
 )
 
 
 def list_reporting_periods(companyfacts: dict[str, Any]) -> list[dict[str, Any]]:
     """Distinct reporting periods from XBRL companyfacts (fy, fp, form, end)."""
-    gaap = companyfacts.get("facts", {}).get("us-gaap", {})
     periods: dict[tuple[Any, ...], dict[str, Any]] = {}
 
-    for name in PERIOD_DISCOVERY_CONCEPTS:
-        concept = gaap.get(name)
-        if not concept:
-            continue
-        _, entries = _unit_entries(concept)
-        for obs in entries:
-            form = obs.get("form") or ""
-            if form not in ("10-K", "10-K/A", "10-Q", "10-Q/A", "20-F", "20-F/A"):
+    for taxonomy in _taxonomy_maps(companyfacts):
+        for name in PERIOD_DISCOVERY_CONCEPTS:
+            concept = taxonomy.get(name)
+            if not concept:
                 continue
-            fp = obs.get("fp")
-            fy = obs.get("fy")
-            end = obs.get("end")
-            if fy is None or not end or not fp:
-                continue
-            if fp == "FY":
-                kind = "annual"
-            elif fp in ("Q1", "Q2", "Q3", "Q4"):
-                kind = "interim"
-            else:
-                continue
-            key = (int(fy), fp, end, form.replace("/A", ""))
-            filed = obs.get("filed") or ""
-            existing = periods.get(key)
-            if existing is None or filed > (existing.get("filed") or ""):
-                periods[key] = {
-                    "kind": kind,
-                    "fiscal_year": int(fy),
-                    "fp": fp,
-                    "end": end,
-                    "form": form,
-                    "filed": filed,
-                    "accn": obs.get("accn"),
-                }
+            _, entries = _unit_entries(concept)
+            for obs in entries:
+                form = obs.get("form") or ""
+                if form not in ALL_XBRL_FORMS:
+                    continue
+                fp = obs.get("fp")
+                fy = obs.get("fy")
+                end = obs.get("end")
+                if not end:
+                    continue
+                if form in ("6-K", "6-K/A") and (fy is None or fp is None):
+                    fy_val = int(end[:4]) if end else None
+                    if fy_val is None:
+                        continue
+                    key = ("interim", fy_val, end, form.replace("/A", ""))
+                    kind = "interim"
+                    fp_out = fp
+                    fy_out = fy_val
+                elif fy is None or not fp:
+                    continue
+                else:
+                    if fp == "FY":
+                        kind = "annual"
+                    elif fp in ("Q1", "Q2", "Q3", "Q4"):
+                        kind = "interim"
+                    else:
+                        continue
+                    key = (int(fy), fp, end, form.replace("/A", ""))
+                    fp_out = fp
+                    fy_out = int(fy)
+                filed = obs.get("filed") or ""
+                existing = periods.get(key)
+                if existing is None or filed > (existing.get("filed") or ""):
+                    periods[key] = {
+                        "kind": kind,
+                        "fiscal_year": fy_out,
+                        "fp": fp_out,
+                        "end": end,
+                        "form": form,
+                        "filed": filed,
+                        "accn": obs.get("accn"),
+                    }
 
     result = list(periods.values())
     result.sort(key=lambda p: (p.get("end") or "", p.get("filed") or ""), reverse=True)
@@ -1401,8 +1447,11 @@ def list_reporting_periods(companyfacts: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def _filter_annual(entries: list[dict[str, Any]], fiscal_year: int | None) -> list[dict[str, Any]]:
-    annual = [e for e in entries if e.get("fp") == "FY" and e.get("form") in ("10-K", "10-K/A", "20-F", "20-F/A", None, "")]
-    annual = [e for e in annual if e.get("form") in ("10-K", "10-K/A", "20-F", "20-F/A")]
+    annual = [
+        e
+        for e in entries
+        if e.get("fp") == "FY" and (e.get("form") or "") in ANNUAL_XBRL_FORMS
+    ]
     annual = _dedupe_observations(_sort_observations(annual))
     if fiscal_year is not None:
         annual = [e for e in annual if e.get("fy") == fiscal_year]
@@ -1413,12 +1462,28 @@ def _filter_quarterly(entries: list[dict[str, Any]], fiscal_year: int | None) ->
     quarterly = [
         e
         for e in entries
-        if e.get("fp") in ("Q1", "Q2", "Q3", "Q4") and e.get("form") in ("10-Q", "10-Q/A")
+        if e.get("fp") in ("Q1", "Q2", "Q3", "Q4")
+        and (e.get("form") or "") in INTERIM_XBRL_FORMS
     ]
     quarterly = _dedupe_observations(_sort_observations(quarterly))
     if fiscal_year is not None:
         quarterly = [e for e in quarterly if e.get("fy") == fiscal_year]
     return quarterly[:MAX_QUARTERLY_PERIODS]
+
+
+def _filter_snapshot(
+    entries: list[dict[str, Any]],
+    report_date: str | None,
+) -> list[dict[str, Any]]:
+    """Match interim 6-K / 10-Q facts by period-end date when fy/fp tags are missing."""
+    if not report_date:
+        return []
+    snap = [
+        e
+        for e in entries
+        if e.get("end") == report_date and (e.get("form") or "") in ALL_XBRL_FORMS
+    ]
+    return _dedupe_observations(_sort_observations(snap))[:1]
 
 
 def _obs_to_period(obs: dict[str, Any]) -> dict[str, Any]:
@@ -1437,13 +1502,24 @@ def _build_annual_summary(metrics: dict[str, Any]) -> list[dict[str, Any]]:
     years: set[int] = set()
     for m in metrics.values():
         for p in m.get("annual", []):
-            if p.get("fy") is not None:
-                years.add(int(p["fy"]))
+            fy = p.get("fy")
+            if fy is not None:
+                years.add(int(fy))
+            elif p.get("end"):
+                years.add(int(str(p["end"])[:4]))
     annual_summary: list[dict[str, Any]] = []
     for fy in sorted(years, reverse=True)[:MAX_ANNUAL_PERIODS]:
         row: dict[str, Any] = {"fy": fy}
         for key, m in metrics.items():
-            match = next((p for p in m.get("annual", []) if p.get("fy") == fy), None)
+            match = next(
+                (
+                    p
+                    for p in m.get("annual", [])
+                    if p.get("fy") == fy
+                    or (p.get("fy") is None and str(p.get("end") or "")[:4] == str(fy))
+                ),
+                None,
+            )
             if match:
                 row[key] = match["value"]
                 row[f"{key}_end"] = match.get("end")
@@ -1452,21 +1528,25 @@ def _build_annual_summary(metrics: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _extract_metrics_from_defs(
-    gaap: dict[str, Any],
+    facts: dict[str, Any],
     metric_defs: list[dict[str, Any]],
     *,
     fiscal_year: int | None = None,
+    report_date: str | None = None,
 ) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
     for defn in metric_defs:
         key = defn["key"]
         concepts = defn["concepts"]
-        concept = _pick_concept(gaap, concepts)
+        concept = _pick_concept_from_facts(facts, concepts)
         if not concept:
             continue
         unit, entries = _unit_entries(concept)
         annual = _filter_annual(entries, fiscal_year)
         quarterly = _filter_quarterly(entries, fiscal_year)
+        snapshot = _filter_snapshot(entries, report_date)
+        if report_date and snapshot and not annual and not quarterly:
+            annual = snapshot
         if not annual and not quarterly:
             continue
         metrics[key] = {
@@ -1635,11 +1715,16 @@ def extract_financial_metrics(
     facts: dict[str, Any],
     *,
     fiscal_year: int | None = None,
+    report_date: str | None = None,
 ) -> dict[str, Any]:
     """Map raw companyfacts payload to compare-friendly metrics."""
-    gaap = (facts.get("facts") or {}).get("us-gaap") or {}
     metric_defs = _metric_defs_from_concepts(METRIC_CONCEPTS, METRIC_LABELS)
-    metrics = _extract_metrics_from_defs(gaap, metric_defs, fiscal_year=fiscal_year)
+    metrics = _extract_metrics_from_defs(
+        facts,
+        metric_defs,
+        fiscal_year=fiscal_year,
+        report_date=report_date,
+    )
     annual_summary = _build_annual_summary(metrics)
 
     return {
@@ -1665,9 +1750,9 @@ def extract_note_disclosures(
     filing_html: bytes | None = None,
     *,
     fiscal_year: int | None = None,
+    report_date: str | None = None,
 ) -> dict[str, Any]:
     """Map companyfacts and iXBRL HTML to footnote metrics and narrative disclosure blocks."""
-    gaap = (facts.get("facts") or {}).get("us-gaap") or {}
     html = filing_html.decode("utf-8", errors="replace") if filing_html else ""
     notes: dict[str, Any] = {}
 
@@ -1676,7 +1761,16 @@ def extract_note_disclosures(
         metric_defs = NOTE_SECTION_METRICS.get(section_id, [])
         block_defs = NOTE_SECTION_TEXT_BLOCKS.get(section_id, [])
 
-        metrics = _extract_metrics_from_defs(gaap, metric_defs, fiscal_year=fiscal_year) if metric_defs else {}
+        metrics = (
+            _extract_metrics_from_defs(
+                facts,
+                metric_defs,
+                fiscal_year=fiscal_year,
+                report_date=report_date,
+            )
+            if metric_defs
+            else {}
+        )
         disclosures = _extract_disclosures_from_html(html, block_defs) if html and block_defs else []
 
         if not metrics and not disclosures:
@@ -1726,18 +1820,32 @@ async def fetch_ticker_financials(
     ticker: str,
     fiscal_year: int | None = None,
     *,
+    period: str | None = None,
     ticker_map: dict[str, dict[str, Any]] | None = None,
     headline_only: bool = False,
 ) -> dict[str, Any]:
     """Resolve ticker, fetch companyfacts, return structured financial metrics."""
+    from sec.filing_periods import parse_period_param
+
     started = time.perf_counter()
     resolved = await resolve_ticker(ticker, ticker_map)
     facts, from_cache = await fetch_company_facts(resolved["cik"])
-    extracted = extract_financial_metrics(facts, fiscal_year=fiscal_year)
+    pf = parse_period_param(period)
+    report_date = pf.report_date if pf and pf.kind == "interim" else None
+    extracted = extract_financial_metrics(
+        facts,
+        fiscal_year=fiscal_year,
+        report_date=report_date,
+    )
     notes_xbrl: dict[str, Any] = {}
     if not headline_only:
         filing_html = _load_cached_filing_html(resolved["cik"], fiscal_year)
-        notes_xbrl = extract_note_disclosures(facts, filing_html, fiscal_year=fiscal_year)
+        notes_xbrl = extract_note_disclosures(
+            facts,
+            filing_html,
+            fiscal_year=fiscal_year,
+            report_date=report_date,
+        )
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
 
     cik_padded = str(int(resolved["cik"])).zfill(10)
@@ -1759,6 +1867,7 @@ async def fetch_tickers_financials_stream(
     tickers: list[str],
     fiscal_year: int | None = None,
     *,
+    period: str | None = None,
     headline_only: bool = False,
 ) -> AsyncIterator[str]:
     """Stream headline/full financials for multiple tickers; one ticker map fetch."""
@@ -1777,6 +1886,7 @@ async def fetch_tickers_financials_stream(
             data = await fetch_ticker_financials(
                 ticker,
                 fiscal_year,
+                period=period,
                 ticker_map=ticker_map,
                 headline_only=headline_only,
             )

@@ -144,7 +144,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     setLoadingFinancials(true);
 
     const upgradeFullFinancials = (ticker: string) => {
-      void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false })
+      void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
         .then((full) => {
           if (loadId !== loadIdRef.current) return;
           setFinancialsByTicker((prev) => ({ ...prev, [ticker]: full }));
@@ -188,7 +188,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     };
 
     const startHeadlineFinancials = () => {
-      void fetchFinancialsBatch(tickers, resolvedFiscalYear, { headlineOnly: true }, {
+      void fetchFinancialsBatch(tickers, resolvedFiscalYear, { headlineOnly: true, period }, {
         onFinancial: (ticker, fin) => {
           if (loadId !== loadIdRef.current) return;
           applyHeadlineFinancial(ticker, fin);
