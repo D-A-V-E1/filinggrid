@@ -212,7 +212,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       });
     };
 
-    const cached = loadParseMeta(cacheKey);
+    const cached = loadParseMeta(cacheKey, period);
     if (cached && hasSectionIndex(cached)) {
       setData(cached);
       setActiveSection(resolveDefaultActiveSection(getComparableSectionIds(cached.columns)));
@@ -509,6 +509,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         ticker={col.ticker}
                         companyName={col.company_name}
                         form={col.form}
+                        period={period}
                         filingDate={col.filing_date}
                         fiscalYear={col.fiscal_year}
                         cacheKey={col.cache_key ?? null}

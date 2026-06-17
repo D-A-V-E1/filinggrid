@@ -73,3 +73,16 @@ export function parseMetaPeriodKey(period?: ComparePeriod): string {
   if (period?.fiscalYear != null) return annualPeriodId(period.fiscalYear);
   return "current";
 }
+
+/** Infer filing form from a period id when column metadata is missing (e.g. stale cache). */
+export function formFromPeriodId(period?: string): string | null {
+  if (!period) return null;
+  if (period.startsWith("interim-")) return null;
+  if (period.includes("-20f")) return "20-F";
+  if (period.startsWith("annual-")) return "10-K";
+  return null;
+}
+
+export function displayFormLabel(form: string): string {
+  return form.replace(/\/A$/i, "");
+}
