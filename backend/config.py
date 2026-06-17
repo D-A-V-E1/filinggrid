@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     # Database
@@ -26,7 +27,7 @@ class Settings(BaseSettings):
     # Supabase JWT validation (JWKS ES256 preferred; HS256 legacy fallback)
     supabase_url: str = Field(
         default="",
-        validation_alias=AliasChoices("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
+        validation_alias=AliasChoices("supabase_url", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
     )
     supabase_jwks_url: str = ""
     supabase_jwt_secret: str = ""
