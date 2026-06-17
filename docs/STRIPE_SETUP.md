@@ -4,6 +4,31 @@ Step-by-step guide for **test mode** (local / staging) and **live mode** (produc
 
 ---
 
+## Cursor Stripe plugin (MCP + skills)
+
+FilingGrid uses three separate Stripe surfaces. They complement each other; only the **CLI** and **Dashboard** populate `backend/.env`.
+
+| Surface | What it is | Used for |
+|---|---|---|
+| **Cursor Stripe plugin** | Official plugin (`plugin-stripe-stripe`) with MCP at `https://mcp.stripe.com` and agent skills (`stripe-best-practices`, `upgrade-stripe`, etc.) | Agent-assisted API calls, docs search, product/price creation (with approval), account lookup |
+| **Stripe CLI** | `stripe.exe` (install: `winget install Stripe.StripeCli`) | `stripe login`, `stripe listen` → local `whsec_...`, triggering test events |
+| **Stripe Dashboard** | [dashboard.stripe.com](https://dashboard.stripe.com) | Copy `sk_test_...`, `pk_test_...`, Customer Portal, production webhooks |
+
+**First-time plugin auth:** In Cursor, approve MCP auth for the Stripe server when prompted (`mcp_auth`). The agent can then call tools like `get_stripe_account_info`, `search_stripe_resources`, and `stripe_api_write` against your linked Stripe account.
+
+**Windows PATH:** Winget installs the CLI as a portable binary (not always on `PATH`):
+
+```powershell
+$stripe = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Stripe.StripeCli_Microsoft.Winget.Source_8wekyb3d8bbwe\stripe.exe"
+& $stripe --version
+```
+
+Optional: add that folder to your user `PATH`, or create a WinGet shim link.
+
+**How the plugin relates to this app:** The FastAPI backend (`backend/billing/stripe_routes.py`) still reads **`STRIPE_SECRET_KEY`**, **`STRIPE_WEBHOOK_SECRET`**, and **`STRIPE_PRICE_PROFESSIONAL`** from `backend/.env`. The MCP plugin does not inject those automatically — use Dashboard keys + CLI `stripe listen` output (or MCP to create the product/price, then paste IDs into `.env`).
+
+---
+
 ## What the code expects
 
 | Item | Value |

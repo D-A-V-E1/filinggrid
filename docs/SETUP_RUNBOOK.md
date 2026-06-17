@@ -130,6 +130,9 @@ Verify:
 
 ```powershell
 stripe --version
+# If 'stripe' not found, use full path (see STRIPE_SETUP.md — Cursor Stripe plugin section):
+$stripe = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Stripe.StripeCli_Microsoft.Winget.Source_8wekyb3d8bbwe\stripe.exe"
+& $stripe --version
 supabase --version
 docker compose version
 ```
