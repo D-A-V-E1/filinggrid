@@ -185,8 +185,8 @@ type StatementTab =
   | "stockholders_equity";
 
 const STATEMENT_TABS: { id: StatementTab; label: string }[] = [
-  { id: "income_statement", label: "Income Statement" },
-  { id: "balance_sheet", label: "Balance Sheet" },
+  { id: "income_statement", label: "Income" },
+  { id: "balance_sheet", label: "Balance" },
   { id: "cash_flow", label: "Cash Flow" },
   { id: "stockholders_equity", label: "Equity" },
 ];
@@ -266,13 +266,13 @@ function FullStatementsPanel({
           </span>
         )}
       </div>
-      <div className="mb-3 flex flex-wrap gap-1 border-b border-slate-200 pb-2">
+      <div className="mb-3 flex flex-nowrap gap-0.5 border-b border-slate-200 pb-2">
         {STATEMENT_TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`rounded px-2.5 py-1 font-sans text-[11px] font-medium transition ${
+            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 font-sans text-[10px] font-medium transition ${
               activeTab === tab.id
                 ? "bg-brand-100 text-brand-900"
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
