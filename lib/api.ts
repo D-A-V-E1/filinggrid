@@ -145,6 +145,7 @@ export interface FinancialStatementsXbrl {
     income_statement: StatementTable;
     balance_sheet: StatementTable;
     cash_flow: StatementTable;
+    stockholders_equity: StatementTable;
   };
 }
 

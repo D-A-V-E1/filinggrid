@@ -308,6 +308,121 @@ CASH_FLOW_LINES: list[dict[str, Any]] = [
     },
 ]
 
+STOCKHOLDERS_EQUITY_LINES: list[dict[str, Any]] = [
+    {
+        "key": "equity_beginning",
+        "label": "Stockholders' equity, beginning of period",
+        "concepts": [
+            "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+            "StockholdersEquity",
+        ],
+    },
+    {
+        "key": "common_stock",
+        "label": "Common stock",
+        "concepts": ["CommonStockValue", "CommonStocksIncludingAdditionalPaidInCapital"],
+    },
+    {
+        "key": "additional_paid_in_capital",
+        "label": "Additional paid-in capital",
+        "concepts": ["AdditionalPaidInCapital", "AdditionalPaidInCapitalCommonStock"],
+    },
+    {
+        "key": "retained_earnings",
+        "label": "Retained earnings",
+        "concepts": ["RetainedEarningsAccumulatedDeficit"],
+    },
+    {
+        "key": "aoci",
+        "label": "Accumulated other comprehensive income (loss)",
+        "concepts": ["AccumulatedOtherComprehensiveIncomeLossNetOfTax"],
+    },
+    {
+        "key": "treasury_stock",
+        "label": "Treasury stock",
+        "concepts": ["TreasuryStockValue", "TreasuryStockValueAcquiredCostMethod"],
+    },
+    {"key": "net_income", "label": "Net income", "concepts": ["NetIncomeLoss", "ProfitLoss"]},
+    {
+        "key": "other_comprehensive_income",
+        "label": "Other comprehensive income (loss)",
+        "concepts": [
+            "OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
+            "OtherComprehensiveIncomeLossNetOfTax",
+        ],
+    },
+    {
+        "key": "comprehensive_income",
+        "label": "Comprehensive income",
+        "concepts": ["ComprehensiveIncomeNetOfTax", "ComprehensiveIncomeNetOfTaxIncludingPortionAttributableToNoncontrollingInterest"],
+    },
+    {
+        "key": "share_based_comp",
+        "label": "Share-based compensation",
+        "concepts": [
+            "AdjustmentsToAdditionalPaidInCapitalSharebasedCompensationRequisiteServicePeriodRecognitionValue",
+            "ShareBasedCompensation",
+            "StockIssuedDuringPeriodValueShareBasedCompensation",
+        ],
+    },
+    {
+        "key": "stock_issued",
+        "label": "Stock issued",
+        "concepts": [
+            "StockIssuedDuringPeriodValueNewIssues",
+            "ProceedsFromIssuanceOfCommonStock",
+            "StockIssuedDuringPeriodSharesNewIssues",
+        ],
+    },
+    {
+        "key": "dividends",
+        "label": "Dividends declared",
+        "concepts": [
+            "DividendsCommonStock",
+            "Dividends",
+            "PaymentsOfDividends",
+            "PaymentsOfDividendsCommonStock",
+        ],
+    },
+    {
+        "key": "stock_repurchases",
+        "label": "Stock repurchases",
+        "concepts": [
+            "PaymentsForRepurchaseOfCommonStock",
+            "PaymentsForRepurchaseOfEquity",
+            "TreasuryStockSharesAcquired",
+        ],
+    },
+    {
+        "key": "equity_other",
+        "label": "Other equity changes",
+        "concepts": [
+            "StockholdersEquityOther",
+            "AdjustmentsToAdditionalPaidInCapitalOther",
+        ],
+    },
+    {
+        "key": "equity_ending",
+        "label": "Stockholders' equity, end of period",
+        "concepts": [
+            "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+            "StockholdersEquity",
+        ],
+    },
+    {
+        "key": "common_shares_outstanding",
+        "label": "Common shares outstanding",
+        "concepts": ["CommonStockSharesOutstanding"],
+    },
+]
+
+STATEMENT_TABLE_DEFS: tuple[tuple[str, list[dict[str, Any]], str], ...] = (
+    ("income_statement", INCOME_STATEMENT_LINES, "Income Statement"),
+    ("balance_sheet", BALANCE_SHEET_LINES, "Balance Sheet"),
+    ("cash_flow", CASH_FLOW_LINES, "Cash Flow"),
+    ("stockholders_equity", STOCKHOLDERS_EQUITY_LINES, "Stockholders' Equity"),
+)
+
 # Note section id -> metric definitions (key, label, candidate us-gaap concepts)
 NOTE_SECTION_METRICS: dict[str, list[dict[str, Any]]] = {
     "note-summary-policies": [
@@ -1502,14 +1617,9 @@ def extract_statement_tables(
     gaap = (facts.get("facts") or {}).get("us-gaap") or {}
     period_filter = resolve_period_filter(fiscal_year, period)
 
-    statement_defs = (
-        ("income_statement", INCOME_STATEMENT_LINES, "Income Statement"),
-        ("balance_sheet", BALANCE_SHEET_LINES, "Balance Sheet"),
-        ("cash_flow", CASH_FLOW_LINES, "Cash Flow"),
-    )
     statements: dict[str, Any] = {}
     all_rows: list[dict[str, Any]] = []
-    for stmt_key, lines, label in statement_defs:
+    for stmt_key, lines, label in STATEMENT_TABLE_DEFS:
         rows = _extract_statement_rows(gaap, lines, period_filter)
         statements[stmt_key] = {"label": label, "rows": rows}
         all_rows.extend(rows)

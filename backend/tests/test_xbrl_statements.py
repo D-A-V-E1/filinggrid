@@ -79,6 +79,48 @@ SAMPLE_COMPANYFACTS = {
                     ]
                 }
             ),
+            "RetainedEarningsAccumulatedDeficit": _concept(
+                {
+                    "USD": [
+                        _obs(1800, fy=2024, fp="FY", end="2024-12-31", form="10-K"),
+                    ]
+                }
+            ),
+            "AccumulatedOtherComprehensiveIncomeLossNetOfTax": _concept(
+                {
+                    "USD": [
+                        _obs(-50, fy=2024, fp="FY", end="2024-12-31", form="10-K"),
+                    ]
+                }
+            ),
+            "ShareBasedCompensation": _concept(
+                {
+                    "USD": [
+                        _obs(25, fy=2024, fp="FY", end="2024-12-31", form="10-K"),
+                    ]
+                }
+            ),
+            "PaymentsOfDividendsCommonStock": _concept(
+                {
+                    "USD": [
+                        _obs(-40, fy=2024, fp="FY", end="2024-12-31", form="10-K"),
+                    ]
+                }
+            ),
+            "PaymentsForRepurchaseOfCommonStock": _concept(
+                {
+                    "USD": [
+                        _obs(-60, fy=2024, fp="FY", end="2024-12-31", form="10-K"),
+                    ]
+                }
+            ),
+            "TreasuryStockValue": _concept(
+                {
+                    "USD": [
+                        _obs(-200, fy=2024, fp="FY", end="2024-12-31", form="10-K"),
+                    ]
+                }
+            ),
         }
     },
 }
@@ -166,6 +208,24 @@ def test_extract_statement_tables_includes_balance_sheet_rows():
     assert "stockholders_equity" in keys
 
 
+def test_extract_statement_tables_includes_stockholders_equity_rows():
+    result = extract_statement_tables(SAMPLE_COMPANYFACTS, fiscal_year=2024)
+    equity = result["statements"]["stockholders_equity"]
+    assert equity["label"] == "Stockholders' Equity"
+    rows = equity["rows"]
+    keys = {r["key"] for r in rows}
+    assert "net_income" in keys
+    assert "retained_earnings" in keys
+    assert "equity_ending" in keys
+    assert "share_based_comp" in keys
+    assert "dividends" in keys
+    assert "stock_repurchases" in keys
+    net_income = next(r for r in rows if r["key"] == "net_income")
+    assert net_income["value"] == 100
+    ending = next(r for r in rows if r["key"] == "equity_ending")
+    assert ending["value"] == 3000
+
+
 def test_statements_endpoint_blocks_free_tier():
     with patch(
         "main.fetch_ticker_financial_statements",
@@ -201,6 +261,7 @@ def test_statements_endpoint_allows_pro_tier(mock_settings):
             "income_statement": {"label": "Income Statement", "rows": []},
             "balance_sheet": {"label": "Balance Sheet", "rows": []},
             "cash_flow": {"label": "Cash Flow", "rows": []},
+            "stockholders_equity": {"label": "Stockholders' Equity", "rows": []},
         },
     }
     with patch(

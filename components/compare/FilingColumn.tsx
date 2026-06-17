@@ -178,12 +178,17 @@ function XbrlMetricsPanel({
   );
 }
 
-type StatementTab = "income_statement" | "balance_sheet" | "cash_flow";
+type StatementTab =
+  | "income_statement"
+  | "balance_sheet"
+  | "cash_flow"
+  | "stockholders_equity";
 
 const STATEMENT_TABS: { id: StatementTab; label: string }[] = [
   { id: "income_statement", label: "Income Statement" },
   { id: "balance_sheet", label: "Balance Sheet" },
   { id: "cash_flow", label: "Cash Flow" },
+  { id: "stockholders_equity", label: "Equity" },
 ];
 
 function formatPeriodLabel(period: FinancialStatementsXbrl["period"]): string {
@@ -287,7 +292,7 @@ function LockedStatementsPanel({ onUpgrade }: { onUpgrade: () => void }) {
     <article className="mb-4 min-w-0 rounded-lg border border-dashed border-brand-200 bg-brand-50/30 px-4 py-5 text-center shadow-sm">
       <p className="font-sans text-sm font-semibold text-slate-800">Full GAAP financial statements</p>
       <p className="mt-1 text-xs text-slate-600">
-        Income Statement, Balance Sheet, and Cash Flow with detailed line items.
+        Income Statement, Balance Sheet, Cash Flow, and Stockholders&apos; Equity with detailed line items.
       </p>
       <button
         type="button"
