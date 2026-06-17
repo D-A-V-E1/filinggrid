@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
+import { comparePathWithPeriod, resolveComparePeriod } from "@/lib/filing-period";
 import { searchTickers } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
@@ -19,11 +20,13 @@ export default function TickerSearchBar({
   initialTickers = [],
   compact = false,
   fiscalYear,
+  period,
   onPaywall,
 }: {
   initialTickers?: string[];
   compact?: boolean;
   fiscalYear?: number;
+  period?: string;
   onPaywall?: (reason: string, message: string) => void;
 }) {
   const router = useRouter();
@@ -49,10 +52,12 @@ export default function TickerSearchBar({
   const compareUrl = useMemo(() => {
     if (tickers.length < 2 || tickers.length > maxColumns) return null;
     const slug = buildPeerSlug(tickers.map((t) => t.ticker));
-    const currentYear = new Date().getFullYear();
-    const year = fiscalYear ?? currentYear;
-    return year < currentYear ? `/compare/${slug}?year=${year}` : `/compare/${slug}`;
-  }, [tickers, fiscalYear, maxColumns]);
+    const comparePeriod = resolveComparePeriod(
+      fiscalYear != null ? String(fiscalYear) : undefined,
+      period
+    );
+    return comparePathWithPeriod(slug, comparePeriod);
+  }, [tickers, fiscalYear, period, maxColumns]);
 
   function showColumnLimitPaywall(message: string) {
     if (onPaywall) {

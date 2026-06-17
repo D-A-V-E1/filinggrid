@@ -27,7 +27,8 @@ import { isDevTierToggleEnabled } from "@/lib/dev-tier";
 import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
 import SectionNav from "./SectionNav";
-import YearPicker from "./YearPicker";
+import FilingPeriodPicker from "./FilingPeriodPicker";
+import { fiscalYearFromPeriod, type ComparePeriod } from "@/lib/filing-period";
 import PeerGroupsMenu from "./PeerGroupsMenu";
 import PaywallModal from "../billing/PaywallModal";
 import TickerSearchBar from "../TickerSearchBar";
@@ -36,11 +37,23 @@ import DevTierToggle from "../DevTierToggle";
 interface CompareGridProps {
   tickers: string[];
   fiscalYear?: number;
+  period?: string;
   slugError?: string | null;
 }
 
-export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareGridProps) {
-  const cacheKey = useMemo(() => parseMetaCacheKey(tickers, fiscalYear), [tickers, fiscalYear]);
+export default function CompareGrid({ tickers, fiscalYear, period, slugError }: CompareGridProps) {
+  const comparePeriod = useMemo<ComparePeriod>(
+    () => ({ fiscalYear, period }),
+    [fiscalYear, period]
+  );
+  const resolvedFiscalYear = useMemo(
+    () => fiscalYearFromPeriod(period, fiscalYear),
+    [period, fiscalYear]
+  );
+  const cacheKey = useMemo(
+    () => parseMetaCacheKey(tickers, comparePeriod),
+    [tickers, comparePeriod]
+  );
   const [data, setData] = useState<ParseResponse | null>(null);
   const [loadingFinancials, setLoadingFinancials] = useState(false);
   const [loadingTickers, setLoadingTickers] = useState<string[]>([]);
@@ -71,11 +84,11 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       form: null,
       filing_date: null,
       report_date: null,
-      fiscal_year: fiscalYear ?? null,
+      fiscal_year: resolvedFiscalYear ?? null,
       sections: [],
       error: null,
     }),
-    [fiscalYear]
+    [resolvedFiscalYear]
   );
 
   useEffect(() => {
@@ -131,7 +144,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     setLoadingFinancials(true);
 
     const upgradeFullFinancials = (ticker: string) => {
-      void fetchFinancials(ticker, fiscalYear, { headlineOnly: false })
+      void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false })
         .then((full) => {
           if (loadId !== loadIdRef.current) return;
           setFinancialsByTicker((prev) => ({ ...prev, [ticker]: full }));
@@ -175,7 +188,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     };
 
     const startHeadlineFinancials = () => {
-      void fetchFinancialsBatch(tickers, fiscalYear, { headlineOnly: true }, {
+      void fetchFinancialsBatch(tickers, resolvedFiscalYear, { headlineOnly: true }, {
         onFinancial: (ticker, fin) => {
           if (loadId !== loadIdRef.current) return;
           applyHeadlineFinancial(ticker, fin);
@@ -222,7 +235,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       startHeadlineFinancials();
 
       try {
-        await parseFilingsStream(tickers, fiscalYear, {
+        await parseFilingsStream(tickers, resolvedFiscalYear, {
           onCatalog: (sectionCatalogIn, at) => {
             if (loadId !== loadIdRef.current) return;
             sectionCatalog = sectionCatalogIn;
@@ -258,7 +271,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
             setData(merged);
             if (hasSectionIndex(merged)) saveParseMeta(cacheKey, merged);
           },
-        });
+        }, period);
       } catch (err) {
         if (loadId !== loadIdRef.current) return;
         if (err instanceof ApiError && err.isPaywall) {
@@ -291,7 +304,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
         }
       }
     })();
-  }, [buildPlaceholderColumn, cacheKey, tickers, fiscalYear, isPro]);
+  }, [buildPlaceholderColumn, cacheKey, tickers, resolvedFiscalYear, period, isPro]);
 
   useEffect(() => {
     if (slugError || authLoading) return;
@@ -346,9 +359,16 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           initialTickers={tickers}
           compact
           fiscalYear={fiscalYear}
+          period={period}
           onPaywall={handlePaywall}
         />
-        <YearPicker fiscalYear={fiscalYear} tier={tier} onPaywall={handlePaywall} />
+        <FilingPeriodPicker
+          tickers={tickers}
+          fiscalYear={fiscalYear}
+          period={period}
+          tier={tier}
+          onPaywall={handlePaywall}
+        />
         <PeerGroupsMenu
           tickers={tickers}
           fiscalYear={fiscalYear}
@@ -502,7 +522,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
                         financialsError={financialsErrors[col.ticker] ?? null}
                         sectionsPending={loadingSections && col.sections.length === 0}
                         columnCount={tickers.length}
-                        fiscalYearFilter={fiscalYear ?? col.fiscal_year}
+                        fiscalYearFilter={resolvedFiscalYear ?? col.fiscal_year}
                       />
                     );
                   })}

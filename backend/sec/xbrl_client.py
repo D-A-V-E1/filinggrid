@@ -1003,6 +1003,59 @@ def _sort_observations(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
+PERIOD_DISCOVERY_CONCEPTS: tuple[str, ...] = (
+    "Assets",
+    "Revenues",
+    "SalesRevenueNet",
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "NetIncomeLoss",
+)
+
+
+def list_reporting_periods(companyfacts: dict[str, Any]) -> list[dict[str, Any]]:
+    """Distinct reporting periods from XBRL companyfacts (fy, fp, form, end)."""
+    gaap = companyfacts.get("facts", {}).get("us-gaap", {})
+    periods: dict[tuple[Any, ...], dict[str, Any]] = {}
+
+    for name in PERIOD_DISCOVERY_CONCEPTS:
+        concept = gaap.get(name)
+        if not concept:
+            continue
+        _, entries = _unit_entries(concept)
+        for obs in entries:
+            form = obs.get("form") or ""
+            if form not in ("10-K", "10-K/A", "10-Q", "10-Q/A", "20-F", "20-F/A"):
+                continue
+            fp = obs.get("fp")
+            fy = obs.get("fy")
+            end = obs.get("end")
+            if fy is None or not end or not fp:
+                continue
+            if fp == "FY":
+                kind = "annual"
+            elif fp in ("Q1", "Q2", "Q3", "Q4"):
+                kind = "interim"
+            else:
+                continue
+            key = (int(fy), fp, end, form.replace("/A", ""))
+            filed = obs.get("filed") or ""
+            existing = periods.get(key)
+            if existing is None or filed > (existing.get("filed") or ""):
+                periods[key] = {
+                    "kind": kind,
+                    "fiscal_year": int(fy),
+                    "fp": fp,
+                    "end": end,
+                    "form": form,
+                    "filed": filed,
+                    "accn": obs.get("accn"),
+                }
+
+    result = list(periods.values())
+    result.sort(key=lambda p: (p.get("end") or "", p.get("filed") or ""), reverse=True)
+    return result
+
+
 def _filter_annual(entries: list[dict[str, Any]], fiscal_year: int | None) -> list[dict[str, Any]]:
     annual = [e for e in entries if e.get("fp") == "FY" and e.get("form") in ("10-K", "10-K/A", "20-F", "20-F/A", None, "")]
     annual = [e for e in annual if e.get("form") in ("10-K", "10-K/A", "20-F", "20-F/A")]

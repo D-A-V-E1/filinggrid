@@ -235,14 +235,19 @@ export interface ParseStreamCallbacks {
 export async function parseFilingsStream(
   tickers: string[],
   fiscalYear: number | undefined,
-  callbacks: ParseStreamCallbacks
+  callbacks: ParseStreamCallbacks,
+  period?: string
 ): Promise<void> {
   const headers = await buildAuthHeaders({ Accept: "application/x-ndjson" });
 
   const res = await fetch(`${API_URL}/parse/stream`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ tickers, fiscal_year: fiscalYear ?? null }),
+    body: JSON.stringify({
+      tickers,
+      fiscal_year: fiscalYear ?? null,
+      period: period ?? null,
+    }),
   });
 
   if (!res.ok) {
@@ -496,6 +501,23 @@ export interface PeerGroup {
   id: string;
   group_name: string;
   tickers_list: string[];
+}
+
+export interface FilingPeriodOption {
+  id: string;
+  kind: "annual" | "interim";
+  fiscal_year: number;
+  fp?: string | null;
+  period_end?: string | null;
+  report_date?: string | null;
+  form: string;
+  label: string;
+  filing_date?: string | null;
+}
+
+export async function fetchFilingPeriods(tickers: string[]): Promise<FilingPeriodOption[]> {
+  const q = tickers.map((t) => t.toUpperCase()).join(",");
+  return apiFetch<FilingPeriodOption[]>(`/filings/periods?tickers=${encodeURIComponent(q)}`);
 }
 
 export async function listPeerGroups(): Promise<PeerGroup[]> {

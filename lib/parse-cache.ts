@@ -1,13 +1,14 @@
 import type { ParseResponse } from "./api";
 import { normalizePeerSlug } from "./utils";
+import { parseMetaPeriodKey, type ComparePeriod } from "./filing-period";
 
 const META_PREFIX = "fg:meta:";
 const SECTION_PREFIX = "fg:section:";
 const SECTION_TEXT_PREFIX = "fg:section-text:";
 
-export function parseMetaCacheKey(tickers: string[], fiscalYear?: number): string {
+export function parseMetaCacheKey(tickers: string[], comparePeriod?: ComparePeriod): string {
   const slug = normalizePeerSlug(tickers);
-  return `${META_PREFIX}${slug}:${fiscalYear ?? "current"}`;
+  return `${META_PREFIX}${slug}:${parseMetaPeriodKey(comparePeriod)}`;
 }
 
 function sectionHtmlCacheKey(cacheKey: string, sectionId: string): string {

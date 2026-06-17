@@ -40,6 +40,7 @@ from sec.section_extractor import (
 class ParseRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=8)
     fiscal_year: int | None = None
+    period: str | None = None
 
 
 class ColumnResult(BaseModel):
@@ -114,24 +115,28 @@ def _build_column_result(
 async def _parse_single_ticker(
     ticker: str,
     ticker_map: dict[str, dict[str, Any]],
-    target_year: int,
     requested_year: int | None,
+    period: str | None = None,
 ) -> tuple[ColumnResult, list[dict[str, Any]], str | None, bool]:
     ticker = ticker.upper().strip()
     try:
         resolved = await resolve_ticker(ticker, ticker_map)
         submissions = await fetch_submissions(resolved["cik"])
-        filing = find_filing(submissions, fiscal_year=target_year)
 
-        if not filing and requested_year is None:
+        if period:
+            filing = find_filing(submissions, period=period)
+        elif requested_year is not None:
+            filing = find_filing(submissions, fiscal_year=requested_year)
+        else:
             filing = find_filing(submissions, fiscal_year=None)
 
         if not filing:
+            label = period or (str(requested_year) if requested_year is not None else "latest")
             column = ColumnResult(
                 ticker=ticker,
                 company_name=resolved["company_name"],
                 cik=resolved["cik"],
-                error=f"No comparable filing (10-K, 10-Q, 20-F, or 6-K) found for fiscal year {target_year}",
+                error=f"No comparable filing (10-K, 10-Q, 20-F, or 6-K) found for period {label}",
             )
             return column, [], None, False
 
@@ -151,7 +156,7 @@ async def _parse_single_ticker(
                 ticker=col_meta.get("ticker", ticker),
                 company_name=col_meta.get("company_name", resolved["company_name"]),
                 cik=cik,
-                form=col_meta.get("form", filing.get("form")),
+                form=col_meta.get("form") or filing.get("form"),
                 filing_date=col_meta.get("filing_date", filing.get("filing_date")),
                 report_date=col_meta.get("report_date", filing.get("report_date")),
                 fiscal_year=col_meta.get("fiscal_year", fiscal_year),
@@ -198,12 +203,11 @@ async def _parse_single_ticker(
 
 
 async def parse_filings(request: ParseRequest) -> ParseResponse:
-    target_year = request.fiscal_year or datetime.now().year
     ticker_map = await fetch_ticker_map()
 
     raw_results = await asyncio.gather(
         *[
-            _parse_single_ticker(ticker, ticker_map, target_year, request.fiscal_year)
+            _parse_single_ticker(ticker, ticker_map, request.fiscal_year, request.period)
             for ticker in request.tickers
         ]
     )
@@ -223,7 +227,6 @@ async def parse_filings(request: ParseRequest) -> ParseResponse:
 
 
 async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
-    target_year = request.fiscal_year or datetime.now().year
     parsed_at = datetime.utcnow().isoformat() + "Z"
 
     yield json.dumps(
@@ -238,7 +241,7 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
 
     tasks = {
         asyncio.create_task(
-            _parse_single_ticker(ticker, ticker_map, target_year, request.fiscal_year)
+            _parse_single_ticker(ticker, ticker_map, request.fiscal_year, request.period)
         ): ticker
         for ticker in request.tickers
     }
@@ -254,6 +257,28 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
         yield json.dumps({"type": "column", "column": payload.model_dump()}) + "\n"
 
     yield json.dumps({"type": "done", "parsed_at": parsed_at}) + "\n"
+
+
+async def list_periods_for_tickers(tickers: list[str]) -> list[dict[str, Any]]:
+    from sec.filing_periods import list_comparable_filings, merge_filing_periods
+    from sec.xbrl_client import fetch_company_facts, list_reporting_periods
+
+    ticker_map = await fetch_ticker_map()
+    period_lists: list[list[dict[str, Any]]] = []
+    for raw in tickers:
+        ticker = raw.upper().strip()
+        if not ticker:
+            continue
+        resolved = await resolve_ticker(ticker, ticker_map)
+        submissions = await fetch_submissions(resolved["cik"])
+        xbrl_periods: list[dict[str, Any]] | None = None
+        try:
+            facts, _ = await fetch_company_facts(resolved["cik"])
+            xbrl_periods = list_reporting_periods(facts)
+        except Exception:
+            xbrl_periods = None
+        period_lists.append(list_comparable_filings(submissions, xbrl_periods=xbrl_periods))
+    return merge_filing_periods(period_lists)
 
 
 async def get_section_html(
@@ -335,10 +360,9 @@ async def _extract_and_cache_section(
             column_meta, _ = cached
 
     if column_meta is None:
-        target_year = fiscal_year or datetime.now().year
         ticker_map = await fetch_ticker_map()
         column, sections, new_key, _from_cache = await _parse_single_ticker(
-            ticker, ticker_map, target_year, fiscal_year
+            ticker, ticker_map, fiscal_year, None
         )
         if not new_key or not sections:
             return None, None, None

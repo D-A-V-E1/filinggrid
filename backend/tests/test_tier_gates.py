@@ -1,7 +1,7 @@
 """Tests for subscription tier gates and dev tier overrides."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from middleware import (
     AuthContext,
     TIER_LIMITS,
+    check_free_period_access,
     check_parse_access,
     check_professional_access,
     get_auth_context,
@@ -44,19 +45,37 @@ def test_pro_blocks_ninth_column():
     assert "Professional supports up to 8" in exc.value.detail["message"]
 
 
-def test_free_blocks_historical_year():
+@pytest.mark.anyio
+async def test_free_blocks_deep_historical_period():
     auth = AuthContext(tier="free")
-    prior_year = datetime.now().year - 1
-    with pytest.raises(HTTPException) as exc:
-        check_parse_access(auth, 1, prior_year)
+    deep_year = datetime.now().year - 3
+    with patch("filing_parser.list_periods_for_tickers", new_callable=AsyncMock) as mock_periods:
+        mock_periods.return_value = [
+            {"id": "interim-2026-03-31", "kind": "interim", "fiscal_year": 2026},
+            {"id": "annual-2025", "kind": "annual", "fiscal_year": 2025},
+        ]
+        with pytest.raises(HTTPException) as exc:
+            await check_free_period_access(auth, ["AAPL"], deep_year, f"annual-{deep_year}")
     assert exc.value.status_code == 402
     assert exc.value.detail["reason"] == "historical_data"
+
+
+@pytest.mark.anyio
+async def test_free_allows_completed_fiscal_year_period():
+    auth = AuthContext(tier="free")
+    prior_year = datetime.now().year - 1
+    with patch("filing_parser.list_periods_for_tickers", new_callable=AsyncMock) as mock_periods:
+        mock_periods.return_value = [
+            {"id": "interim-2026-03-31", "kind": "interim", "fiscal_year": 2026},
+            {"id": f"annual-{prior_year}", "kind": "annual", "fiscal_year": prior_year},
+        ]
+        await check_free_period_access(auth, ["AAPL"], prior_year, f"annual-{prior_year}")
 
 
 def test_pro_allows_historical_year():
     auth = AuthContext(tier="professional")
     prior_year = datetime.now().year - 1
-    check_parse_access(auth, 1, prior_year)
+    check_parse_access(auth, 1)
 
 
 def test_peer_groups_require_professional():

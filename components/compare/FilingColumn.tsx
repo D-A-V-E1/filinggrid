@@ -77,21 +77,27 @@ interface XbrlPanelProps {
   fromCache?: boolean;
   subtitle?: string;
   fiscalYearFilter?: number | null;
-  compact?: boolean;
+  maxFyColumns?: number;
+}
+
+/** Fewer FY columns when the compare grid is wider so tables stay readable. */
+function maxFyColumnsForLayout(columnCount: number): number {
+  if (columnCount >= 4) return 1;
+  if (columnCount >= 3) return 2;
+  return 4;
 }
 
 function pickAnnualRows(
   annualSummary: XbrlPanelProps["annualSummary"],
   fiscalYearFilter?: number | null,
-  compact?: boolean
+  maxFyColumns = 4
 ): XbrlPanelProps["annualSummary"] {
   if (fiscalYearFilter != null) {
     const match = annualSummary.filter((r) => r.fy === fiscalYearFilter);
     if (match.length > 0) return match;
   }
   const sorted = [...annualSummary].sort((a, b) => b.fy - a.fy);
-  if (compact) return sorted.slice(0, 1);
-  return sorted.slice(0, 4);
+  return sorted.slice(0, maxFyColumns);
 }
 
 function XbrlMetricsPanel({
@@ -101,16 +107,16 @@ function XbrlMetricsPanel({
   fromCache,
   subtitle,
   fiscalYearFilter,
-  compact,
+  maxFyColumns = 4,
 }: XbrlPanelProps) {
-  const tableRows = pickAnnualRows(annualSummary, fiscalYearFilter, compact);
+  const tableRows = pickAnnualRows(annualSummary, fiscalYearFilter, maxFyColumns);
   if (tableRows.length === 0) return null;
 
   const visibleRows = rows.filter(({ key }) => tableRows.some((r) => r[key] != null));
   if (visibleRows.length === 0) return null;
 
   return (
-    <article className="mb-4 rounded-lg border border-brand-200 bg-brand-50/40 px-3 py-4 shadow-sm sm:px-4">
+    <article className="mb-4 min-w-0 rounded-lg border border-brand-200 bg-brand-50/40 px-3 py-4 shadow-sm sm:px-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-brand-800">
           SEC XBRL (fast path)
@@ -121,13 +127,18 @@ function XbrlMetricsPanel({
           </span>
         )}
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full table-fixed border-collapse text-left text-xs">
+      <div className="xbrl-metrics-scroll overflow-x-auto">
+        <table className="xbrl-metrics-table w-max min-w-full border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-brand-200/80">
-              <th className="w-[42%] py-1.5 pr-2 font-medium text-slate-600">Metric</th>
+              <th className="min-w-[7rem] max-w-[11rem] py-1.5 pr-3 font-medium text-slate-600">
+                Metric
+              </th>
               {tableRows.map((r) => (
-                <th key={r.fy} className="py-1.5 px-1 text-right font-mono font-semibold text-slate-700">
+                <th
+                  key={r.fy}
+                  className="whitespace-nowrap py-1.5 px-2 text-right font-mono font-semibold text-slate-700"
+                >
                   FY {r.fy}
                 </th>
               ))}
@@ -136,11 +147,14 @@ function XbrlMetricsPanel({
           <tbody>
             {visibleRows.map(({ key, label, unit }) => (
               <tr key={key} className="border-b border-brand-100/80 last:border-0">
-                <td className="py-1.5 pr-2 text-slate-600">{label}</td>
+                <td className="min-w-[7rem] max-w-[11rem] py-1.5 pr-3 text-slate-600">{label}</td>
                 {tableRows.map((r) => {
                   const val = r[key];
                   return (
-                    <td key={r.fy} className="py-1.5 px-1 text-right font-mono tabular-nums text-slate-800">
+                    <td
+                      key={r.fy}
+                      className="whitespace-nowrap py-1.5 px-2 text-right font-mono tabular-nums text-slate-800"
+                    >
                       {typeof val === "number" ? formatMetricValue(val, unit) : "—"}
                     </td>
                   );
@@ -168,7 +182,7 @@ function XbrlDisclosuresPanel({ disclosures }: { disclosures: XbrlDisclosure[] }
   if (disclosures.length === 0) return null;
 
   return (
-    <article className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
+    <article className="mb-4 min-w-0 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
       <p className="mb-3 font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         XBRL disclosure text
       </p>
@@ -242,7 +256,7 @@ function FilingColumn({
   columnCount = 1,
   fiscalYearFilter = null,
 }: FilingColumnProps) {
-  const compactMetrics = columnCount >= 4;
+  const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const resolvedFiscalYear =
     fiscalYearFilter ?? financialsXbrl?.fiscal_year_filter ?? fiscalYear ?? null;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -300,7 +314,7 @@ function FilingColumn({
           fromCache={financialsXbrl.from_cache}
           subtitle="Headline GAAP metrics from SEC companyfacts."
           fiscalYearFilter={resolvedFiscalYear}
-          compact={compactMetrics}
+          maxFyColumns={maxFyColumns}
         />
       );
     }
@@ -317,7 +331,7 @@ function FilingColumn({
           fromCache={financialsXbrl.from_cache}
           subtitle="Tagged GAAP facts from SEC companyfacts."
           fiscalYearFilter={resolvedFiscalYear}
-          compact={compactMetrics}
+          maxFyColumns={maxFyColumns}
         />
       ) : null;
 
@@ -334,7 +348,7 @@ function FilingColumn({
         {metricsPanel}
       </>
     );
-  }, [financialsXbrl, activeSection, resolvedFiscalYear, compactMetrics]);
+  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });

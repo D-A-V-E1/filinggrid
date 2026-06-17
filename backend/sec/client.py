@@ -129,11 +129,42 @@ async def resolve_ticker(ticker: str, ticker_map: dict | None = None) -> dict[st
     return {"ticker": ticker, "cik": info["cik"], "company_name": info["title"]}
 
 
+async def _merge_submission_archives(data: dict[str, Any]) -> None:
+    """Append older filing rows from SEC archive JSON files (beyond the 1000-row recent window)."""
+    filings = data.get("filings", {})
+    if filings.get("_archives_merged"):
+        return
+
+    archive_files = filings.get("files") or []
+    recent = filings.setdefault("recent", {})
+    if not archive_files:
+        filings["_archives_merged"] = True
+        return
+
+    keys = ("form", "accessionNumber", "filingDate", "reportDate", "primaryDocument")
+    client = await get_http_client()
+    for info in archive_files:
+        name = info.get("name")
+        if not name:
+            continue
+        url = f"https://data.sec.gov/submissions/{name}"
+        resp = await _rate_limited_get(client, url, data_api=True)
+        resp.raise_for_status()
+        chunk = resp.json()
+        for key in keys:
+            values = chunk.get(key)
+            if values:
+                recent.setdefault(key, [])
+                recent[key].extend(values)
+
+    filings["_archives_merged"] = True
+
+
 async def fetch_submissions(cik: str) -> dict[str, Any]:
     from filing_store import load_submissions, save_submissions
 
     cached = load_submissions(cik)
-    if cached:
+    if cached and cached.get("filings", {}).get("_archives_merged"):
         return cached
 
     in_flight = _submissions_inflight.get(cik)
@@ -141,12 +172,16 @@ async def fetch_submissions(cik: str) -> dict[str, Any]:
         return await in_flight
 
     async def _load() -> dict[str, Any]:
-        cik_padded = str(int(cik)).zfill(10)
-        url = SUBMISSIONS_URL.format(cik=cik_padded)
-        client = await get_http_client()
-        resp = await _rate_limited_get(client, url, data_api=True)
-        resp.raise_for_status()
-        data = resp.json()
+        if cached:
+            data = cached
+        else:
+            cik_padded = str(int(cik)).zfill(10)
+            url = SUBMISSIONS_URL.format(cik=cik_padded)
+            client = await get_http_client()
+            resp = await _rate_limited_get(client, url, data_api=True)
+            resp.raise_for_status()
+            data = resp.json()
+        await _merge_submission_archives(data)
         save_submissions(cik, data)
         return data
 
@@ -183,7 +218,17 @@ def find_filing(
     submissions: dict[str, Any],
     form_types: list[str] | None = None,
     fiscal_year: int | None = None,
+    *,
+    period: str | None = None,
 ) -> dict[str, Any] | None:
+    from sec.filing_periods import find_filing_for_period, resolve_period_filter
+
+    if period:
+        period_filter = resolve_period_filter(fiscal_year, period)
+        if period_filter:
+            return find_filing_for_period(submissions, period_filter, period_id=period)
+        return None
+
     form_types = form_types or COMPARABLE_FORM_TYPES
     recent = submissions.get("filings", {}).get("recent", {})
     forms = recent.get("form", [])
@@ -217,10 +262,12 @@ def find_filing(
 
     if not candidates:
         return None
-    # Prefer annual reports (10-K / 20-F) over interim (10-Q / 6-K), then newest filing date.
-    candidates.sort(
-        key=lambda x: (_form_tier(x["form"]), -_filing_date_ord(x.get("filing_date")))
-    )
+    if fiscal_year is None:
+        candidates.sort(key=lambda x: -_filing_date_ord(x.get("filing_date")))
+    else:
+        candidates.sort(
+            key=lambda x: (_form_tier(x["form"]), -_filing_date_ord(x.get("filing_date")))
+        )
     return candidates[0]
 
 
