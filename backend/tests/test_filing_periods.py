@@ -7,6 +7,7 @@ import pytest
 from sec.client import find_filing
 from sec.filing_periods import (
     filter_free_tier_periods,
+    interim_slot_from_option,
     list_comparable_filings,
     merge_filing_periods,
     parse_period_param,
@@ -36,6 +37,11 @@ def test_parse_period_param_annual_and_interim():
     assert interim is not None
     assert interim.kind == "interim"
     assert interim.report_date == "2024-06-29"
+    canonical = parse_period_param("interim-2025-Q4-10-Q")
+    assert canonical is not None
+    assert canonical.fp == "Q4"
+    assert canonical.fiscal_year == 2025
+    assert canonical.form == "10-Q"
 
 
 def test_find_filing_with_interim_period():
@@ -58,6 +64,50 @@ def test_find_filing_with_interim_period():
     filing = find_filing(subs, period="interim-2024-06-29")
     assert filing is not None
     assert filing["form"] == "10-Q"
+
+
+def test_find_filing_cross_ticker_via_interim_slot():
+    """Legacy date id from one issuer must resolve via fiscal slot on another."""
+    aapl = _submissions(
+        [
+            {
+                "form": "10-Q",
+                "accession": "0000320193-26-000010",
+                "filing_date": "2026-01-30",
+                "report_date": "2025-12-27",
+            },
+        ]
+    )
+    msft = _submissions(
+        [
+            {
+                "form": "10-Q",
+                "accession": "0001193125-26-000010",
+                "filing_date": "2026-01-28",
+                "report_date": "2025-12-31",
+            },
+        ]
+    )
+    xbrl_q4 = [
+        {
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q4",
+            "end": "2025-12-27",
+            "form": "10-Q",
+            "filed": "2026-01-30",
+            "accn": "0000320193-26-000010",
+        },
+    ]
+    aapl_opts = list_comparable_filings(aapl, xbrl_periods=xbrl_q4)
+    slot = interim_slot_from_option(aapl_opts[0])
+    assert slot == (2025, "Q4", "10-Q")
+
+    msft_xbrl = [{**xbrl_q4[0], "end": "2025-12-31", "accn": "0001193125-26-000010"}]
+    msft_opts = list_comparable_filings(msft, xbrl_periods=msft_xbrl)
+    filing = find_filing(msft, period="interim-2025-12-27", interim_slot=slot)
+    assert filing is not None
+    assert filing["report_date"] == "2025-12-31"
 
 
 def test_find_filing_with_annual_period_20f():
@@ -207,33 +257,37 @@ def test_dedupe_period_options_collapses_duplicate_labels():
     assert deduped[0]["id"] == "interim-2025-06-28"
 
 
-def test_merge_filing_periods_keeps_distinct_interim_ends_across_tickers():
-    """Same fiscal quarter label for two issuers must remain two selectable periods."""
+def test_merge_filing_periods_unions_by_fiscal_slot():
+    """Same fiscal quarter across issuers becomes one selectable period (canonical id)."""
     aapl = [
         {
-            "id": "interim-2025-06-28",
+            "id": "interim-2025-Q3-10-Q",
             "kind": "interim",
             "fiscal_year": 2025,
             "fp": "Q3",
             "form": "10-Q",
             "label": "FY25 · Q3 · 10-Q",
             "filing_date": "2025-08-01",
+            "period_end": "2025-06-28",
+            "report_date": "2025-06-28",
         }
     ]
     msft = [
         {
-            "id": "interim-2025-03-31",
+            "id": "interim-2025-Q3-10-Q",
             "kind": "interim",
             "fiscal_year": 2025,
             "fp": "Q3",
             "form": "10-Q",
             "label": "FY25 · Q3 · 10-Q",
             "filing_date": "2025-04-30",
+            "period_end": "2025-03-31",
+            "report_date": "2025-03-31",
         }
     ]
     merged = merge_filing_periods([aapl, msft])
     ids = {o["id"] for o in merged}
-    assert ids == {"interim-2025-06-28", "interim-2025-03-31"}
+    assert ids == {"interim-2025-Q3-10-Q"}
 
 
 def test_filter_free_tier_periods_latest_plus_completed_year():
@@ -323,7 +377,7 @@ def test_list_comparable_filings_unions_submissions_beyond_xbrl():
     ids = {o["id"] for o in options}
     assert "annual-2000" in ids
     assert "annual-2024" in ids
-    assert "interim-2025-06-29" in ids
+    assert "interim-2025-Q3-10-Q" in ids
     annual_2024 = next(o for o in options if o["id"] == "annual-2024")
     assert annual_2024.get("fp") == "FY"
     assert "FY24" in annual_2024["label"]

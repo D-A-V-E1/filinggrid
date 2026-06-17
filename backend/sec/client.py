@@ -220,13 +220,19 @@ def find_filing(
     fiscal_year: int | None = None,
     *,
     period: str | None = None,
+    interim_slot: tuple[int, str, str] | None = None,
 ) -> dict[str, Any] | None:
     from sec.filing_periods import find_filing_for_period, resolve_period_filter
 
     if period:
         period_filter = resolve_period_filter(fiscal_year, period)
         if period_filter:
-            return find_filing_for_period(submissions, period_filter, period_id=period)
+            return find_filing_for_period(
+                submissions,
+                period_filter,
+                period_id=period,
+                interim_slot=interim_slot,
+            )
         return None
 
     form_types = form_types or COMPARABLE_FORM_TYPES

@@ -117,6 +117,7 @@ async def _parse_single_ticker(
     ticker_map: dict[str, dict[str, Any]],
     requested_year: int | None,
     period: str | None = None,
+    interim_slot: tuple[int, str, str] | None = None,
 ) -> tuple[ColumnResult, list[dict[str, Any]], str | None, bool]:
     ticker = ticker.upper().strip()
     try:
@@ -124,7 +125,7 @@ async def _parse_single_ticker(
         submissions = await fetch_submissions(resolved["cik"])
 
         if period:
-            filing = find_filing(submissions, period=period)
+            filing = find_filing(submissions, period=period, interim_slot=interim_slot)
         elif requested_year is not None:
             filing = find_filing(submissions, fiscal_year=requested_year)
         else:
@@ -203,11 +204,18 @@ async def _parse_single_ticker(
 
 
 async def parse_filings(request: ParseRequest) -> ParseResponse:
+    from sec.filing_periods import resolve_interim_slot_for_tickers
+
     ticker_map = await fetch_ticker_map()
+    interim_slot = await resolve_interim_slot_for_tickers(
+        request.tickers, request.period, ticker_map
+    )
 
     raw_results = await asyncio.gather(
         *[
-            _parse_single_ticker(ticker, ticker_map, request.fiscal_year, request.period)
+            _parse_single_ticker(
+                ticker, ticker_map, request.fiscal_year, request.period, interim_slot
+            )
             for ticker in request.tickers
         ]
     )
@@ -238,10 +246,17 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
     ) + "\n"
 
     ticker_map = await fetch_ticker_map()
+    from sec.filing_periods import resolve_interim_slot_for_tickers
+
+    interim_slot = await resolve_interim_slot_for_tickers(
+        request.tickers, request.period, ticker_map
+    )
 
     tasks = {
         asyncio.create_task(
-            _parse_single_ticker(ticker, ticker_map, request.fiscal_year, request.period)
+            _parse_single_ticker(
+                ticker, ticker_map, request.fiscal_year, request.period, interim_slot
+            )
         ): ticker
         for ticker in request.tickers
     }

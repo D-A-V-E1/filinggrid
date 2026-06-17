@@ -15,15 +15,22 @@ from sec.client import (
 )
 
 
+
+
 @dataclass(frozen=True)
 class PeriodFilter:
     kind: Literal["annual", "interim"]
     fiscal_year: int | None = None
     report_date: str | None = None
+    fp: str | None = None
+    form: str | None = None
+
+
+InterimSlot = tuple[int, str, str]  # fiscal_year, fp, form
 
 
 def parse_period_param(period: str | None) -> PeriodFilter | None:
-    """Parse URL/API period id: ``annual-2024``, ``annual-2024-20f``, or ``interim-2024-09-30``."""
+    """Parse period id: ``annual-2024``, ``interim-2024-09-30``, or ``interim-2025-Q4-10-Q``."""
     if not period or not period.strip():
         return None
     value = period.strip().lower()
@@ -35,15 +42,40 @@ def parse_period_param(period: str | None) -> PeriodFilter | None:
             return PeriodFilter(kind="annual", fiscal_year=int(year_str))
         return None
     if value.startswith("interim-"):
-        report_date = value[len("interim-") :]
-        if len(report_date) >= 10 and report_date[4] == "-" and report_date[7] == "-":
+        rest = value[len("interim-") :]
+        parts = rest.split("-")
+        if len(parts) >= 3 and parts[0].isdigit() and parts[1].upper() in ("Q1", "Q2", "Q3", "Q4"):
             return PeriodFilter(
                 kind="interim",
-                fiscal_year=int(report_date[:4]),
-                report_date=report_date[:10],
+                fiscal_year=int(parts[0]),
+                fp=parts[1].upper(),
+                form="-".join(parts[2:]).upper(),
+            )
+        if len(rest) >= 10 and rest[4] == "-" and rest[7] == "-":
+            return PeriodFilter(
+                kind="interim",
+                fiscal_year=int(rest[:4]),
+                report_date=rest[:10],
             )
         return None
     return None
+
+
+def interim_slot_from_period_filter(pf: PeriodFilter | None) -> InterimSlot | None:
+    if not pf or pf.kind != "interim" or pf.fiscal_year is None or not pf.fp:
+        return None
+    form = _compact_form_label(pf.form or "10-Q")
+    if pf.fp not in ("Q1", "Q2", "Q3", "Q4"):
+        return None
+    return pf.fiscal_year, pf.fp, form
+
+
+def interim_slot_from_option(option: dict[str, Any]) -> InterimSlot | None:
+    fy = option.get("fiscal_year")
+    fp = option.get("fp")
+    if fy is None or fp not in ("Q1", "Q2", "Q3", "Q4"):
+        return None
+    return int(fy), fp, _compact_form_label(option.get("form") or "10-Q")
 
 
 def resolve_period_filter(
@@ -253,11 +285,19 @@ def _is_20f_form(form: str) -> bool:
     return _compact_form_label(form) == "20-F"
 
 
-def _period_option_id(kind: str, form: str, fiscal_year: int, report_date: str | None) -> str:
+def _period_option_id(
+    kind: str,
+    form: str,
+    fiscal_year: int,
+    report_date: str | None,
+    fp: str | None = None,
+) -> str:
     if kind == "annual":
         if _is_20f_form(form):
             return f"annual-{fiscal_year}-20f"
         return f"annual-{fiscal_year}"
+    if fp in ("Q1", "Q2", "Q3", "Q4"):
+        return f"interim-{fiscal_year}-{fp}-{_compact_form_label(form)}"
     return f"interim-{report_date}"
 
 
@@ -311,8 +351,8 @@ def _dedupe_period_options(options: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _period_merge_key(option: dict[str, Any]) -> str:
-    """Union key across tickers — keep distinct period-end ids per issuer."""
-    return option["id"]
+    """Union key across tickers — one row per fiscal period slot."""
+    return _period_canonical_key(option)
 
 
 def _compact_form_label(form: str) -> str:
@@ -403,6 +443,7 @@ def _build_period_option(
         form,
         fiscal_year if kind == "annual" else (int(period_end[:4]) if period_end else fiscal_year),
         period_end if kind == "interim" else period_end,
+        fp=fp,
     )
     if kind == "interim" and not period_end:
         raise ValueError("interim period requires period_end")
@@ -604,6 +645,7 @@ def find_filing_for_period(
     *,
     fiscal_year: int | None = None,
     period_id: str | None = None,
+    interim_slot: InterimSlot | None = None,
 ) -> dict[str, Any] | None:
     """Resolve a single filing for the given annual or interim period."""
     pf = period_filter or (
@@ -625,6 +667,12 @@ def find_filing_for_period(
             if row["form"] in annual_forms and row.get("fiscal_year") == year
         ]
     else:
+        slot = interim_slot or interim_slot_from_period_filter(pf)
+        if slot:
+            filing = _find_filing_for_interim_slot(submissions, slot)
+            if filing:
+                return filing
+
         report_date = pf.report_date
         if not report_date:
             return None
@@ -638,3 +686,73 @@ def find_filing_for_period(
         return None
     candidates.sort(key=lambda x: (_form_tier(x["form"]), -_filing_date_ord(x.get("filing_date"))))
     return candidates[0]
+
+
+def _find_filing_for_interim_slot(
+    submissions: dict[str, Any],
+    slot: InterimSlot,
+) -> dict[str, Any] | None:
+    """Match issuer interim filing by fiscal year + fp + form (cross-ticker safe)."""
+    fy, fp, form = slot
+    opts = list_comparable_filings(submissions)
+    matches = [
+        o
+        for o in opts
+        if o.get("kind") == "interim"
+        and o.get("fiscal_year") == fy
+        and o.get("fp") == fp
+        and _compact_form_label(o.get("form") or "") == form
+    ]
+    if not matches:
+        return None
+    best = max(matches, key=lambda o: _filing_date_ord(o.get("filing_date")))
+    end = best.get("period_end") or best.get("report_date")
+    if not end:
+        return None
+    candidates = [
+        row
+        for row in _iter_submission_filings(submissions)
+        if row["form"] in INTERIM_COMPARABLE_FORMS and row.get("report_date") == end
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: (_form_tier(x["form"]), -_filing_date_ord(x.get("filing_date"))))
+    return candidates[0]
+
+
+async def resolve_interim_slot_for_tickers(
+    tickers: list[str],
+    period: str | None,
+    ticker_map: dict[str, Any],
+) -> InterimSlot | None:
+    """Map issuer-specific interim id to fiscal slot shared across tickers."""
+    if not period or not period.strip().startswith("interim-"):
+        return None
+
+    stripped = period.strip()
+    pf = parse_period_param(stripped)
+    slot = interim_slot_from_period_filter(pf)
+    if slot:
+        return slot
+
+    legacy_report_date = pf.report_date if pf and pf.kind == "interim" else None
+
+    from sec.client import fetch_submissions, resolve_ticker
+
+    for raw in tickers:
+        ticker = raw.upper().strip()
+        if not ticker:
+            continue
+        try:
+            resolved = await resolve_ticker(ticker, ticker_map)
+            submissions = await fetch_submissions(resolved["cik"])
+        except Exception:
+            continue
+        for opt in list_comparable_filings(submissions):
+            if opt.get("id") == stripped:
+                return interim_slot_from_option(opt)
+            if legacy_report_date:
+                end = opt.get("period_end") or opt.get("report_date")
+                if end == legacy_report_date:
+                    return interim_slot_from_option(opt)
+    return None
