@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
 import { searchTickers } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { addTickerLimitMessage, getMaxColumns } from "@/lib/tier-limits";
+import { useEffectiveTier } from "@/hooks/useEffectiveTier";
+import { addTickerLimitMessage } from "@/lib/tier-limits";
 import PaywallModal from "./billing/PaywallModal";
 import PrivacyStrip from "./PrivacyStrip";
 
@@ -28,6 +29,7 @@ export default function TickerSearchBar({
   const router = useRouter();
   const pathname = usePathname();
   const { auth } = useAuth();
+  const { tier, isPro, maxColumns } = useEffectiveTier(auth);
   const [isNavigating, setIsNavigating] = useState(false);
   const [limitMessage, setLimitMessage] = useState("");
   const [internalPaywall, setInternalPaywall] = useState({
@@ -43,11 +45,6 @@ export default function TickerSearchBar({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchError, setSearchError] = useState("");
   const queryRequestIdRef = useRef(0);
-
-  const maxColumns = useMemo(
-    () => getMaxColumns(auth?.tier, auth?.limits.max_columns),
-    [auth?.tier, auth?.limits.max_columns]
-  );
 
   const compareUrl = useMemo(() => {
     if (tickers.length < 2 || tickers.length > maxColumns) return null;
@@ -111,9 +108,9 @@ export default function TickerSearchBar({
     if (tickers.some((t) => t.ticker === upper)) return;
 
     if (tickers.length >= maxColumns) {
-      const message = addTickerLimitMessage(auth?.tier ?? "free", maxColumns);
+      const message = addTickerLimitMessage(tier, maxColumns);
       setLimitMessage(message);
-      if ((auth?.tier ?? "free") !== "professional") {
+      if (!isPro) {
         showColumnLimitPaywall(message);
       }
       return;
@@ -133,9 +130,9 @@ export default function TickerSearchBar({
   function handleCompare() {
     if (isNavigating) return;
     if (tickers.length > maxColumns) {
-      const message = addTickerLimitMessage(auth?.tier ?? "free", maxColumns);
+      const message = addTickerLimitMessage(tier, maxColumns);
       setLimitMessage(message);
-      if ((auth?.tier ?? "free") !== "professional") {
+      if (!isPro) {
         showColumnLimitPaywall(message);
       }
       return;

@@ -21,7 +21,8 @@ import {
 import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
-import { compareUrlLimitMessage, getMaxColumns } from "@/lib/tier-limits";
+import { useEffectiveTier } from "@/hooks/useEffectiveTier";
+import { compareUrlLimitMessage } from "@/lib/tier-limits";
 import { isDevTierToggleEnabled } from "@/lib/dev-tier";
 import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
@@ -51,8 +52,8 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     reason: "",
     message: "",
   });
-  const [tier, setTier] = useState("free");
   const { auth, loading: authLoading, refresh: refreshAuth } = useAuth();
+  const { tier, isPro, maxColumns } = useEffectiveTier(auth);
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [sectionsParseError, setSectionsParseError] = useState("");
@@ -78,13 +79,15 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
   );
 
   useEffect(() => {
-    if (auth?.tier) setTier(auth.tier);
-  }, [auth?.tier]);
-
-  useEffect(() => {
     prefetchAuthToken();
     checkApiHealth().then(setApiHealthy);
   }, []);
+
+  useEffect(() => {
+    if (isPro && paywall.open) {
+      setPaywall((p) => ({ ...p, open: false }));
+    }
+  }, [isPro, paywall.open]);
 
   useEffect(() => {
     if (!slugError) return;
@@ -92,12 +95,9 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
     setError("");
   }, [slugError]);
 
-  const maxColumns = useMemo(
-    () => getMaxColumns(auth?.tier, auth?.limits.max_columns),
-    [auth?.tier, auth?.limits.max_columns]
-  );
+  const maxColumnsResolved = maxColumns;
 
-  const overColumnLimit = tickers.length > maxColumns;
+  const overColumnLimit = tickers.length > maxColumnsResolved;
 
   const isBootstrapMode = useMemo(() => {
     if (!data) return false;
@@ -265,7 +265,9 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
           const detail = err.detail as { reason?: string; message?: string };
           const reason = detail.reason || "subscription_required";
           const message = detail.message || "Upgrade to Professional to continue.";
-          setPaywall({ open: true, reason, message });
+          if (!isPro || reason === "column_limit") {
+            setPaywall({ open: true, reason, message });
+          }
           if (reason === "column_limit") {
             setSectionsParseError(message);
           }
@@ -285,13 +287,15 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
         }
       }
     })();
-  }, [buildPlaceholderColumn, cacheKey, tickers, fiscalYear]);
+  }, [buildPlaceholderColumn, cacheKey, tickers, fiscalYear, isPro]);
 
   useEffect(() => {
     if (slugError || authLoading) return;
     if (overColumnLimit) {
-      const message = compareUrlLimitMessage(auth?.tier ?? "free", maxColumns, tickers.length);
-      setPaywall({ open: true, reason: "column_limit", message });
+      const message = compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length);
+      if (!isPro) {
+        setPaywall({ open: true, reason: "column_limit", message });
+      }
       setSectionsParseError(message);
       setData(null);
       setLoadingFinancials(false);
@@ -300,15 +304,19 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
       return;
     }
     loadFilings();
-  }, [loadFilings, slugError, authLoading, overColumnLimit, auth?.tier, maxColumns, tickers.length]);
+  }, [loadFilings, slugError, authLoading, overColumnLimit, tier, maxColumnsResolved, tickers.length, isPro]);
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
   }, []);
 
-  const handlePaywall = useCallback((reason: string, message: string) => {
-    setPaywall({ open: true, reason, message });
-  }, []);
+  const handlePaywall = useCallback(
+    (reason: string, message: string) => {
+      if (isPro) return;
+      setPaywall({ open: true, reason, message });
+    },
+    [isPro]
+  );
 
   const activeSectionLabel = useMemo(() => {
     if (!data || !activeSection) return null;
@@ -345,7 +353,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
         />
         <div className="ml-auto flex items-center gap-3">
           <DevTierToggle
-            currentTier={auth?.tier ?? tier}
+            currentTier={tier}
             onChange={() => {
               void refreshAuth();
             }}
@@ -386,7 +394,7 @@ export default function CompareGrid({ tickers, fiscalYear, slugError }: CompareG
             <div className="max-w-md text-center">
               <p className="text-sm font-medium text-slate-800">Too many tickers for your plan</p>
               <p className="mt-2 text-sm text-slate-600">
-                {compareUrlLimitMessage(auth?.tier ?? "free", maxColumns, tickers.length)}
+                {compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length)}
               </p>
             </div>
           </div>

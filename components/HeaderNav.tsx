@@ -6,6 +6,7 @@ import { useState } from "react";
 import { createPortal, createCheckout } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import SignInModal from "@/components/auth/SignInModal";
 
 export default function HeaderNav() {
@@ -13,6 +14,7 @@ export default function HeaderNav() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { auth, loading, configured, isSignedIn, refresh } = useAuth();
+  const { isPro } = useEffectiveTier(auth);
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -52,7 +54,7 @@ export default function HeaderNav() {
           <span className="text-slate-400">…</span>
         ) : isSignedIn && auth ? (
           <div className="flex items-center gap-3">
-            {auth.tier === "professional" ? (
+            {isPro ? (
               <span className="hidden rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 sm:inline">
                 Pro
               </span>
@@ -71,7 +73,7 @@ export default function HeaderNav() {
             <Link href="/account" className="text-slate-600 hover:text-slate-900 sm:hidden">
               Account
             </Link>
-            {auth.tier === "professional" && (
+            {isPro && (
               <button
                 type="button"
                 onClick={handleManageBilling}

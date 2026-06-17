@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import MagicLinkForm from "@/components/auth/MagicLinkForm";
 import { createCheckout, createPortal } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 
 interface PaywallModalProps {
   open: boolean;
@@ -20,6 +21,7 @@ export default function PaywallModal({ open, reason, message, onClose }: Paywall
     pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
 
   const { auth, isSignedIn, refresh } = useAuth();
+  const { isPro } = useEffectiveTier(auth);
   const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +42,13 @@ export default function PaywallModal({ open, reason, message, onClose }: Paywall
     }
   }, [open, isSignedIn]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (open && isPro) {
+      onClose();
+    }
+  }, [open, isPro, onClose]);
+
+  if (!open || isPro) return null;
 
   async function handleCheckout() {
     setLoading(true);

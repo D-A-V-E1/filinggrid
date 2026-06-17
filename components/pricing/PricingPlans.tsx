@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import PaywallModal from "@/components/billing/PaywallModal";
+import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 
 const PLANS = [
   {
@@ -42,6 +44,8 @@ const PLANS = [
 
 export default function PricingPlans() {
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const { auth } = useAuth();
+  const { isPro } = useEffectiveTier(auth);
 
   return (
     <>
@@ -70,13 +74,22 @@ export default function PricingPlans() {
               ))}
             </ul>
             {plan.isPro ? (
-              <button
-                type="button"
-                onClick={() => setPaywallOpen(true)}
-                className="mt-8 block w-full rounded-lg bg-brand-600 py-2.5 text-center text-sm font-medium text-white transition hover:bg-brand-700"
-              >
-                {plan.cta}
-              </button>
+              isPro ? (
+                <Link
+                  href="/account"
+                  className="mt-8 block w-full rounded-lg border border-brand-200 bg-brand-50 py-2.5 text-center text-sm font-medium text-brand-800 transition hover:bg-brand-100"
+                >
+                  Current plan — manage billing
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPaywallOpen(true)}
+                  className="mt-8 block w-full rounded-lg bg-brand-600 py-2.5 text-center text-sm font-medium text-white transition hover:bg-brand-700"
+                >
+                  {plan.cta}
+                </button>
+              )
             ) : (
               <Link
                 href={plan.href}

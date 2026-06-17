@@ -6,11 +6,13 @@ import { useState } from "react";
 import { createCheckout, createPortal } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import SignInModal from "@/components/auth/SignInModal";
 
 export default function AccountPanel() {
   const router = useRouter();
   const { auth, loading, configured, isSignedIn, refresh } = useAuth();
+  const { isPro } = useEffectiveTier(auth);
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
@@ -93,7 +95,7 @@ export default function AccountPanel() {
     );
   }
 
-  const isPro = auth.tier === "professional";
+  const isProUser = isPro;
 
   return (
     <div className="space-y-6">
@@ -107,7 +109,7 @@ export default function AccountPanel() {
           <div>
             <dt className="text-slate-500">Plan</dt>
             <dd className="font-medium capitalize text-slate-900">
-              {isPro ? "Professional" : "Free"}
+              {isProUser ? "Professional" : "Free"}
             </dd>
           </div>
           <div>
@@ -122,7 +124,7 @@ export default function AccountPanel() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500">Billing</h2>
-        {isPro ? (
+        {isProUser ? (
           <p className="mt-3 text-sm text-slate-600">
             Manage your subscription, invoices, and payment method in the Stripe Customer Portal.
           </p>
@@ -136,7 +138,7 @@ export default function AccountPanel() {
           </div>
         )}
         <div className="mt-4 flex flex-wrap gap-3">
-          {isPro ? (
+          {isProUser ? (
             <button
               type="button"
               onClick={handlePortal}
