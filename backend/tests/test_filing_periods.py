@@ -165,6 +165,77 @@ def test_merge_filing_periods_keeps_10k_and_20f_separate():
     assert "annual-2024-20f" in ids
 
 
+def test_dedupe_period_options_collapses_duplicate_labels():
+    """XBRL + submissions can surface the same fiscal quarter under different period-end ids."""
+    options = [
+        {
+            "id": "interim-2025-06-28",
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q3",
+            "form": "10-Q",
+            "label": "FY25 · Q3 · 10-Q",
+            "filing_date": "2025-08-01",
+            "period_end": "2025-06-28",
+        },
+        {
+            "id": "interim-2024-06-29",
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q3",
+            "form": "10-Q",
+            "label": "FY25 · Q3 · 10-Q",
+            "filing_date": "2024-08-02",
+            "period_end": "2024-06-29",
+        },
+        {
+            "id": "interim-2024-09-28",
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q3",
+            "form": "10-Q",
+            "label": "FY25 · Q3 · 10-Q",
+            "filing_date": "2024-11-01",
+            "period_end": "2024-09-28",
+        },
+    ]
+    from sec.filing_periods import _dedupe_period_options
+
+    deduped = _dedupe_period_options(options)
+    labels = [o["label"] for o in deduped]
+    assert labels.count("FY25 · Q3 · 10-Q") == 1
+    assert deduped[0]["id"] == "interim-2025-06-28"
+
+
+def test_merge_filing_periods_keeps_distinct_interim_ends_across_tickers():
+    """Same fiscal quarter label for two issuers must remain two selectable periods."""
+    aapl = [
+        {
+            "id": "interim-2025-06-28",
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q3",
+            "form": "10-Q",
+            "label": "FY25 · Q3 · 10-Q",
+            "filing_date": "2025-08-01",
+        }
+    ]
+    msft = [
+        {
+            "id": "interim-2025-03-31",
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q3",
+            "form": "10-Q",
+            "label": "FY25 · Q3 · 10-Q",
+            "filing_date": "2025-04-30",
+        }
+    ]
+    merged = merge_filing_periods([aapl, msft])
+    ids = {o["id"] for o in merged}
+    assert ids == {"interim-2025-06-28", "interim-2025-03-31"}
+
+
 def test_filter_free_tier_periods_latest_plus_completed_year():
     all_periods = [
         {"id": "interim-2026-03-31", "kind": "interim", "fiscal_year": 2026, "label": "FY26 · Q1 · 10-Q"},

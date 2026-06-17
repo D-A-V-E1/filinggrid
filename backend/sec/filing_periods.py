@@ -311,35 +311,8 @@ def _dedupe_period_options(options: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _period_merge_key(option: dict[str, Any]) -> str:
-    """Union key across tickers — one row per fiscal period slot."""
-    return _period_canonical_key(option)
-
-
-def _interim_catalog_key(option: dict[str, Any]) -> str | None:
-    """One fiscal quarter per issuer when XBRL fp is present."""
-    if option.get("kind") != "interim":
-        return None
-    fy = option.get("fiscal_year")
-    fp = option.get("fp")
-    if fy is None or fp not in ("Q1", "Q2", "Q3", "Q4"):
-        return None
-    form = _compact_form_label(option.get("form", ""))
-    return f"interim|{fy}|{fp}|{form}"
-
-
-def _collapse_period_options(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Drop duplicate fiscal quarters (restatements); prefer latest filing_date."""
-    best: dict[str, dict[str, Any]] = {}
-    for opt in options:
-        key = _interim_catalog_key(opt) or opt["id"]
-        existing = best.get(key)
-        if existing is None or _filing_date_ord(opt.get("filing_date")) > _filing_date_ord(
-            existing.get("filing_date")
-        ):
-            best[key] = opt
-    result = list(best.values())
-    result.sort(key=_sort_key_period)
-    return result
+    """Union key across tickers — keep distinct period-end ids per issuer."""
+    return option["id"]
 
 
 def _compact_form_label(form: str) -> str:
@@ -378,6 +351,9 @@ def _period_display_label(
     quarter = _quarter_from_report_date(period_end)
     if short == "10-Q" and quarter:
         return f"FY{fy} · Q{quarter} · {short}"
+
+    if short == "10-Q" and period_end:
+        return f"FY{fy} · {short} · {period_end}"
 
     return f"FY{fy} · {short}"
 
@@ -455,7 +431,7 @@ def _options_from_xbrl(
     submission_rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     annual_best: dict[tuple[int, str], dict[str, Any]] = {}
-    interim_best: dict[str, dict[str, Any]] = {}
+    interim_best: dict[tuple[Any, ...], dict[str, Any]] = {}
 
     for xp in xbrl_periods:
         filing = _match_submission_filing(
@@ -498,7 +474,7 @@ def _options_from_xbrl(
             ):
                 interim_best[key] = option
 
-    return _collapse_period_options(list(annual_best.values()) + list(interim_best.values()))
+    return _dedupe_period_options(list(annual_best.values()) + list(interim_best.values()))
 
 
 def _six_k_options_from_submissions(
@@ -582,7 +558,7 @@ def _options_from_submissions(submission_rows: list[dict[str, Any]]) -> list[dic
             )
         )
 
-    return _collapse_period_options(options)
+    return _dedupe_period_options(options)
 
 
 def list_comparable_filings(
@@ -602,7 +578,7 @@ def list_comparable_filings(
         merged: dict[str, dict[str, Any]] = {o["id"]: o for o in submission_options}
         for opt in xbrl_options:
             merged[opt["id"]] = opt
-        return _collapse_period_options(list(merged.values()))
+        return _dedupe_period_options(list(merged.values()))
 
     return submission_options
 
@@ -612,7 +588,9 @@ def merge_filing_periods(period_lists: list[list[dict[str, Any]]]) -> list[dict[
     merged: dict[str, dict[str, Any]] = {}
     for periods in period_lists:
         for opt in periods:
-            merged[_period_merge_key(opt)] = opt
+            key = _period_merge_key(opt)
+            if _better_period_option(opt, merged.get(key)):
+                merged[key] = opt
 
     result = list(merged.values())
     result.sort(key=_sort_key_period)
