@@ -1,3 +1,5 @@
+"use client";
+
 export default function PrivacyStrip({ className = "" }: { className?: string }) {
   return (
     <p

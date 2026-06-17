@@ -13,7 +13,7 @@ API = os.environ.get("FILINGGRID_API", "http://localhost:8000")
 HEADERS_PRO = {"Accept": "application/x-ndjson", "X-Dev-Tier": "professional"}
 
 
-async def test_parse(tickers: list[str], fiscal_year: int) -> tuple[bool, str]:
+async def smoke_parse(tickers: list[str], fiscal_year: int) -> tuple[bool, str]:
     async with httpx.AsyncClient(timeout=120) as client:
         r = await client.post(
             f"{API}/parse/stream",
@@ -37,7 +37,7 @@ async def test_parse(tickers: list[str], fiscal_year: int) -> tuple[bool, str]:
         return True, f"parse ok ({columns} columns)"
 
 
-async def test_financials(tickers: list[str], fiscal_year: int) -> tuple[bool, str]:
+async def smoke_financials(tickers: list[str], fiscal_year: int) -> tuple[bool, str]:
     async with httpx.AsyncClient(timeout=120) as client:
         r = await client.post(
             f"{API}/filings/financials/batch",
@@ -79,8 +79,8 @@ async def main() -> int:
     failures = 0
     for tickers, fy in cases:
         label = f"{len(tickers)} tickers ({', '.join(tickers)})"
-        fin_ok, fin_msg = await test_financials(tickers, fy)
-        parse_ok, parse_msg = await test_parse(tickers, fy)
+        fin_ok, fin_msg = await smoke_financials(tickers, fy)
+        parse_ok, parse_msg = await smoke_parse(tickers, fy)
         status = "PASS" if fin_ok and parse_ok else "FAIL"
         if not fin_ok or not parse_ok:
             failures += 1

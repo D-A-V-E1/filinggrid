@@ -38,13 +38,21 @@ export function hasRenderableSections(data: ParseResponse): boolean {
 /** @deprecated Use hasSectionIndex — kept for imports during transition. */
 export const hasParsedColumns = hasSectionIndex;
 
-export function loadParseMeta(key: string): ParseResponse | null {
+function columnsMissingForm(data: ParseResponse): boolean {
+  return data.columns.some((c) => !c.error && !c.form);
+}
+
+export function loadParseMeta(key: string, period?: string): ParseResponse | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const data = JSON.parse(raw) as ParseResponse;
     if (!hasSectionIndex(data)) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    if (period && columnsMissingForm(data)) {
       sessionStorage.removeItem(key);
       return null;
     }

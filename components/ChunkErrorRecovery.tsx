@@ -13,7 +13,9 @@ export default function ChunkErrorRecovery() {
         text.includes("ChunkLoadError") ||
         text.includes("Loading chunk") ||
         text.includes("Failed to fetch dynamically imported module") ||
-        text.includes("Unexpected token")
+        text.includes("Unexpected token") ||
+        text.includes("reading 'call'") ||
+        text.includes("options.factory")
       );
     }
 

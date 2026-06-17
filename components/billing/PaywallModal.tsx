@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import MagicLinkForm from "@/components/auth/MagicLinkForm";
 import { createCheckout, createPortal } from "@/lib/api";
@@ -14,7 +14,7 @@ interface PaywallModalProps {
   onClose: () => void;
 }
 
-export default function PaywallModal({ open, reason, message, onClose }: PaywallModalProps) {
+function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const returnPath =
@@ -169,5 +169,14 @@ export default function PaywallModal({ open, reason, message, onClose }: Paywall
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       </div>
     </div>
+  );
+}
+
+export default function PaywallModal(props: PaywallModalProps) {
+  if (!props.open) return null;
+  return (
+    <Suspense fallback={null}>
+      <PaywallModalInner {...props} />
+    </Suspense>
   );
 }

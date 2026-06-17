@@ -11,12 +11,14 @@ import {
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
 import { isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
+import { displayFormLabel, formFromPeriodId } from "@/lib/filing-period";
 import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
   ticker: string;
   companyName: string;
   form: string | null;
+  period?: string;
   filingDate: string | null;
   fiscalYear: number | null;
   cacheKey: string | null;
@@ -241,6 +243,7 @@ function FilingColumn({
   ticker,
   companyName,
   form,
+  period,
   filingDate,
   fiscalYear,
   cacheKey,
@@ -257,6 +260,8 @@ function FilingColumn({
   fiscalYearFilter = null,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
+  const displayForm = form ?? formFromPeriodId(period);
+  const formLabel = displayForm ? displayFormLabel(displayForm) : null;
   const resolvedFiscalYear =
     fiscalYearFilter ?? financialsXbrl?.fiscal_year_filter ?? fiscalYear ?? null;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -408,7 +413,7 @@ function FilingColumn({
       <ColumnHeader
         ticker={ticker}
         companyName={companyName}
-        form={form}
+        form={formLabel}
         filingDate={filingDate}
         fiscalYear={fiscalYear}
       />
