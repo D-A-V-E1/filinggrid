@@ -10,6 +10,16 @@ from config import Settings
 from middleware import decode_jwt
 
 
+def test_settings_derives_jwks_url_from_next_public_env_alias(monkeypatch):
+    monkeypatch.setenv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    settings = Settings()
+    assert settings.supabase_jwks_url_resolved == (
+        "https://example.supabase.co/auth/v1/.well-known/jwks.json"
+    )
+    assert settings.auth_configured is True
+
+
 def test_settings_derives_jwks_url_from_supabase_url():
     settings = Settings(
         supabase_url="https://example.supabase.co",

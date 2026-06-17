@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     filing_cache_dir: str = ".cache/filings"
 
     # Supabase JWT validation (JWKS ES256 preferred; HS256 legacy fallback)
-    supabase_url: str = ""
+    supabase_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
+    )
     supabase_jwks_url: str = ""
     supabase_jwt_secret: str = ""
     supabase_service_role_key: str = ""

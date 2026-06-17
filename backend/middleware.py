@@ -87,12 +87,13 @@ def _decode_jwt_jwks(token: str) -> dict:
     if not client:
         raise jwt.InvalidTokenError("JWKS not configured")
     signing_key = client.get_signing_key_from_jwt(token)
-    return jwt.decode(
-        token,
-        signing_key.key,
-        algorithms=["ES256", "RS256"],
-        audience="authenticated",
-    )
+    decode_kwargs: dict = {
+        "algorithms": ["ES256", "RS256"],
+        "audience": "authenticated",
+    }
+    if settings.supabase_url.strip() and not settings.supabase_url.strip().upper().startswith("TODO"):
+        decode_kwargs["issuer"] = f"{settings.supabase_url.rstrip('/')}/auth/v1"
+    return jwt.decode(token, signing_key.key, **decode_kwargs)
 
 
 def _decode_jwt_hs256(token: str) -> dict:

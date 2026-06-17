@@ -223,12 +223,15 @@ Restart the API after changing webhook secret.
 |---|---|---|
 | Project URL | `NEXT_PUBLIC_SUPABASE_URL` | Root `.env` (frontend) |
 | Publishable key (`sb_publishable_...`) or legacy anon (`eyJ...`) | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Root `.env` (frontend) |
-| JWT Secret (under **JWT Settings**, not the secret API key) | `SUPABASE_JWT_SECRET` | Root `.env` + `backend/.env` |
+| Project URL (backend) | `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL` | `backend/.env` |
+| Legacy JWT Secret (HS256 fallback only) | `SUPABASE_JWT_SECRET` | `backend/.env` (optional with ECC/RSA keys) |
 | Secret key (`sb_secret_...`) or legacy service_role | `SUPABASE_SERVICE_ROLE_KEY` | `backend/.env` (optional; unused by auth middleware today) |
 
-`@supabase/supabase-js` v2.x accepts `sb_publishable_...` in place of the legacy anon key — no code changes required. The `sb_secret_...` key is **not** a substitute for `SUPABASE_JWT_SECRET`; the backend verifies user session tokens with the JWT signing secret (`backend/middleware.py`).
+`@supabase/supabase-js` v2.x accepts `sb_publishable_...` in place of the legacy anon key — no code changes required.
 
-Backend validates JWTs with `SUPABASE_JWT_SECRET` (`backend/middleware.py`). Frontend uses URL + publishable/anon key for `@supabase/ssr` sign-in.
+**JWT verification (backend):** If your project uses **ECC (P-256)** or **RSA** signing keys (Supabase dashboard → **Project Settings → JWT Keys**), the backend verifies access tokens via JWKS at `{SUPABASE_URL}/auth/v1/.well-known/jwks.json` — **no shared secret required**. Set `SUPABASE_URL` in `backend/.env` to your project URL. Optionally set `SUPABASE_JWT_SECRET` from the **Legacy JWT Secret** tab only if you need HS256 fallback during key rotation.
+
+Frontend uses URL + publishable/anon key for `@supabase/ssr` sign-in.
 
 > **Note:** FilingGrid uses a **local PostgreSQL** (`DATABASE_URL`) for users/orgs/tiers, not Supabase Postgres, unless you point `DATABASE_URL` at Supabase's connection string intentionally.
 
@@ -371,7 +374,7 @@ Expected: **21 passed** (tier gates + webhook handler mocks).
 | `You have not configured API keys yet` (Stripe CLI) | Run `stripe login` |
 | `503 Billing is not configured` | Set `STRIPE_SECRET_KEY` + `STRIPE_PRICE_PROFESSIONAL` in `backend/.env`, restart API |
 | `400 Invalid signature` on webhook | Wrong `STRIPE_WEBHOOK_SECRET`; restart `stripe listen` and update env |
-| `AUTH_NOT_CONFIGURED` | Set `SUPABASE_JWT_SECRET` in `backend/.env` |
+| `AUTH_NOT_CONFIGURED` | Set `SUPABASE_URL` in `backend/.env` (JWKS) or `SUPABASE_JWT_SECRET` (legacy HS256) |
 | Magic link redirect fails | Check Supabase Site URL + redirect URLs match `http://localhost:3000` |
 | Paid but still Free | Webhook not reaching API; confirm `stripe listen` running and API on :8000 |
 | `Professional tier requires a corporate email` | Use work email domain for checkout |
