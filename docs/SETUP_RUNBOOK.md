@@ -7,6 +7,46 @@ Use this runbook when CLIs are not logged in or dashboard credentials are not ye
 
 ---
 
+## Setup completion status (last checked: 2026-06-16)
+
+| Item | Status | Notes |
+|---|---|---|
+| `.env` + `backend/.env` exist | ✅ Done | Non-secret defaults filled; secrets still `TODO_*` |
+| Supabase CLI installed | ✅ v2.106.0 | `supabase login` required (browser) |
+| Supabase project + keys | ⏸ Blocked | Create project at [supabase.com/dashboard](https://supabase.com/dashboard) |
+| Supabase auth URLs | ⏸ Blocked | Site URL `http://localhost:3000`, redirect `http://localhost:3000/auth/callback` |
+| Docker Desktop | ⏸ Not installed | Required for local Postgres via `docker compose` |
+| `docker compose up -d` + migrations | ⏸ Blocked | Needs Docker; then `cd backend; .\.venv\Scripts\python.exe -m alembic upgrade head` |
+| Stripe CLI installed | ✅ v1.42.13 (winget) | **Not on PATH** — reopen terminal after install or add WinGet Links to PATH |
+| Stripe CLI logged in | ⏸ Unknown | Run `stripe login` (browser) |
+| Stripe test product $29/mo | ⏸ Blocked | Create in **Test mode** at [dashboard.stripe.com/test/products](https://dashboard.stripe.com/test/products) |
+| Stripe API keys in `.env` | ⏸ Blocked | Copy `sk_test_...` + `price_...` from test dashboard |
+| Stripe webhook secret | ⏸ Blocked | Run `stripe listen --forward-to localhost:8000/webhooks/stripe` |
+| Unit tests (tier + webhooks) | ✅ 21/21 pass | No live Stripe/Supabase required |
+| API `/health` + `/auth/me` | ✅ Verified | Via TestClient; live server needs DB for full routes |
+
+**Cloud Postgres alternative (no Docker):** [Neon](https://neon.tech) free tier → set `DATABASE_URL` in both `.env` files → run `alembic upgrade head`.
+
+**After secrets are filled — start dev stack:**
+
+```powershell
+# Terminal 1 — DB (if Docker installed)
+docker compose up -d
+
+# Terminal 2 — Stripe webhooks (after stripe login)
+stripe listen --forward-to localhost:8000/webhooks/stripe
+
+# Terminal 3 — API
+cd backend; .\.venv\Scripts\activate; uvicorn main:app --reload --port 8000
+
+# Terminal 4 — Frontend
+npm install; npm run dev
+```
+
+**Manual E2E:** sign in (magic link) → add 4 tickers → paywall → corporate email checkout → card `4242 4242 4242 4242` → confirm `GET /auth/me` shows `"tier": "professional"`.
+
+---
+
 ## What agents can automate vs what you do (~5 min)
 
 | Step | Automated? | Your action |
