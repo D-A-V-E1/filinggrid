@@ -217,15 +217,18 @@ Restart the API after changing webhook secret.
 
 ### 2c. Copy keys
 
-**Project Settings → API**
+**Project Settings → API** (use the **Publishable and secret API keys** tab for new projects, or **Legacy API keys** for `eyJ` anon/service_role)
 
 | Dashboard field | Env variable | Where |
 |---|---|---|
 | Project URL | `NEXT_PUBLIC_SUPABASE_URL` | Root `.env` (frontend) |
-| anon public | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Root `.env` (frontend) |
-| JWT Secret | `SUPABASE_JWT_SECRET` | Root `.env` + `backend/.env` |
+| Publishable key (`sb_publishable_...`) or legacy anon (`eyJ...`) | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Root `.env` (frontend) |
+| JWT Secret (under **JWT Settings**, not the secret API key) | `SUPABASE_JWT_SECRET` | Root `.env` + `backend/.env` |
+| Secret key (`sb_secret_...`) or legacy service_role | `SUPABASE_SERVICE_ROLE_KEY` | `backend/.env` (optional; unused by auth middleware today) |
 
-Backend validates JWTs with `SUPABASE_JWT_SECRET` (`backend/middleware.py`). Frontend uses URL + anon key for `@supabase/ssr` sign-in.
+`@supabase/supabase-js` v2.x accepts `sb_publishable_...` in place of the legacy anon key — no code changes required. The `sb_secret_...` key is **not** a substitute for `SUPABASE_JWT_SECRET`; the backend verifies user session tokens with the JWT signing secret (`backend/middleware.py`).
+
+Backend validates JWTs with `SUPABASE_JWT_SECRET` (`backend/middleware.py`). Frontend uses URL + publishable/anon key for `@supabase/ssr` sign-in.
 
 > **Note:** FilingGrid uses a **local PostgreSQL** (`DATABASE_URL`) for users/orgs/tiers, not Supabase Postgres, unless you point `DATABASE_URL` at Supabase's connection string intentionally.
 
