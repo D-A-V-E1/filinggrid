@@ -108,6 +108,46 @@ export interface FinancialsXbrl {
   notes_xbrl?: Record<string, NoteSectionXbrl>;
 }
 
+export interface StatementRow {
+  key: string;
+  label: string;
+  concept: string;
+  unit?: string;
+  value: number;
+  fy?: number;
+  fp?: string;
+  end?: string;
+  form?: string;
+}
+
+export interface StatementTable {
+  label: string;
+  rows: StatementRow[];
+}
+
+export interface FinancialStatementsXbrl {
+  ticker: string;
+  cik: string;
+  entity_name: string;
+  fiscal_year_filter: number | null;
+  period_filter: string | null;
+  source: string;
+  from_cache: boolean;
+  fetch_ms?: number;
+  period: {
+    kind?: string | null;
+    fy?: number;
+    fp?: string;
+    end?: string;
+    form?: string;
+  };
+  statements: {
+    income_statement: StatementTable;
+    balance_sheet: StatementTable;
+    cash_flow: StatementTable;
+  };
+}
+
 export interface PaywallError {
   code: string;
   reason: string;
@@ -308,6 +348,20 @@ export async function fetchFinancials(
   const qs = params.toString();
   return apiFetch<FinancialsXbrl>(
     `/filings/${encodeURIComponent(ticker.toUpperCase())}/financials${qs ? `?${qs}` : ""}`
+  );
+}
+
+export async function fetchFinancialStatements(
+  ticker: string,
+  fiscalYear?: number | null,
+  period?: string | null
+): Promise<FinancialStatementsXbrl> {
+  const params = new URLSearchParams();
+  if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+  if (period) params.set("period", period);
+  const qs = params.toString();
+  return apiFetch<FinancialStatementsXbrl>(
+    `/filings/${encodeURIComponent(ticker.toUpperCase())}/financials/statements${qs ? `?${qs}` : ""}`
   );
 }
 

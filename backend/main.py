@@ -33,7 +33,11 @@ from filing_parser import (
     parse_filings_stream,
 )
 from sec.client import fetch_ticker_map
-from sec.xbrl_client import fetch_ticker_financials, fetch_tickers_financials_stream
+from sec.xbrl_client import (
+    fetch_ticker_financials,
+    fetch_ticker_financial_statements,
+    fetch_tickers_financials_stream,
+)
 
 settings = get_settings()
 
@@ -244,6 +248,20 @@ async def filing_financials_endpoint(
     headline_only: bool = Query(False),
 ):
     return await fetch_ticker_financials(ticker, fiscal_year=fiscal_year, headline_only=headline_only)
+
+
+@app.get("/filings/{ticker}/financials/statements")
+async def filing_financial_statements_endpoint(
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+    ticker: str,
+    fiscal_year: int | None = Query(None),
+    period: str | None = Query(None),
+):
+    from middleware import check_professional_access
+
+    check_professional_access(auth)
+    await check_free_period_access(auth, [ticker], fiscal_year, period)
+    return await fetch_ticker_financial_statements(ticker, fiscal_year=fiscal_year, period=period)
 
 
 @app.get("/parse/section", response_model=SectionHtmlResponse)

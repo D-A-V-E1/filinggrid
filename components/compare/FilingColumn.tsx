@@ -2,10 +2,13 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  fetchFinancialStatements,
   fetchSectionHtml,
+  type FinancialStatementsXbrl,
   type FinancialsXbrl,
   type FilingSection,
   type NoteSectionXbrl,
+  type StatementTable,
   type XbrlDisclosure,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
@@ -33,6 +36,8 @@ interface FilingColumnProps {
   sectionsPending?: boolean;
   columnCount?: number;
   fiscalYearFilter?: number | null;
+  isPro?: boolean;
+  onPaywall?: (reason: string, message: string) => void;
 }
 
 function formatSectionLabel(label: string): string {
@@ -173,6 +178,128 @@ function XbrlMetricsPanel({
   );
 }
 
+type StatementTab = "income_statement" | "balance_sheet" | "cash_flow";
+
+const STATEMENT_TABS: { id: StatementTab; label: string }[] = [
+  { id: "income_statement", label: "Income Statement" },
+  { id: "balance_sheet", label: "Balance Sheet" },
+  { id: "cash_flow", label: "Cash Flow" },
+];
+
+function formatPeriodLabel(period: FinancialStatementsXbrl["period"]): string {
+  if (period.fp === "FY" || period.kind === "annual") {
+    return period.fy != null ? `FY ${period.fy}` : "Annual";
+  }
+  if (period.fp && period.fy != null) {
+    return `${period.fp} ${period.fy}`;
+  }
+  if (period.end) return period.end;
+  return "Selected period";
+}
+
+function StatementRowsTable({
+  table,
+  periodLabel,
+}: {
+  table: StatementTable;
+  periodLabel: string;
+}) {
+  if (table.rows.length === 0) {
+    return <p className="text-xs text-slate-500">No line items available for this period.</p>;
+  }
+
+  return (
+    <div className="xbrl-metrics-scroll overflow-x-auto">
+      <table className="xbrl-metrics-table w-max min-w-full border-collapse text-left text-xs">
+        <thead>
+          <tr className="border-b border-brand-200/80">
+            <th className="min-w-[9rem] max-w-[14rem] py-1.5 pr-3 font-medium text-slate-600">
+              Line item
+            </th>
+            <th className="whitespace-nowrap py-1.5 px-2 text-right font-mono font-semibold text-slate-700">
+              {periodLabel}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row) => (
+            <tr key={row.key} className="border-b border-brand-100/80 last:border-0">
+              <td className="min-w-[9rem] max-w-[14rem] py-1.5 pr-3 text-slate-600">{row.label}</td>
+              <td className="whitespace-nowrap py-1.5 px-2 text-right font-mono tabular-nums text-slate-800">
+                {formatMetricValue(row.value, row.unit)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FullStatementsPanel({
+  statements,
+  fetchMs,
+  fromCache,
+}: {
+  statements: FinancialStatementsXbrl;
+  fetchMs?: number;
+  fromCache?: boolean;
+}) {
+  const [activeTab, setActiveTab] = useState<StatementTab>("income_statement");
+  const periodLabel = formatPeriodLabel(statements.period);
+  const activeTable = statements.statements[activeTab];
+
+  return (
+    <article className="mb-4 min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-4 shadow-sm sm:px-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+          Full GAAP statements
+        </p>
+        {fetchMs != null && (
+          <span className="font-mono text-[10px] text-slate-500">
+            {fetchMs}ms{fromCache ? " · cached" : ""}
+          </span>
+        )}
+      </div>
+      <div className="mb-3 flex flex-wrap gap-1 border-b border-slate-200 pb-2">
+        {STATEMENT_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded px-2.5 py-1 font-sans text-[11px] font-medium transition ${
+              activeTab === tab.id
+                ? "bg-brand-100 text-brand-900"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <StatementRowsTable table={activeTable} periodLabel={periodLabel} />
+    </article>
+  );
+}
+
+function LockedStatementsPanel({ onUpgrade }: { onUpgrade: () => void }) {
+  return (
+    <article className="mb-4 min-w-0 rounded-lg border border-dashed border-brand-200 bg-brand-50/30 px-4 py-5 text-center shadow-sm">
+      <p className="font-sans text-sm font-semibold text-slate-800">Full GAAP financial statements</p>
+      <p className="mt-1 text-xs text-slate-600">
+        Income Statement, Balance Sheet, and Cash Flow with detailed line items.
+      </p>
+      <button
+        type="button"
+        onClick={onUpgrade}
+        className="mt-4 inline-flex items-center rounded-md bg-brand-700 px-4 py-2 font-sans text-xs font-semibold text-white shadow-sm transition hover:bg-brand-800"
+      >
+        Upgrade to Professional
+      </button>
+    </article>
+  );
+}
+
 function splitDisclosureParagraphs(text: string): string[] {
   return text
     .split(/\n{2,}/)
@@ -258,6 +385,8 @@ function FilingColumn({
   sectionsPending = false,
   columnCount = 1,
   fiscalYearFilter = null,
+  isPro = false,
+  onPaywall,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const displayForm = form ?? formFromPeriodId(period);
@@ -269,6 +398,9 @@ function FilingColumn({
   const [loadingHtml, setLoadingHtml] = useState(false);
   const [showHtmlExcerpt, setShowHtmlExcerpt] = useState(false);
   const [sectionError, setSectionError] = useState("");
+  const [fullStatements, setFullStatements] = useState<FinancialStatementsXbrl | null>(null);
+  const [loadingStatements, setLoadingStatements] = useState(false);
+  const [statementsError, setStatementsError] = useState("");
 
   const section = activeSection ? sections.find((s) => s.id === activeSection) : sections[0];
   const displayLabel = section
@@ -362,6 +494,46 @@ function FilingColumn({
     setSectionError("");
   }, [activeSection, ticker]);
 
+  useEffect(() => {
+    setFullStatements(null);
+    setStatementsError("");
+    setLoadingStatements(false);
+  }, [ticker, resolvedFiscalYear, period, isPro]);
+
+  useEffect(() => {
+    if (activeSection !== "financial-statements" || !isPro || !financialsXbrl) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingStatements(true);
+    setStatementsError("");
+
+    void fetchFinancialStatements(ticker, resolvedFiscalYear, period ?? null)
+      .then((data) => {
+        if (!cancelled) setFullStatements(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setStatementsError(err instanceof Error ? err.message : "Failed to load statements");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStatements(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, isPro, financialsXbrl, ticker, resolvedFiscalYear, period]);
+
+  const handleStatementsUpgrade = useCallback(() => {
+    onPaywall?.(
+      "subscription_required",
+      "Full GAAP financial statements require a Professional subscription."
+    );
+  }, [onPaywall]);
+
   const loadHtmlExcerpt = useCallback(() => {
     if (!activeSection || loadingHtml) return;
 
@@ -430,6 +602,34 @@ function FilingColumn({
       >
         <div className="compare-column-body px-5 py-5">
           {xbrlPanel}
+
+          {activeSection === "financial-statements" && hasXbrlData && !isPro && (
+            <LockedStatementsPanel onUpgrade={handleStatementsUpgrade} />
+          )}
+
+          {activeSection === "financial-statements" && isPro && financialsXbrl && (
+            <>
+              {loadingStatements && !fullStatements && (
+                <div className="mb-4 space-y-2 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200" />
+                  <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+                  <p className="text-[10px] text-slate-500">Loading full GAAP statements…</p>
+                </div>
+              )}
+              {statementsError && !fullStatements && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                  <p className="text-xs text-red-700">{statementsError}</p>
+                </div>
+              )}
+              {fullStatements && (
+                <FullStatementsPanel
+                  statements={fullStatements}
+                  fetchMs={fullStatements.fetch_ms}
+                  fromCache={fullStatements.from_cache}
+                />
+              )}
+            </>
+          )}
 
           {financialsError && activeSection === "financial-statements" && !xbrlPanel ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4">

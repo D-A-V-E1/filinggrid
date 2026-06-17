@@ -524,6 +524,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         sectionsPending={loadingSections && col.sections.length === 0}
                         columnCount={tickers.length}
                         fiscalYearFilter={resolvedFiscalYear ?? col.fiscal_year}
+                        isPro={isPro}
+                        onPaywall={handlePaywall}
                       />
                     );
                   })}

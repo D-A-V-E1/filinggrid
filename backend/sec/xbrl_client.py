@@ -79,6 +79,235 @@ METRIC_LABELS: dict[str, str] = {
 MAX_ANNUAL_PERIODS = 5
 MAX_QUARTERLY_PERIODS = 8
 
+# Ordered GAAP line items for full financial statements (first concept match wins per row).
+INCOME_STATEMENT_LINES: list[dict[str, Any]] = [
+    {
+        "key": "revenue",
+        "label": "Revenue",
+        "concepts": [
+            "RevenueFromContractWithCustomerExcludingAssessedTax",
+            "Revenues",
+            "SalesRevenueNet",
+        ],
+    },
+    {
+        "key": "cost_of_revenue",
+        "label": "Cost of revenue",
+        "concepts": ["CostOfRevenue", "CostOfGoodsAndServicesSold"],
+    },
+    {"key": "gross_profit", "label": "Gross profit", "concepts": ["GrossProfit"]},
+    {
+        "key": "rd_expense",
+        "label": "Research & development",
+        "concepts": ["ResearchAndDevelopmentExpense"],
+    },
+    {
+        "key": "sga_expense",
+        "label": "Selling, general & administrative",
+        "concepts": [
+            "SellingGeneralAndAdministrativeExpense",
+            "GeneralAndAdministrativeExpense",
+        ],
+    },
+    {
+        "key": "operating_expenses",
+        "label": "Operating expenses",
+        "concepts": ["OperatingExpenses", "CostsAndExpenses"],
+    },
+    {"key": "operating_income", "label": "Operating income", "concepts": ["OperatingIncomeLoss"]},
+    {
+        "key": "interest_expense",
+        "label": "Interest expense",
+        "concepts": ["InterestExpense", "InterestExpenseDebt"],
+    },
+    {
+        "key": "interest_income",
+        "label": "Interest income",
+        "concepts": ["InterestIncomeOperating", "InvestmentIncomeInterest"],
+    },
+    {
+        "key": "other_income",
+        "label": "Other income (expense), net",
+        "concepts": ["OtherNonoperatingIncomeExpense", "NonoperatingIncomeExpense"],
+    },
+    {
+        "key": "income_before_tax",
+        "label": "Income before income taxes",
+        "concepts": [
+            "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+            "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
+        ],
+    },
+    {"key": "income_tax", "label": "Income tax expense", "concepts": ["IncomeTaxExpenseBenefit"]},
+    {"key": "net_income", "label": "Net income", "concepts": ["NetIncomeLoss", "ProfitLoss"]},
+    {"key": "eps_basic", "label": "EPS (basic)", "concepts": ["EarningsPerShareBasic"]},
+    {"key": "eps_diluted", "label": "EPS (diluted)", "concepts": ["EarningsPerShareDiluted"]},
+    {
+        "key": "shares_basic",
+        "label": "Weighted avg shares (basic)",
+        "concepts": ["WeightedAverageNumberOfSharesOutstandingBasic"],
+    },
+    {
+        "key": "shares_diluted",
+        "label": "Weighted avg shares (diluted)",
+        "concepts": ["WeightedAverageNumberOfDilutedSharesOutstanding"],
+    },
+    {
+        "key": "depreciation",
+        "label": "Depreciation & amortization",
+        "concepts": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization"],
+    },
+]
+
+BALANCE_SHEET_LINES: list[dict[str, Any]] = [
+    {
+        "key": "cash",
+        "label": "Cash & equivalents",
+        "concepts": [
+            "CashAndCashEquivalentsAtCarryingValue",
+            "CashCashEquivalentsAndShortTermInvestments",
+        ],
+    },
+    {
+        "key": "short_term_investments",
+        "label": "Short-term investments",
+        "concepts": ["ShortTermInvestments", "MarketableSecuritiesCurrent"],
+    },
+    {
+        "key": "accounts_receivable",
+        "label": "Accounts receivable, net",
+        "concepts": ["AccountsReceivableNetCurrent", "ReceivablesNetCurrent"],
+    },
+    {"key": "inventory", "label": "Inventory, net", "concepts": ["InventoryNet"]},
+    {"key": "current_assets", "label": "Total current assets", "concepts": ["AssetsCurrent"]},
+    {
+        "key": "ppe_net",
+        "label": "PP&E, net",
+        "concepts": ["PropertyPlantAndEquipmentNet"],
+    },
+    {"key": "goodwill", "label": "Goodwill", "concepts": ["Goodwill"]},
+    {
+        "key": "intangibles_net",
+        "label": "Intangible assets, net",
+        "concepts": ["IntangibleAssetsNetExcludingGoodwill"],
+    },
+    {"key": "total_assets", "label": "Total assets", "concepts": ["Assets"]},
+    {
+        "key": "accounts_payable",
+        "label": "Accounts payable",
+        "concepts": ["AccountsPayableCurrent"],
+    },
+    {
+        "key": "short_term_debt",
+        "label": "Short-term debt",
+        "concepts": ["ShortTermBorrowings", "LongTermDebtCurrent", "CommercialPaper"],
+    },
+    {
+        "key": "current_liabilities",
+        "label": "Total current liabilities",
+        "concepts": ["LiabilitiesCurrent"],
+    },
+    {
+        "key": "long_term_debt",
+        "label": "Long-term debt",
+        "concepts": ["LongTermDebt", "LongTermDebtNoncurrent"],
+    },
+    {"key": "total_liabilities", "label": "Total liabilities", "concepts": ["Liabilities"]},
+    {
+        "key": "stockholders_equity",
+        "label": "Stockholders' equity",
+        "concepts": [
+            "StockholdersEquity",
+            "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        ],
+    },
+    {
+        "key": "retained_earnings",
+        "label": "Retained earnings",
+        "concepts": ["RetainedEarningsAccumulatedDeficit"],
+    },
+    {
+        "key": "common_shares_outstanding",
+        "label": "Common shares outstanding",
+        "concepts": ["CommonStockSharesOutstanding"],
+    },
+]
+
+CASH_FLOW_LINES: list[dict[str, Any]] = [
+    {"key": "net_income", "label": "Net income", "concepts": ["NetIncomeLoss", "ProfitLoss"]},
+    {
+        "key": "depreciation",
+        "label": "Depreciation & amortization",
+        "concepts": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization"],
+    },
+    {
+        "key": "share_based_comp",
+        "label": "Share-based compensation",
+        "concepts": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
+    },
+    {
+        "key": "operating_cash_flow",
+        "label": "Net cash from operating activities",
+        "concepts": [
+            "NetCashProvidedByUsedInOperatingActivities",
+            "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+        ],
+    },
+    {
+        "key": "capex",
+        "label": "Capital expenditures",
+        "concepts": [
+            "PaymentsToAcquirePropertyPlantAndEquipment",
+            "PaymentsToAcquireProductiveAssets",
+        ],
+    },
+    {
+        "key": "investing_cash_flow",
+        "label": "Net cash from investing activities",
+        "concepts": [
+            "NetCashProvidedByUsedInInvestingActivities",
+            "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations",
+        ],
+    },
+    {
+        "key": "financing_cash_flow",
+        "label": "Net cash from financing activities",
+        "concepts": [
+            "NetCashProvidedByUsedInFinancingActivities",
+            "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations",
+        ],
+    },
+    {
+        "key": "dividends",
+        "label": "Dividends paid",
+        "concepts": ["PaymentsOfDividends", "PaymentsOfDividendsCommonStock"],
+    },
+    {
+        "key": "stock_repurchases",
+        "label": "Stock repurchases",
+        "concepts": [
+            "PaymentsForRepurchaseOfCommonStock",
+            "PaymentsForRepurchaseOfEquity",
+        ],
+    },
+    {
+        "key": "net_change_cash",
+        "label": "Net change in cash",
+        "concepts": [
+            "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
+            "CashAndCashEquivalentsPeriodIncreaseDecrease",
+        ],
+    },
+    {
+        "key": "cash_end",
+        "label": "Cash at end of period",
+        "concepts": [
+            "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+            "CashAndCashEquivalentsAtCarryingValue",
+        ],
+    },
+]
+
 # Note section id -> metric definitions (key, label, candidate us-gaap concepts)
 NOTE_SECTION_METRICS: dict[str, list[dict[str, Any]]] = {
     "note-summary-policies": [
@@ -1154,6 +1383,131 @@ def _note_section_label(section_id: str) -> str:
     return section_id.replace("-", " ").title()
 
 
+def _pick_observation_for_period(
+    entries: list[dict[str, Any]],
+    period_filter: Any | None,
+) -> dict[str, Any] | None:
+    """Pick the best observation for a statement line given annual or interim period filter."""
+    if not entries:
+        return None
+
+    entries = _dedupe_observations(_sort_observations(entries))
+
+    if period_filter is None:
+        annual = _filter_annual(entries, None)
+        if annual:
+            return annual[0]
+        quarterly = _filter_quarterly(entries, None)
+        return quarterly[0] if quarterly else None
+
+    if period_filter.kind == "annual":
+        annual = _filter_annual(entries, period_filter.fiscal_year)
+        return annual[0] if annual else None
+
+    quarterly = [
+        e
+        for e in entries
+        if e.get("fp") in ("Q1", "Q2", "Q3", "Q4") and e.get("form") in ("10-Q", "10-Q/A")
+    ]
+    quarterly = _dedupe_observations(_sort_observations(quarterly))
+    if period_filter.fiscal_year is not None:
+        quarterly = [e for e in quarterly if e.get("fy") == period_filter.fiscal_year]
+    if period_filter.report_date:
+        exact = [e for e in quarterly if e.get("end") == period_filter.report_date]
+        if exact:
+            return exact[0]
+    return quarterly[0] if quarterly else None
+
+
+def _extract_statement_rows(
+    gaap: dict[str, Any],
+    line_defs: list[dict[str, Any]],
+    period_filter: Any | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for defn in line_defs:
+        obs: dict[str, Any] | None = None
+        matched_concept: str | None = None
+        unit = ""
+        for concept_name in defn["concepts"]:
+            concept_data = gaap.get(concept_name)
+            if not concept_data:
+                continue
+            unit, entries = _unit_entries(concept_data)
+            candidate = _pick_observation_for_period(entries, period_filter)
+            if candidate is not None and candidate.get("val") is not None:
+                obs = candidate
+                matched_concept = concept_name
+                break
+        if obs is None or matched_concept is None:
+            continue
+        rows.append(
+            {
+                "key": defn["key"],
+                "label": defn.get("label", matched_concept),
+                "concept": matched_concept,
+                "unit": unit,
+                "value": obs.get("val"),
+                "fy": obs.get("fy"),
+                "fp": obs.get("fp"),
+                "end": obs.get("end"),
+                "form": obs.get("form"),
+            }
+        )
+    return rows
+
+
+def _period_meta_from_filter(period_filter: Any | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if rows:
+        first = rows[0]
+        return {
+            "kind": "interim" if first.get("fp") in ("Q1", "Q2", "Q3", "Q4") else "annual",
+            "fy": first.get("fy"),
+            "fp": first.get("fp"),
+            "end": first.get("end"),
+            "form": first.get("form"),
+        }
+    if period_filter is None:
+        return {"kind": None}
+    if period_filter.kind == "annual":
+        return {"kind": "annual", "fy": period_filter.fiscal_year, "fp": "FY"}
+    return {
+        "kind": "interim",
+        "fy": period_filter.fiscal_year,
+        "end": period_filter.report_date,
+    }
+
+
+def extract_statement_tables(
+    facts: dict[str, Any],
+    *,
+    fiscal_year: int | None = None,
+    period: str | None = None,
+) -> dict[str, Any]:
+    """Extract full GAAP statement line items for one reporting period from companyfacts."""
+    from sec.filing_periods import resolve_period_filter
+
+    gaap = (facts.get("facts") or {}).get("us-gaap") or {}
+    period_filter = resolve_period_filter(fiscal_year, period)
+
+    statement_defs = (
+        ("income_statement", INCOME_STATEMENT_LINES, "Income Statement"),
+        ("balance_sheet", BALANCE_SHEET_LINES, "Balance Sheet"),
+        ("cash_flow", CASH_FLOW_LINES, "Cash Flow"),
+    )
+    statements: dict[str, Any] = {}
+    all_rows: list[dict[str, Any]] = []
+    for stmt_key, lines, label in statement_defs:
+        rows = _extract_statement_rows(gaap, lines, period_filter)
+        statements[stmt_key] = {"label": label, "rows": rows}
+        all_rows.extend(rows)
+
+    return {
+        "period": _period_meta_from_filter(period_filter, all_rows),
+        "statements": statements,
+    }
+
+
 def extract_financial_metrics(
     facts: dict[str, Any],
     *,
@@ -1216,6 +1570,33 @@ def extract_note_disclosures(
         }
 
     return notes
+
+
+async def fetch_ticker_financial_statements(
+    ticker: str,
+    fiscal_year: int | None = None,
+    period: str | None = None,
+    *,
+    ticker_map: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Resolve ticker, load cached companyfacts, return full statement tables."""
+    started = time.perf_counter()
+    resolved = await resolve_ticker(ticker, ticker_map)
+    facts, from_cache = await fetch_company_facts(resolved["cik"])
+    extracted = extract_statement_tables(facts, fiscal_year=fiscal_year, period=period)
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+
+    return {
+        "ticker": resolved["ticker"],
+        "cik": resolved["cik"],
+        "entity_name": facts.get("entityName") or resolved["company_name"],
+        "fiscal_year_filter": fiscal_year,
+        "period_filter": period,
+        "source": "sec_companyfacts",
+        "from_cache": from_cache,
+        "fetch_ms": elapsed_ms,
+        **extracted,
+    }
 
 
 async def fetch_ticker_financials(
