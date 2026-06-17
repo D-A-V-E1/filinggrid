@@ -61,7 +61,7 @@ def test_create_requires_two_tickers():
 def test_anonymous_dev_pro_can_list_peer_groups(mock_settings, client):
     mock_settings.allow_dev_tier_toggle = True
     mock_settings.dev_pro_tier = False
-    mock_settings.supabase_jwt_secret = ""
+    mock_settings.auth_configured = False
 
     res = client.get("/peer-groups", headers={"X-Dev-Tier": "professional"})
     assert res.status_code == 200
@@ -72,7 +72,7 @@ def test_anonymous_dev_pro_can_list_peer_groups(mock_settings, client):
 def test_anonymous_dev_pro_peer_group_crud(mock_settings, client):
     mock_settings.allow_dev_tier_toggle = True
     mock_settings.dev_pro_tier = False
-    mock_settings.supabase_jwt_secret = ""
+    mock_settings.auth_configured = False
 
     headers = {"X-Dev-Tier": "professional"}
 
@@ -100,7 +100,7 @@ def test_anonymous_dev_pro_peer_group_crud(mock_settings, client):
 def test_anonymous_free_peer_groups_blocked(mock_settings, client):
     mock_settings.allow_dev_tier_toggle = True
     mock_settings.dev_pro_tier = False
-    mock_settings.supabase_jwt_secret = ""
+    mock_settings.auth_configured = False
 
     res = client.get("/peer-groups", headers={"X-Dev-Tier": "free"})
     assert res.status_code == 401
@@ -110,7 +110,7 @@ def test_anonymous_free_peer_groups_blocked(mock_settings, client):
 def test_anonymous_without_dev_toggle_blocked(mock_settings, client):
     mock_settings.allow_dev_tier_toggle = False
     mock_settings.dev_pro_tier = False
-    mock_settings.supabase_jwt_secret = ""
+    mock_settings.auth_configured = False
 
     res = client.get("/peer-groups", headers={"X-Dev-Tier": "professional"})
     assert res.status_code == 401

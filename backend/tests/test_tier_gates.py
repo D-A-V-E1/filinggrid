@@ -135,7 +135,7 @@ async def test_get_auth_context_applies_dev_header_for_anonymous(monkeypatch):
     mock_settings = MagicMock()
     mock_settings.allow_dev_tier_toggle = True
     mock_settings.dev_pro_tier = False
-    mock_settings.supabase_jwt_secret = ""
+    mock_settings.auth_configured = False
     monkeypatch.setattr("middleware.settings", mock_settings)
 
     request = MagicMock()
@@ -152,7 +152,7 @@ async def test_get_auth_context_applies_env_override_without_auth(monkeypatch):
     mock_settings = MagicMock()
     mock_settings.allow_dev_tier_toggle = True
     mock_settings.dev_pro_tier = True
-    mock_settings.supabase_jwt_secret = ""
+    mock_settings.auth_configured = False
     monkeypatch.setattr("middleware.settings", mock_settings)
 
     request = MagicMock()

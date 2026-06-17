@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated, Optional
 
 import jwt
+from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -13,6 +14,20 @@ from database import Organization, SessionLocal, User, get_db
 
 settings = get_settings()
 security = HTTPBearer(auto_error=False)
+
+_jwks_client: Optional[PyJWKClient] = None
+_jwks_client_url: Optional[str] = None
+
+
+def _get_jwks_client() -> Optional[PyJWKClient]:
+    global _jwks_client, _jwks_client_url
+    jwks_url = settings.supabase_jwks_url_resolved
+    if not jwks_url:
+        return None
+    if _jwks_client is None or _jwks_client_url != jwks_url:
+        _jwks_client = PyJWKClient(jwks_url, cache_keys=True)
+        _jwks_client_url = jwks_url
+    return _jwks_client
 
 CONSUMER_EMAIL_DOMAINS = {
     "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
@@ -67,30 +82,76 @@ def resolve_effective_tier(request: Request, org_tier: str) -> str:
     return tier
 
 
+def _decode_jwt_jwks(token: str) -> dict:
+    client = _get_jwks_client()
+    if not client:
+        raise jwt.InvalidTokenError("JWKS not configured")
+    signing_key = client.get_signing_key_from_jwt(token)
+    return jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["ES256", "RS256"],
+        audience="authenticated",
+    )
+
+
+def _decode_jwt_hs256(token: str) -> dict:
+    secret = settings.supabase_jwt_secret_effective
+    if not secret:
+        raise jwt.InvalidTokenError("HS256 secret not configured")
+    return jwt.decode(
+        token,
+        secret,
+        algorithms=["HS256"],
+        audience="authenticated",
+    )
+
+
 def decode_jwt(token: str) -> dict:
-    if not settings.supabase_jwt_secret:
+    if not settings.auth_configured:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "AUTH_NOT_CONFIGURED", "message": "Authentication is not configured."},
         )
-    try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "TOKEN_EXPIRED", "message": "Session expired. Please sign in again."},
-        )
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "INVALID_TOKEN", "message": str(exc)},
-        )
+
+    jwks_configured = bool(settings.supabase_jwks_url_resolved)
+    legacy_configured = bool(settings.supabase_jwt_secret_effective)
+    last_error: Optional[jwt.InvalidTokenError] = None
+
+    if jwks_configured:
+        try:
+            return _decode_jwt_jwks(token)
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "TOKEN_EXPIRED", "message": "Session expired. Please sign in again."},
+            )
+        except jwt.InvalidTokenError as exc:
+            last_error = exc
+            if not legacy_configured:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail={"code": "INVALID_TOKEN", "message": str(exc)},
+                )
+
+    if legacy_configured:
+        try:
+            return _decode_jwt_hs256(token)
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "TOKEN_EXPIRED", "message": "Session expired. Please sign in again."},
+            )
+        except jwt.InvalidTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "INVALID_TOKEN", "message": str(last_error or exc)},
+            )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"code": "AUTH_NOT_CONFIGURED", "message": "Authentication is not configured."},
+    )
 
 
 def get_or_create_user(db: Session, email: str) -> tuple[User, Organization]:
@@ -125,7 +186,7 @@ async def get_auth_context(
             is_authenticated=False,
         )
 
-    if not settings.supabase_jwt_secret:
+    if not settings.auth_configured:
         return AuthContext(
             tier=resolve_effective_tier(request, "free"),
             is_authenticated=False,

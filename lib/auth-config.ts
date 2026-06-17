@@ -26,4 +26,4 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export const SUPABASE_NOT_CONFIGURED_MESSAGE =
-  "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env (see .env.example).";
+  "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (publishable sb_publishable_... or legacy anon key) in .env (see .env.example).";
