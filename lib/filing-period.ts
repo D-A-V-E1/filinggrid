@@ -74,12 +74,23 @@ export function parseMetaPeriodKey(period?: ComparePeriod): string {
   return "current";
 }
 
+export function normalizeComparePeriodId(period?: string | null): string | null {
+  if (!period) return null;
+  const interim = period.match(/^interim-(\d{4})-(Q[1-4])(?:-.+)?$/i);
+  if (interim) return `interim-${interim[1]}-${interim[2].toUpperCase()}`;
+  if (/^annual-\d{4}-20f$/i.test(period)) return period.replace(/-20f$/i, "");
+  return period;
+}
+
 /** Infer filing form from a period id when column metadata is missing (e.g. stale cache). */
 export function formFromPeriodId(period?: string): string | null {
   if (!period) return null;
-  if (period.startsWith("interim-")) return null;
+  if (period.startsWith("interim-")) {
+    const slotMatch = period.match(/interim-\d{4}-(Q[1-4])-(.+)$/i);
+    return slotMatch ? slotMatch[2].toUpperCase() : null;
+  }
   if (period.includes("-20f")) return "20-F";
-  if (period.startsWith("annual-")) return "10-K";
+  if (period.startsWith("annual-")) return null;
   return null;
 }
 

@@ -268,6 +268,7 @@ export async function apiFetch<T>(
 
 export interface ParseStreamCallbacks {
   onCatalog: (catalog: { id: string; label: string }[], parsedAt: string) => void;
+  onColumnMeta?: (column: FilingColumn) => void;
   onColumn: (column: FilingColumn) => void;
   onDone: (parsedAt: string) => void;
   onError?: (error: Error) => void;
@@ -329,6 +330,8 @@ export async function parseFilingsStream(
 
       if (event.type === "catalog" && event.section_catalog) {
         callbacks.onCatalog(event.section_catalog, event.parsed_at ?? new Date().toISOString());
+      } else if (event.type === "column_meta" && event.column) {
+        callbacks.onColumnMeta?.(event.column);
       } else if (event.type === "column" && event.column) {
         callbacks.onColumn(event.column);
       } else if (event.type === "done") {

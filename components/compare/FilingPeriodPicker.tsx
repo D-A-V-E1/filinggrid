@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { fetchFilingPeriods, type FilingPeriodOption } from "@/lib/api";
-import { CURRENT_YEAR } from "@/lib/filing-period";
+import { CURRENT_YEAR, normalizeComparePeriodId } from "@/lib/filing-period";
 
 const YEAR_OPTIONS = Array.from({ length: 12 }, (_, i) => CURRENT_YEAR - i);
 
@@ -49,7 +49,8 @@ export default function FilingPeriodPicker({
   const [loadError, setLoadError] = useState("");
 
   const currentId =
-    period ?? (fiscalYear != null ? `annual-${fiscalYear}` : periods[0]?.id ?? "latest");
+    normalizeComparePeriodId(period) ??
+    (fiscalYear != null ? `annual-${fiscalYear}` : periods[0]?.id ?? "latest");
 
   const loadPeriods = useCallback(async () => {
     if (!isPro || tickers.length < 1) {

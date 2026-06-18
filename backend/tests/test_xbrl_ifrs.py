@@ -1,6 +1,6 @@
 """Tests for IFRS / 20-F / 6-K XBRL financial extraction."""
 
-from sec.xbrl_client import extract_financial_metrics
+from sec.xbrl_client import extract_financial_metrics, extract_statement_tables
 
 
 def _ifrs_facts() -> dict:
@@ -95,3 +95,56 @@ def test_extract_financial_metrics_6k_snapshot_by_report_date():
     result = extract_financial_metrics(facts, fiscal_year=2024, report_date="2024-06-30")
     assert len(result["annual_summary"]) == 1
     assert result["annual_summary"][0]["revenue"] == 5000000000
+
+
+def test_extract_statement_tables_ifrs_20f_income():
+    result = extract_statement_tables(_ifrs_facts(), fiscal_year=2023)
+    income = result["statements"]["income_statement"]["rows"]
+    keys = {r["key"] for r in income}
+    assert "revenue" in keys
+    assert "net_income" in keys
+    revenue = next(r for r in income if r["key"] == "revenue")
+    assert revenue["value"] == 70598800000
+
+
+def test_extract_statement_tables_6k_snapshot_income():
+    facts = {
+        "entityName": "TAIWAN SEMICONDUCTOR MANUFACTURING CO LTD",
+        "cik": "0001046179",
+        "facts": {
+            "ifrs-full": {
+                "Revenue": {
+                    "units": {
+                        "USD": [
+                            {
+                                "start": "2026-01-01",
+                                "end": "2026-03-31",
+                                "val": 25000000000,
+                                "form": "6-K",
+                                "filed": "2026-06-10",
+                            }
+                        ]
+                    }
+                },
+                "ProfitLoss": {
+                    "units": {
+                        "USD": [
+                            {
+                                "start": "2026-01-01",
+                                "end": "2026-03-31",
+                                "val": 9000000000,
+                                "form": "6-K",
+                                "filed": "2026-06-10",
+                            }
+                        ]
+                    }
+                },
+            }
+        },
+    }
+    result = extract_statement_tables(facts, period="interim-2026-03-31")
+    income = result["statements"]["income_statement"]["rows"]
+    keys = {r["key"] for r in income}
+    assert "revenue" in keys
+    assert "net_income" in keys
+    assert next(r for r in income if r["key"] == "revenue")["value"] == 25000000000

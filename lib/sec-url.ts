@@ -1,5 +1,13 @@
 const ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data";
 
+/** Pro full-statement nav sections → common iXBRL table anchor ids (10-K / 10-Q). */
+export const GAAP_STATEMENT_ANCHOR_FALLBACKS: Record<string, string> = {
+  income_statement: "consolidated_statements_of_operations",
+  balance_sheet: "consolidated_balance_sheets",
+  cash_flow: "consolidated_statements_of_cash_flows",
+  stockholders_equity: "consolidated_statements_of_shareholders_equity",
+};
+
 /** Best-effort EDGAR fragment ids when parsed section metadata has no anchor (10-K / 10-Q / 20-F / 6-K variants). */
 const SECTION_ANCHOR_FALLBACKS: Record<string, string> = {
   business: "item_1_business",
@@ -53,6 +61,9 @@ export function resolveSectionAnchor(
 ): string | null {
   if (anchor) return anchor;
   if (!sectionId) return null;
+
+  const gaapStatementAnchor = GAAP_STATEMENT_ANCHOR_FALLBACKS[sectionId];
+  if (gaapStatementAnchor) return gaapStatementAnchor;
 
   if (sectionId.startsWith("note-")) {
     // Footnotes inherit the financial statements anchor from the column when available.

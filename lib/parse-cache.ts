@@ -24,6 +24,11 @@ export function hasSectionIndex(data: ParseResponse): boolean {
   return data.columns.some((c) => !c.error && c.sections.length > 0);
 }
 
+/** True when columns have resolved filing headers (form, dates) before section index. */
+export function hasColumnHeaders(data: ParseResponse): boolean {
+  return data.columns.some((c) => !c.error && Boolean(c.form));
+}
+
 /** @deprecated Use hasSectionIndex — kept for callers checking inline HTML. */
 export function hasRenderableSections(data: ParseResponse): boolean {
   const hasHtml = data.columns.some(
@@ -68,8 +73,41 @@ export function saveParseMeta(key: string, data: ParseResponse): void {
   if (!hasSectionIndex(data)) return;
   try {
     sessionStorage.setItem(key, JSON.stringify(data));
+    sessionStorage.removeItem(`${key}:draft`);
   } catch {
     /* quota exceeded — server disk cache still applies */
+  }
+}
+
+/** Persist in-progress compare state (headers before section index completes). */
+export function saveParseMetaDraft(key: string, data: ParseResponse): void {
+  if (typeof window === "undefined") return;
+  if (!hasColumnHeaders(data)) return;
+  try {
+    sessionStorage.setItem(`${key}:draft`, JSON.stringify(data));
+  } catch {
+    /* quota exceeded */
+  }
+}
+
+export function loadParseMetaDraft(key: string, period?: string): ParseResponse | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(`${key}:draft`);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as ParseResponse;
+    if (!hasColumnHeaders(data)) {
+      sessionStorage.removeItem(`${key}:draft`);
+      return null;
+    }
+    if (period && columnsMissingForm(data)) {
+      sessionStorage.removeItem(`${key}:draft`);
+      return null;
+    }
+    return data;
+  } catch {
+    sessionStorage.removeItem(`${key}:draft`);
+    return null;
   }
 }
 
@@ -112,4 +150,5 @@ export function saveSectionText(cacheKey: string, sectionId: string, text: strin
 export function clearParseMeta(key: string): void {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(key);
+  sessionStorage.removeItem(`${key}:draft`);
 }

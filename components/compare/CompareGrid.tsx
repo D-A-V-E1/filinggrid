@@ -13,12 +13,14 @@ import {
   type ParseResponse,
 } from "@/lib/api";
 import {
+  GAAP_STATEMENT_SECTION_IDS,
   getComparableSectionIds,
+  mergeProStatementCatalog,
   resolveDefaultActiveSection,
   DEFAULT_ACTIVE_SECTION,
   FINANCIALS_BOOTSTRAP_CATALOG,
 } from "@/lib/sections";
-import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta } from "@/lib/parse-cache";
+import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta, saveParseMetaDraft } from "@/lib/parse-cache";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
@@ -33,6 +35,7 @@ import PeerGroupsMenu from "./PeerGroupsMenu";
 import PaywallModal from "../billing/PaywallModal";
 import TickerSearchBar from "../TickerSearchBar";
 import DevTierToggle from "../DevTierToggle";
+import { getCompareColumnLayout, compareGridTemplateColumns } from "@/lib/compare-layout";
 
 interface CompareGridProps {
   tickers: string[];
@@ -73,8 +76,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>({});
   const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>({});
   const loadIdRef = useRef(0);
+  const upgradedFullFinancialsRef = useRef(new Set<string>());
 
-  const columnMinWidth = tickers.length <= 3 ? 300 : tickers.length <= 5 ? 280 : 260;
+  const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
 
   const buildPlaceholderColumn = useCallback(
     (ticker: string, fin?: FinancialsXbrl): FilingColumn => ({
@@ -129,11 +133,55 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     } else if (ids.size === 0 && isBootstrapMode) {
       ids.add(DEFAULT_ACTIVE_SECTION);
     }
+    if (isPro) {
+      for (const id of GAAP_STATEMENT_SECTION_IDS) ids.add(id);
+    }
     return ids;
-  }, [data, isBootstrapMode]);
+  }, [data, isBootstrapMode, isPro]);
+
+  const navigableCatalog = useMemo(() => {
+    if (!data) return FINANCIALS_BOOTSTRAP_CATALOG;
+    return mergeProStatementCatalog(data.section_catalog, isPro);
+  }, [data, isPro]);
+
+  const upgradeFullFinancials = useCallback(
+    (ticker: string) => {
+      const upper = ticker.toUpperCase();
+      if (upgradedFullFinancialsRef.current.has(upper)) return;
+      upgradedFullFinancialsRef.current.add(upper);
+      void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
+        .then((full) => {
+          setFinancialsByTicker((prev) => ({ ...prev, [upper]: full }));
+          setFinancialsErrors((prev) => {
+            if (!(upper in prev)) return prev;
+            const next = { ...prev };
+            delete next[upper];
+            return next;
+          });
+        })
+        .catch((err) => {
+          upgradedFullFinancialsRef.current.delete(upper);
+          const message = err instanceof Error ? err.message : "Failed to load financials";
+          setFinancialsErrors((prev) => ({ ...prev, [upper]: message }));
+        });
+    },
+    [resolvedFiscalYear, period]
+  );
+
+  useEffect(() => {
+    if (!activeSection?.startsWith("note-")) return;
+    for (const ticker of tickers) {
+      const upper = ticker.toUpperCase();
+      const fin = financialsByTicker[upper];
+      if (!fin) continue;
+      const hasNotes = fin.notes_xbrl && Object.keys(fin.notes_xbrl).length > 0;
+      if (!hasNotes) upgradeFullFinancials(upper);
+    }
+  }, [activeSection, tickers, financialsByTicker, upgradeFullFinancials]);
 
   const loadFilings = useCallback(() => {
     const loadId = ++loadIdRef.current;
+    upgradedFullFinancialsRef.current = new Set();
     setActiveSection(DEFAULT_ACTIVE_SECTION);
     setError("");
     setSectionsParseError("");
@@ -143,26 +191,19 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     setLoadingSections(false);
     setLoadingFinancials(true);
 
-    const upgradeFullFinancials = (ticker: string) => {
-      void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
-        .then((full) => {
-          if (loadId !== loadIdRef.current) return;
-          setFinancialsByTicker((prev) => ({ ...prev, [ticker]: full }));
-          setFinancialsErrors((prev) => {
-            if (!(ticker in prev)) return prev;
-            const next = { ...prev };
-            delete next[ticker];
-            return next;
-          });
-        })
-        .catch((err) => {
-          if (loadId !== loadIdRef.current) return;
-          const message = err instanceof Error ? err.message : "Failed to load financials";
-          setFinancialsErrors((prev) => ({ ...prev, [ticker]: message }));
-        });
-    };
-
     let anyFinancials = false;
+
+    const mergeColumnHeader = (existing: FilingColumn, incoming: FilingColumn): FilingColumn => ({
+      ...existing,
+      ...incoming,
+      sections: existing.sections.length > 0 ? existing.sections : incoming.sections,
+    });
+
+    const applyColumnHeaders = (columns: FilingColumn[], incoming: FilingColumn) => {
+      const idx = columns.findIndex((c) => c.ticker === incoming.ticker);
+      if (idx >= 0) columns[idx] = mergeColumnHeader(columns[idx], incoming);
+      else columns.push(incoming);
+    };
 
     const applyHeadlineFinancial = (ticker: string, fin: FinancialsXbrl) => {
       anyFinancials = anyFinancials || (fin.annual_summary?.length ?? 0) > 0;
@@ -184,7 +225,6 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       });
       setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
       setLoadingFinancials(false);
-      upgradeFullFinancials(ticker);
     };
 
     const startHeadlineFinancials = () => {
@@ -242,6 +282,20 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
             setData((prev) =>
               prev ? { ...prev, section_catalog: sectionCatalogIn, parsed_at: at } : prev
             );
+          },
+          onColumnMeta: (column) => {
+            if (loadId !== loadIdRef.current) return;
+            applyColumnHeaders(columns, column);
+            setData((prev) => {
+              if (!prev) return prev;
+              const next = {
+                ...prev,
+                columns: [...columns],
+                section_catalog: sectionCatalog.length > 0 ? sectionCatalog : prev.section_catalog,
+              };
+              saveParseMetaDraft(cacheKey, next);
+              return next;
+            });
           },
           onColumn: (column) => {
             if (loadId !== loadIdRef.current) return;
@@ -336,9 +390,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   );
 
   const activeSectionLabel = useMemo(() => {
-    if (!data || !activeSection) return null;
-    return data.section_catalog.find((s) => s.id === activeSection)?.label ?? null;
-  }, [data, activeSection]);
+    if (!activeSection) return null;
+    return navigableCatalog.find((s) => s.id === activeSection)?.label ?? null;
+  }, [navigableCatalog, activeSection]);
 
   const canShowCompare = Boolean(data && data.columns.length > 0);
 
@@ -458,9 +512,10 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           <div className="flex h-full min-h-0 w-full overflow-hidden">
             <SectionNav
               availableSectionIds={availableSectionIds}
-              sectionCatalog={data.section_catalog}
+              sectionCatalog={navigableCatalog}
               activeSection={activeSection}
               onSectionSelect={handleSectionSelect}
+              isPro={isPro}
               mobileOpen={navOpen}
               onMobileClose={() => setNavOpen(false)}
             />
@@ -481,8 +536,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                 <div
                   className="compare-columns-grid grid h-full min-h-0"
                   style={{
-                    gridTemplateColumns: `repeat(${tickers.length}, minmax(${columnMinWidth}px, 1fr))`,
-                    minWidth: `${tickers.length * columnMinWidth}px`,
+                    gridTemplateColumns: compareGridTemplateColumns(tickers.length, columnLayout),
+                    minWidth: `${tickers.length * columnLayout.minWidth}px`,
                   }}
                 >
                   {tickers.map((ticker) => {
@@ -523,6 +578,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         financialsError={financialsErrors[col.ticker] ?? null}
                         sectionsPending={loadingSections && col.sections.length === 0}
                         columnCount={tickers.length}
+                        columnLayout={columnLayout}
                         fiscalYearFilter={resolvedFiscalYear ?? col.fiscal_year}
                         isPro={isPro}
                         onPaywall={handlePaywall}

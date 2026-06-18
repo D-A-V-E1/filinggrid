@@ -12,9 +12,10 @@ import {
   type XbrlDisclosure,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
-import { isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
+import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { displayFormLabel, formFromPeriodId } from "@/lib/filing-period";
+import type { CompareColumnLayout } from "@/lib/compare-layout";
 import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
@@ -35,6 +36,7 @@ interface FilingColumnProps {
   financialsError?: string | null;
   sectionsPending?: boolean;
   columnCount?: number;
+  columnLayout?: CompareColumnLayout;
   fiscalYearFilter?: number | null;
   isPro?: boolean;
   onPaywall?: (reason: string, message: string) => void;
@@ -69,6 +71,17 @@ const FINANCIAL_STATEMENT_ROWS: { key: string; label: string; unit?: string }[] 
   { key: "eps_diluted", label: "EPS (diluted)", unit: "USD/shares" },
 ];
 
+const FINANCIAL_STATEMENT_ROWS_DENSE: { key: string; label: string; unit?: string }[] = [
+  { key: "revenue", label: "Revenue" },
+  { key: "net_income", label: "Net income" },
+  { key: "operating_income", label: "Op. income" },
+  { key: "total_assets", label: "Assets" },
+  { key: "total_liabilities", label: "Liabilities" },
+  { key: "stockholders_equity", label: "Equity" },
+  { key: "cash", label: "Cash" },
+  { key: "eps_diluted", label: "EPS (dil.)", unit: "USD/shares" },
+];
+
 function buildNoteRowMetrics(note: NoteSectionXbrl): { key: string; label: string; unit?: string }[] {
   return Object.entries(note.metrics).map(([key, metric]) => ({
     key,
@@ -85,6 +98,7 @@ interface XbrlPanelProps {
   subtitle?: string;
   fiscalYearFilter?: number | null;
   maxFyColumns?: number;
+  tableFit?: boolean;
 }
 
 /** Fewer FY columns when the compare grid is wider so tables stay readable. */
@@ -115,6 +129,7 @@ function XbrlMetricsPanel({
   subtitle,
   fiscalYearFilter,
   maxFyColumns = 4,
+  tableFit = false,
 }: XbrlPanelProps) {
   const tableRows = pickAnnualRows(annualSummary, fiscalYearFilter, maxFyColumns);
   if (tableRows.length === 0) return null;
@@ -122,29 +137,36 @@ function XbrlMetricsPanel({
   const visibleRows = rows.filter(({ key }) => tableRows.some((r) => r[key] != null));
   if (visibleRows.length === 0) return null;
 
+  const scrollClass = tableFit ? "xbrl-metrics-scroll" : "xbrl-metrics-scroll overflow-x-auto";
+  const tableClass = tableFit
+    ? "xbrl-metrics-table xbrl-metrics-table--fit border-collapse text-left text-xs"
+    : "xbrl-metrics-table w-max min-w-full border-collapse text-left text-xs";
+
   return (
-    <article className="mb-4 min-w-0 rounded-lg border border-brand-200 bg-brand-50/40 px-3 py-4 shadow-sm sm:px-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <article
+      className={`mb-4 min-w-0 rounded-lg border border-brand-200 bg-brand-50/40 shadow-sm ${
+        tableFit ? "px-2 py-3" : "px-3 py-4 sm:px-4"
+      }`}
+    >
+      <div className="mb-3 flex items-center justify-between gap-1">
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-brand-800">
           SEC XBRL (fast path)
         </p>
-        {fetchMs != null && (
+        {fetchMs != null && !tableFit && (
           <span className="font-mono text-[10px] text-brand-600/80">
             {fetchMs}ms{fromCache ? " · cached" : ""}
           </span>
         )}
       </div>
-      <div className="xbrl-metrics-scroll overflow-x-auto">
-        <table className="xbrl-metrics-table w-max min-w-full border-collapse text-left text-xs">
+      <div className={scrollClass}>
+        <table className={tableClass}>
           <thead>
             <tr className="border-b border-brand-200/80">
-              <th className="min-w-[7rem] max-w-[11rem] py-1.5 pr-3 font-medium text-slate-600">
-                Metric
-              </th>
+              <th className="xbrl-metric-line py-1.5 pr-2 font-medium text-slate-600">Metric</th>
               {tableRows.map((r) => (
                 <th
                   key={r.fy}
-                  className="whitespace-nowrap py-1.5 px-2 text-right font-mono font-semibold text-slate-700"
+                  className="xbrl-metric-value py-1.5 pl-1 text-right font-mono font-semibold text-slate-700"
                 >
                   FY {r.fy}
                 </th>
@@ -154,13 +176,13 @@ function XbrlMetricsPanel({
           <tbody>
             {visibleRows.map(({ key, label, unit }) => (
               <tr key={key} className="border-b border-brand-100/80 last:border-0">
-                <td className="min-w-[7rem] max-w-[11rem] py-1.5 pr-3 text-slate-600">{label}</td>
+                <td className="xbrl-metric-line py-1.5 pr-2 text-slate-600">{label}</td>
                 {tableRows.map((r) => {
                   const val = r[key];
                   return (
                     <td
                       key={r.fy}
-                      className="whitespace-nowrap py-1.5 px-2 text-right font-mono tabular-nums text-slate-800"
+                      className="xbrl-metric-value py-1.5 pl-1 text-right font-mono tabular-nums text-slate-800"
                     >
                       {typeof val === "number" ? formatMetricValue(val, unit) : "—"}
                     </td>
@@ -184,13 +206,6 @@ type StatementTab =
   | "cash_flow"
   | "stockholders_equity";
 
-const STATEMENT_TABS: { id: StatementTab; label: string }[] = [
-  { id: "income_statement", label: "Income" },
-  { id: "balance_sheet", label: "Balance" },
-  { id: "cash_flow", label: "Cash Flow" },
-  { id: "stockholders_equity", label: "Equity" },
-];
-
 function formatPeriodLabel(period: FinancialStatementsXbrl["period"]): string {
   if (period.fp === "FY" || period.kind === "annual") {
     return period.fy != null ? `FY ${period.fy}` : "Annual";
@@ -205,21 +220,30 @@ function formatPeriodLabel(period: FinancialStatementsXbrl["period"]): string {
 function StatementRowsTable({
   table,
   periodLabel,
+  tableFit = false,
 }: {
   table: StatementTable;
   periodLabel: string;
+  tableFit?: boolean;
 }) {
   if (table.rows.length === 0) {
     return <p className="text-xs text-slate-500">No line items available for this period.</p>;
   }
 
+  const scrollClass = tableFit ? "xbrl-metrics-scroll" : "xbrl-metrics-scroll overflow-x-auto";
+  const tableClass = tableFit
+    ? "xbrl-metrics-table xbrl-metrics-table--fit border-collapse text-left text-xs"
+    : "xbrl-metrics-table w-max min-w-full border-collapse text-left text-xs";
+
   return (
-    <div className="xbrl-metrics-scroll -mx-1 px-1">
-      <table className="xbrl-metrics-table xbrl-statement-table border-collapse text-left text-xs">
+    <div className={scrollClass}>
+      <table className={tableClass}>
         <thead>
           <tr className="border-b border-brand-200/80">
-            <th className="py-1.5 pr-2 font-medium text-slate-600">Line item</th>
-            <th className="whitespace-nowrap py-1.5 pl-2 text-right font-mono font-semibold text-slate-700">
+            <th className="gaap-statement-line xbrl-metric-line py-1.5 pr-2 font-medium text-slate-600">
+              Line item
+            </th>
+            <th className="xbrl-metric-value py-1.5 pl-1 text-right font-mono font-semibold text-slate-700">
               {periodLabel}
             </th>
           </tr>
@@ -227,8 +251,10 @@ function StatementRowsTable({
         <tbody>
           {table.rows.map((row) => (
             <tr key={row.key} className="border-b border-brand-100/80 last:border-0">
-              <td className="py-1.5 pr-2 text-slate-600">{row.label}</td>
-              <td className="whitespace-nowrap py-1.5 pl-2 text-right font-mono tabular-nums text-slate-800">
+              <td className="gaap-statement-line xbrl-metric-line py-1.5 pr-2 text-slate-600">
+                {row.label}
+              </td>
+              <td className="xbrl-metric-value py-1.5 pl-1 text-right font-mono tabular-nums text-slate-800">
                 {formatMetricValue(row.value, row.unit)}
               </td>
             </tr>
@@ -239,48 +265,40 @@ function StatementRowsTable({
   );
 }
 
-function FullStatementsPanel({
-  statements,
+function SingleStatementPanel({
+  table,
+  period,
+  title,
   fetchMs,
   fromCache,
+  tableFit = false,
 }: {
-  statements: FinancialStatementsXbrl;
+  table: StatementTable;
+  period: FinancialStatementsXbrl["period"];
+  title: string;
   fetchMs?: number;
   fromCache?: boolean;
+  tableFit?: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState<StatementTab>("income_statement");
-  const periodLabel = formatPeriodLabel(statements.period);
-  const activeTable = statements.statements[activeTab];
+  const periodLabel = formatPeriodLabel(period);
 
   return (
-    <article className="mb-4 min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-4 shadow-sm sm:px-4">
+    <article
+      className={`gaap-statement-panel mb-4 min-w-0 rounded-lg border border-brand-200 bg-brand-50/40 shadow-sm ${
+        tableFit ? "px-2 py-3" : "px-3 py-4 sm:px-4"
+      }`}
+    >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-          Full GAAP statements
+        <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-brand-800">
+          {title}
         </p>
         {fetchMs != null && (
-          <span className="font-mono text-[10px] text-slate-500">
+          <span className="font-mono text-[10px] text-brand-600/80">
             {fetchMs}ms{fromCache ? " · cached" : ""}
           </span>
         )}
       </div>
-      <div className="mb-3 flex flex-nowrap gap-0.5 border-b border-slate-200 pb-2">
-        {STATEMENT_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 font-sans text-[10px] font-medium transition ${
-              activeTab === tab.id
-                ? "bg-brand-100 text-brand-900"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      <StatementRowsTable table={activeTable} periodLabel={periodLabel} />
+      <StatementRowsTable table={table} periodLabel={periodLabel} tableFit={tableFit} />
     </article>
   );
 }
@@ -387,11 +405,14 @@ function FilingColumn({
   financialsError = null,
   sectionsPending = false,
   columnCount = 1,
+  columnLayout,
   fiscalYearFilter = null,
   isPro = false,
   onPaywall,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
+  const tableFit = columnCount >= 5;
+  const headlineMetricRows = tableFit ? FINANCIAL_STATEMENT_ROWS_DENSE : FINANCIAL_STATEMENT_ROWS;
   const displayForm = form ?? formFromPeriodId(period);
   const formLabel = displayForm ? displayFormLabel(displayForm) : null;
   const resolvedFiscalYear =
@@ -406,6 +427,7 @@ function FilingColumn({
   const [statementsError, setStatementsError] = useState("");
 
   const section = activeSection ? sections.find((s) => s.id === activeSection) : sections[0];
+  const isStatementSection = isGaapStatementSection(activeSection);
   const displayLabel = section
     ? formatSectionLabel(section.label)
     : sectionLabel
@@ -420,6 +442,22 @@ function FilingColumn({
     }
     return buildSectionFilingUrl(filingUrl, activeSection, anchor, section.heading);
   }, [filingUrl, activeSection, section, sections]);
+
+  const gaapStatementFilingUrl = useMemo(() => {
+    if (!filingUrl || !isStatementSection || !activeSection) return null;
+    const finSection = sections.find((s) => s.id === "financial-statements");
+    return buildSectionFilingUrl(
+      filingUrl,
+      activeSection,
+      finSection?.anchor ?? null,
+      finSection?.heading ?? null
+    );
+  }, [filingUrl, isStatementSection, activeSection, sections]);
+
+  const activeStatementTable = useMemo(() => {
+    if (!fullStatements || !activeSection || !isStatementSection) return null;
+    return fullStatements.statements[activeSection as StatementTab] ?? null;
+  }, [fullStatements, activeSection, isStatementSection]);
 
   const hasXbrlData = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return false;
@@ -437,6 +475,7 @@ function FilingColumn({
   const showSecViewer = Boolean(
     activeSection &&
       section &&
+      !isStatementSection &&
       (isNarrativeSection(activeSection) || (isXbrlBackedSection(activeSection) && !hasXbrlData))
   );
 
@@ -448,13 +487,14 @@ function FilingColumn({
       if (rows.length === 0) return null;
       return (
         <XbrlMetricsPanel
-          rows={FINANCIAL_STATEMENT_ROWS}
+          rows={headlineMetricRows}
           annualSummary={rows}
           fetchMs={financialsXbrl.fetch_ms}
           fromCache={financialsXbrl.from_cache}
           subtitle="Headline GAAP metrics from SEC companyfacts."
           fiscalYearFilter={resolvedFiscalYear}
           maxFyColumns={maxFyColumns}
+          tableFit={tableFit}
         />
       );
     }
@@ -472,6 +512,7 @@ function FilingColumn({
           subtitle="Tagged GAAP facts from SEC companyfacts."
           fiscalYearFilter={resolvedFiscalYear}
           maxFyColumns={maxFyColumns}
+          tableFit={tableFit}
         />
       ) : null;
 
@@ -488,7 +529,7 @@ function FilingColumn({
         {metricsPanel}
       </>
     );
-  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns]);
+  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -504,7 +545,7 @@ function FilingColumn({
   }, [ticker, resolvedFiscalYear, period, isPro]);
 
   useEffect(() => {
-    if (activeSection !== "financial-statements" || !isPro || !financialsXbrl) {
+    if (!isStatementSection || !isPro || !financialsXbrl || fullStatements) {
       return;
     }
 
@@ -528,7 +569,16 @@ function FilingColumn({
     return () => {
       cancelled = true;
     };
-  }, [activeSection, isPro, financialsXbrl, ticker, resolvedFiscalYear, period]);
+  }, [
+    activeSection,
+    isStatementSection,
+    isPro,
+    financialsXbrl,
+    fullStatements,
+    ticker,
+    resolvedFiscalYear,
+    period,
+  ]);
 
   const handleStatementsUpgrade = useCallback(() => {
     onPaywall?.(
@@ -572,6 +622,9 @@ function FilingColumn({
   const showFinancialsBootstrap =
     activeSection === "financial-statements" && (hasXbrlData || financialsPending);
 
+  const showStatementBootstrap =
+    isStatementSection && isPro && (loadingStatements || fullStatements != null || financialsPending);
+
   if (error) {
     return (
       <div className="compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-white">
@@ -583,8 +636,14 @@ function FilingColumn({
     );
   }
 
+  const isCompact = columnLayout?.density === "compact";
+
   return (
-    <div className="compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-slate-50/50 last:border-r-0">
+    <div
+      className={`compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-slate-50/50 last:border-r-0${
+        isCompact ? " compare-column--compact" : ""
+      }`}
+    >
       <ColumnHeader
         ticker={ticker}
         companyName={companyName}
@@ -610,13 +669,13 @@ function FilingColumn({
             <LockedStatementsPanel onUpgrade={handleStatementsUpgrade} />
           )}
 
-          {activeSection === "financial-statements" && isPro && financialsXbrl && (
+          {isStatementSection && isPro && financialsXbrl && (
             <>
               {loadingStatements && !fullStatements && (
-                <div className="mb-4 space-y-2 rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200" />
-                  <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
-                  <p className="text-[10px] text-slate-500">Loading full GAAP statements…</p>
+                <div className="mb-4 space-y-2 rounded-lg border border-brand-200 bg-brand-50/40 px-4 py-4 shadow-sm">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-brand-200" />
+                  <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
+                  <p className="text-[10px] text-brand-700/70">Loading full GAAP statement…</p>
                 </div>
               )}
               {statementsError && !fullStatements && (
@@ -624,29 +683,50 @@ function FilingColumn({
                   <p className="text-xs text-red-700">{statementsError}</p>
                 </div>
               )}
-              {fullStatements && (
-                <FullStatementsPanel
-                  statements={fullStatements}
-                  fetchMs={fullStatements.fetch_ms}
-                  fromCache={fullStatements.from_cache}
-                />
+              {fullStatements && activeStatementTable && (
+                <>
+                  <SingleStatementPanel
+                    table={activeStatementTable}
+                    period={fullStatements.period}
+                    title={`Full GAAP — ${displayLabel}`}
+                    fetchMs={fullStatements.fetch_ms}
+                    fromCache={fullStatements.from_cache}
+                    tableFit={tableFit}
+                  />
+                  {activeStatementTable.rows.length === 0 && gaapStatementFilingUrl && (
+                    <FilingViewer
+                      filingUrl={gaapStatementFilingUrl}
+                      sectionLabel={displayLabel}
+                      ticker={ticker}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
 
-          {financialsError && activeSection === "financial-statements" && !xbrlPanel ? (
+          {financialsError &&
+          (activeSection === "financial-statements" || isStatementSection) &&
+          !xbrlPanel &&
+          !(isStatementSection && fullStatements) ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4">
               <p className="text-sm font-medium text-red-800">Could not load XBRL financials</p>
               <p className="mt-1 text-xs text-red-700">{financialsError}</p>
             </div>
-          ) : financialsPending && activeSection === "financial-statements" && !xbrlPanel ? (
+          ) : financialsPending &&
+            (activeSection === "financial-statements" || isStatementSection) &&
+            !xbrlPanel &&
+            !showStatementBootstrap ? (
             <div className="space-y-3 rounded-lg border border-brand-200 bg-brand-50/40 px-5 py-5 shadow-sm">
               <div className="h-4 w-3/4 animate-pulse rounded bg-brand-200" />
               <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
               <div className="h-4 w-5/6 animate-pulse rounded bg-brand-100" />
               <p className="text-[10px] text-brand-700/70">Loading SEC XBRL financials…</p>
             </div>
-          ) : sectionsPending && activeSection && activeSection !== "financial-statements" ? (
+          ) : sectionsPending &&
+            activeSection &&
+            activeSection !== "financial-statements" &&
+            !isStatementSection ? (
             <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
               <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
               <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
@@ -654,7 +734,7 @@ function FilingColumn({
             </div>
           ) : !activeSection && sections.length === 0 && !showFinancialsBootstrap ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>
-          ) : !section && !showFinancialsBootstrap ? (
+          ) : !section && !showFinancialsBootstrap && !showStatementBootstrap ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
               <p className="text-sm font-medium text-slate-500">Not in this filing</p>
               <p className="mt-1 text-xs text-slate-400">
@@ -726,9 +806,9 @@ function ColumnHeader({
           </span>
         )}
       </div>
-      <p className="mt-0.5 truncate text-xs text-slate-500">{companyName}</p>
+      <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{companyName}</p>
       {(filingDate || fiscalYear) && (
-        <p className="mt-1 font-mono text-xs tabular-nums text-slate-400">
+        <p className="mt-1 font-mono text-xs tabular-nums leading-snug text-slate-400">
           {fiscalYear && `FY ${fiscalYear}`}
           {filingDate && ` · Filed ${filingDate}`}
         </p>

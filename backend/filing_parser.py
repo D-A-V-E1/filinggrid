@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -28,6 +29,7 @@ from sec.client import (
     find_filing,
     resolve_ticker,
 )
+from sec.compare_context import CompareFactsCache
 from sec.section_extractor import (
     _prepare_filing_structure,
     _sections_from_structure,
@@ -74,6 +76,17 @@ class SectionHtmlResponse(BaseModel):
     cache_key: str | None = None
 
 
+@dataclass
+class _ResolvedFiling:
+    ticker: str
+    resolved: dict[str, Any]
+    filing: dict[str, Any]
+    cache_key: str
+    column: ColumnResult
+    sections: list[dict[str, Any]] | None
+    from_cache: bool
+
+
 def _sections_for_response(sections: list[dict[str, Any]], *, include_html: bool = False) -> list[dict[str, Any]]:
     return [
         {
@@ -112,20 +125,36 @@ def _build_column_result(
     return ColumnResult(**col_dict)
 
 
-async def _parse_single_ticker(
+def _column_meta_payload(column: ColumnResult) -> ColumnResult:
+    """Header fields only — no section index."""
+    data = column.model_dump()
+    data["sections"] = []
+    return ColumnResult(**data)
+
+
+async def _resolve_column_filing(
     ticker: str,
     ticker_map: dict[str, dict[str, Any]],
     requested_year: int | None,
-    period: str | None = None,
-    interim_slot: tuple[int, str, str] | None = None,
-) -> tuple[ColumnResult, list[dict[str, Any]], str | None, bool]:
+    period: str | None,
+    interim_slot: tuple[int, str, str] | None,
+    facts_cache: CompareFactsCache | None,
+) -> _ResolvedFiling | ColumnResult:
     ticker = ticker.upper().strip()
     try:
         resolved = await resolve_ticker(ticker, ticker_map)
-        submissions = await fetch_submissions(resolved["cik"])
+        submissions = await fetch_submissions(resolved["cik"], merge_archives=False)
 
         xbrl_periods = None
-        if period:
+        if period and facts_cache is not None:
+            try:
+                from sec.xbrl_client import list_reporting_periods
+
+                facts, _ = await facts_cache.get_company_facts(resolved["cik"])
+                xbrl_periods = list_reporting_periods(facts)
+            except Exception:
+                xbrl_periods = None
+        elif period:
             try:
                 from sec.xbrl_client import fetch_company_facts, list_reporting_periods
 
@@ -148,18 +177,16 @@ async def _parse_single_ticker(
 
         if not filing:
             label = period or (str(requested_year) if requested_year is not None else "latest")
-            column = ColumnResult(
+            return ColumnResult(
                 ticker=ticker,
                 company_name=resolved["company_name"],
                 cik=resolved["cik"],
                 error=f"No comparable filing (10-K, 10-Q, 20-F, or 6-K) found for period {label}",
             )
-            return column, [], None, False
 
         accession = filing.get("accession_no_dash", "")
         fiscal_year = filing.get("fiscal_year")
         cache_key = make_cache_key(ticker, fiscal_year, accession)
-
         primary_document = filing.get("primary_document")
         filing_url = build_filing_url(resolved["cik"], accession, primary_document)
 
@@ -181,19 +208,18 @@ async def _parse_single_ticker(
                     cik, cache_key, primary_document=primary, filing_url=col_meta.get("filing_url")
                 ),
                 sections=sections,
+                cache_key=cache_key,
+                from_cache=True,
             )
-            return column, sections, cache_key, True
-
-        html_bytes = await fetch_filing_html(resolved["cik"], filing)
-
-        def _build_section_index() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-            structure = _prepare_filing_structure(html_bytes)
-            sections = _sections_from_structure(structure, include_html=False)
-            return sections, structure
-
-        sections, structure = await asyncio.to_thread(_build_section_index)
-        store_filing_structure(cache_key, structure)
-        del html_bytes
+            return _ResolvedFiling(
+                ticker=ticker,
+                resolved=resolved,
+                filing=filing,
+                cache_key=cache_key,
+                column=column,
+                sections=sections,
+                from_cache=True,
+            )
 
         column = ColumnResult(
             ticker=ticker,
@@ -205,23 +231,69 @@ async def _parse_single_ticker(
             fiscal_year=fiscal_year,
             primary_document=primary_document,
             filing_url=filing_url,
-            sections=sections,
+            cache_key=cache_key,
+            sections=[],
         )
-        return column, sections, cache_key, False
+        return _ResolvedFiling(
+            ticker=ticker,
+            resolved=resolved,
+            filing=filing,
+            cache_key=cache_key,
+            column=column,
+            sections=None,
+            from_cache=False,
+        )
     except Exception as exc:
-        column = ColumnResult(
+        return ColumnResult(
             ticker=ticker,
             company_name=ticker,
             cik="",
             error=str(exc),
         )
-        return column, [], None, False
+
+
+async def _build_section_index(resolved: _ResolvedFiling) -> tuple[ColumnResult, list[dict[str, Any]], bool]:
+    if resolved.sections is not None:
+        return resolved.column, resolved.sections, resolved.from_cache
+
+    html_bytes = await fetch_filing_html(resolved.resolved["cik"], resolved.filing)
+
+    def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        structure = _prepare_filing_structure(html_bytes)
+        sections = _sections_from_structure(structure, include_html=False)
+        return sections, structure
+
+    sections, structure = await asyncio.to_thread(_build_section_index_sync)
+    store_filing_structure(resolved.cache_key, structure)
+    del html_bytes
+
+    column = resolved.column.model_copy(update={"sections": sections})
+    return column, sections, False
+
+
+async def _parse_single_ticker(
+    ticker: str,
+    ticker_map: dict[str, dict[str, Any]],
+    requested_year: int | None,
+    period: str | None = None,
+    interim_slot: tuple[int, str, str] | None = None,
+    facts_cache: CompareFactsCache | None = None,
+) -> tuple[ColumnResult, list[dict[str, Any]], str | None, bool]:
+    outcome = await _resolve_column_filing(
+        ticker, ticker_map, requested_year, period, interim_slot, facts_cache
+    )
+    if isinstance(outcome, ColumnResult):
+        return outcome, [], None, False
+
+    column, sections, from_cache = await _build_section_index(outcome)
+    return column, sections, outcome.cache_key, from_cache
 
 
 async def parse_filings(request: ParseRequest) -> ParseResponse:
     from sec.filing_periods import resolve_interim_slot_for_tickers
 
     ticker_map = await fetch_ticker_map()
+    facts_cache = CompareFactsCache()
     interim_slot = await resolve_interim_slot_for_tickers(
         request.tickers, request.period, ticker_map
     )
@@ -229,7 +301,12 @@ async def parse_filings(request: ParseRequest) -> ParseResponse:
     raw_results = await asyncio.gather(
         *[
             _parse_single_ticker(
-                ticker, ticker_map, request.fiscal_year, request.period, interim_slot
+                ticker,
+                ticker_map,
+                request.fiscal_year,
+                request.period,
+                interim_slot,
+                facts_cache,
             )
             for ticker in request.tickers
         ]
@@ -261,23 +338,54 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
     ) + "\n"
 
     ticker_map = await fetch_ticker_map()
+    facts_cache = CompareFactsCache()
     from sec.filing_periods import resolve_interim_slot_for_tickers
 
     interim_slot = await resolve_interim_slot_for_tickers(
         request.tickers, request.period, ticker_map
     )
 
-    tasks = {
+    # Phase 1: resolve filings and emit column headers before HTML download/parse.
+    resolve_tasks = {
         asyncio.create_task(
-            _parse_single_ticker(
-                ticker, ticker_map, request.fiscal_year, request.period, interim_slot
+            _resolve_column_filing(
+                ticker,
+                ticker_map,
+                request.fiscal_year,
+                request.period,
+                interim_slot,
+                facts_cache,
             )
         ): ticker
         for ticker in request.tickers
     }
 
-    for task in asyncio.as_completed(tasks):
-        column, sections_full, cache_key, from_cache = await task
+    pending_html: list[_ResolvedFiling] = []
+    for task in asyncio.as_completed(resolve_tasks):
+        outcome = await task
+        if isinstance(outcome, ColumnResult):
+            yield json.dumps({"type": "column_meta", "column": outcome.model_dump()}) + "\n"
+            yield json.dumps({"type": "column", "column": outcome.model_dump()}) + "\n"
+            continue
+
+        meta = _column_meta_payload(outcome.column)
+        yield json.dumps({"type": "column_meta", "column": meta.model_dump()}) + "\n"
+
+        if outcome.sections is not None:
+            payload = _build_column_result(
+                outcome.column, outcome.sections, outcome.cache_key, from_cache=True, include_html=False
+            )
+            yield json.dumps({"type": "column", "column": payload.model_dump()}) + "\n"
+        else:
+            pending_html.append(outcome)
+
+    # Phase 2: download HTML and build section indexes for uncached tickers.
+    html_tasks = {
+        asyncio.create_task(_build_section_index(item)): item.ticker for item in pending_html
+    }
+    for task in asyncio.as_completed(html_tasks):
+        column, sections_full, from_cache = await task
+        cache_key = column.cache_key
         if cache_key and sections_full:
             payload = _build_column_result(
                 column, sections_full, cache_key, from_cache=from_cache, include_html=False
@@ -291,19 +399,20 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
 
 async def list_periods_for_tickers(tickers: list[str]) -> list[dict[str, Any]]:
     from sec.filing_periods import list_comparable_filings, merge_filing_periods
-    from sec.xbrl_client import fetch_company_facts, list_reporting_periods
+    from sec.xbrl_client import list_reporting_periods
 
     ticker_map = await fetch_ticker_map()
+    facts_cache = CompareFactsCache()
     period_lists: list[list[dict[str, Any]]] = []
     for raw in tickers:
         ticker = raw.upper().strip()
         if not ticker:
             continue
         resolved = await resolve_ticker(ticker, ticker_map)
-        submissions = await fetch_submissions(resolved["cik"])
+        submissions = await fetch_submissions(resolved["cik"], merge_archives=True)
         xbrl_periods: list[dict[str, Any]] | None = None
         try:
-            facts, _ = await fetch_company_facts(resolved["cik"])
+            facts, _ = await facts_cache.get_company_facts(resolved["cik"])
             xbrl_periods = list_reporting_periods(facts)
         except Exception:
             xbrl_periods = None
@@ -412,7 +521,7 @@ async def _extract_and_cache_section(
     if not html_bytes:
         ticker_map = await fetch_ticker_map()
         resolved = await resolve_ticker(ticker, ticker_map)
-        submissions = await fetch_submissions(resolved["cik"])
+        submissions = await fetch_submissions(resolved["cik"], merge_archives=False)
         filing = find_filing(submissions, fiscal_year=fiscal_year or column_meta.get("fiscal_year"))
         if not filing:
             return None, None, cache_key

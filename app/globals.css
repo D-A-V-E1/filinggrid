@@ -20,6 +20,114 @@
     overflow: hidden;
   }
 
+  .compare-column--compact .column-header-bar {
+    min-height: 4.75rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+
+  .compare-column--compact .column-header-bar .font-mono.text-lg {
+    font-size: 1rem;
+    line-height: 1.25rem;
+  }
+
+  .compare-column--compact .section-title-bar {
+    min-height: 2.75rem;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .compare-column--compact .compare-column-body {
+    padding: 0.875rem;
+  }
+
+  .compare-column--compact .filing-column-scroll {
+    overflow-x: hidden;
+  }
+
+  .compare-column--compact .xbrl-metrics-scroll {
+    overflow-x: hidden;
+  }
+
+  .compare-column--compact .xbrl-metrics-table {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+  }
+
+  .xbrl-metrics-table--fit {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .xbrl-metrics-table--fit th.xbrl-metric-value,
+  .xbrl-metrics-table--fit td.xbrl-metric-value {
+    width: 44%;
+    min-width: 0;
+    max-width: 44%;
+    white-space: nowrap;
+    padding-left: 0.25rem;
+    padding-right: 0;
+  }
+
+  .xbrl-metrics-table--fit th.xbrl-metric-line,
+  .xbrl-metrics-table--fit td.xbrl-metric-line {
+    width: 56%;
+    min-width: 0;
+    max-width: none;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    padding-right: 0.375rem;
+  }
+
+  .compare-column--compact .xbrl-metrics-table th:not(:first-child),
+  .compare-column--compact .xbrl-metrics-table td:not(:first-child) {
+    min-width: 0;
+  }
+
+  .gaap-statement-panel .xbrl-metrics-scroll {
+    overflow-x: hidden;
+  }
+
+  .gaap-statement-panel .xbrl-metrics-table--fit .gaap-statement-line {
+    width: 56%;
+  }
+
+  .gaap-statement-panel .xbrl-metrics-table--fit .xbrl-metric-value {
+    width: 44%;
+  }
+
+  .compare-column--compact .xbrl-metrics-table th,
+  .compare-column--compact .xbrl-metrics-table td {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
+  .compare-column--compact .xbrl-metrics-table th:first-child,
+  .compare-column--compact .xbrl-metrics-table td:first-child {
+    min-width: 0;
+    max-width: none;
+    padding-right: 0.5rem;
+  }
+
+  .compare-column--compact article.mb-4.rounded-lg {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .gaap-statement-panel .xbrl-metrics-table th.gaap-statement-line,
+  .gaap-statement-panel .xbrl-metrics-table td.gaap-statement-line {
+    min-width: 0;
+    max-width: none;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
   .section-title-bar {
     min-height: 3rem;
     display: flex;
@@ -63,6 +171,7 @@
   .xbrl-metrics-table th:not(:first-child),
   .xbrl-metrics-table td:not(:first-child) {
     white-space: nowrap;
+    min-width: 5.75rem;
   }
 
   .xbrl-metrics-table th:first-child,

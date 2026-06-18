@@ -307,3 +307,52 @@ def test_statements_endpoint_allows_pro_tier(mock_settings):
     assert res.status_code == 200, res.text
     assert res.json()["ticker"] == "TEST"
     mock_fetch.assert_called_once()
+
+
+def test_extract_statement_tables_ifrs_equity():
+    facts = {
+        "entityName": "FOREIGN ADR",
+        "cik": "0001234567",
+        "facts": {
+            "ifrs-full": {
+                "Equity": {
+                    "label": "Equity",
+                    "units": {
+                        "USD": [
+                            {
+                                "end": "2023-12-31",
+                                "val": 50000000000,
+                                "fy": 2023,
+                                "fp": "FY",
+                                "form": "20-F",
+                                "filed": "2024-04-18",
+                            }
+                        ]
+                    },
+                },
+                "ProfitLoss": {
+                    "label": "Profit loss",
+                    "units": {
+                        "USD": [
+                            {
+                                "start": "2023-01-01",
+                                "end": "2023-12-31",
+                                "val": 8000000000,
+                                "fy": 2023,
+                                "fp": "FY",
+                                "form": "20-F",
+                                "filed": "2024-04-18",
+                            }
+                        ]
+                    },
+                },
+            }
+        },
+    }
+    result = extract_statement_tables(facts, fiscal_year=2023)
+    equity = result["statements"]["stockholders_equity"]["rows"]
+    keys = {r["key"] for r in equity}
+    assert "equity_ending" in keys
+    assert "net_income" in keys
+    ending = next(r for r in equity if r["key"] == "equity_ending")
+    assert ending["value"] == 50000000000

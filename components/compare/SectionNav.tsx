@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { NAV_GROUPS } from "@/lib/sections";
+import { getNavGroups } from "@/lib/sections";
 
 interface SectionNavProps {
   availableSectionIds: Set<string>;
   sectionCatalog: { id: string; label: string }[];
   activeSection: string | null;
   onSectionSelect: (sectionId: string) => void;
+  isPro?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -17,12 +18,14 @@ export default function SectionNav({
   sectionCatalog,
   activeSection,
   onSectionSelect,
+  isPro = false,
   mobileOpen = false,
   onMobileClose,
 }: SectionNavProps) {
   const navScrollRef = useRef<HTMLDivElement>(null);
   const activeButtonRef = useRef<HTMLButtonElement>(null);
   const sectionMap = new Map(sectionCatalog.map((s) => [s.id, s]));
+  const navGroups = getNavGroups(isPro);
 
   useEffect(() => {
     if (activeButtonRef.current && navScrollRef.current) {
@@ -59,7 +62,7 @@ export default function SectionNav({
         )}
       </div>
       <div ref={navScrollRef} className="min-h-0 flex-1 overflow-y-auto py-2">
-        {NAV_GROUPS.map((group) => {
+        {navGroups.map((group) => {
           const groupSections = group.ids
             .filter((id) => availableSectionIds.has(id))
             .map((id) => sectionMap.get(id))

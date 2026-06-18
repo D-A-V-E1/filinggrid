@@ -92,12 +92,13 @@ INCOME_STATEMENT_LINES: list[dict[str, Any]] = [
             "RevenueFromContractWithCustomerExcludingAssessedTax",
             "Revenues",
             "SalesRevenueNet",
+            "Revenue",
         ],
     },
     {
         "key": "cost_of_revenue",
         "label": "Cost of revenue",
-        "concepts": ["CostOfRevenue", "CostOfGoodsAndServicesSold"],
+        "concepts": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfSales"],
     },
     {"key": "gross_profit", "label": "Gross profit", "concepts": ["GrossProfit"]},
     {
@@ -118,7 +119,7 @@ INCOME_STATEMENT_LINES: list[dict[str, Any]] = [
         "label": "Operating expenses",
         "concepts": ["OperatingExpenses", "CostsAndExpenses"],
     },
-    {"key": "operating_income", "label": "Operating income", "concepts": ["OperatingIncomeLoss"]},
+    {"key": "operating_income", "label": "Operating income", "concepts": ["OperatingIncomeLoss", "ProfitLossFromOperatingActivities"]},
     {
         "key": "interest_expense",
         "label": "Interest expense",
@@ -140,12 +141,25 @@ INCOME_STATEMENT_LINES: list[dict[str, Any]] = [
         "concepts": [
             "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
             "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
+            "ProfitLossBeforeTax",
         ],
     },
-    {"key": "income_tax", "label": "Income tax expense", "concepts": ["IncomeTaxExpenseBenefit"]},
+    {
+        "key": "income_tax",
+        "label": "Income tax expense",
+        "concepts": ["IncomeTaxExpenseBenefit", "IncomeTaxExpenseContinuingOperations", "IncomeTaxExpense"],
+    },
     {"key": "net_income", "label": "Net income", "concepts": ["NetIncomeLoss", "ProfitLoss"]},
-    {"key": "eps_basic", "label": "EPS (basic)", "concepts": ["EarningsPerShareBasic"]},
-    {"key": "eps_diluted", "label": "EPS (diluted)", "concepts": ["EarningsPerShareDiluted"]},
+    {
+        "key": "eps_basic",
+        "label": "EPS (basic)",
+        "concepts": ["EarningsPerShareBasic", "BasicEarningsLossPerShare"],
+    },
+    {
+        "key": "eps_diluted",
+        "label": "EPS (diluted)",
+        "concepts": ["EarningsPerShareDiluted", "DilutedEarningsLossPerShare"],
+    },
     {
         "key": "shares_basic",
         "label": "Weighted avg shares (basic)",
@@ -170,6 +184,7 @@ BALANCE_SHEET_LINES: list[dict[str, Any]] = [
         "concepts": [
             "CashAndCashEquivalentsAtCarryingValue",
             "CashCashEquivalentsAndShortTermInvestments",
+            "CashAndCashEquivalents",
         ],
     },
     {
@@ -223,6 +238,8 @@ BALANCE_SHEET_LINES: list[dict[str, Any]] = [
         "concepts": [
             "StockholdersEquity",
             "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+            "Equity",
+            "EquityAttributableToOwnersOfParent",
         ],
     },
     {
@@ -255,6 +272,7 @@ CASH_FLOW_LINES: list[dict[str, Any]] = [
         "concepts": [
             "NetCashProvidedByUsedInOperatingActivities",
             "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+            "CashFlowsFromUsedInOperatingActivities",
         ],
     },
     {
@@ -271,6 +289,7 @@ CASH_FLOW_LINES: list[dict[str, Any]] = [
         "concepts": [
             "NetCashProvidedByUsedInInvestingActivities",
             "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations",
+            "CashFlowsFromUsedInInvestingActivities",
         ],
     },
     {
@@ -279,6 +298,7 @@ CASH_FLOW_LINES: list[dict[str, Any]] = [
         "concepts": [
             "NetCashProvidedByUsedInFinancingActivities",
             "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations",
+            "CashFlowsFromUsedInFinancingActivities",
         ],
     },
     {
@@ -319,12 +339,18 @@ STOCKHOLDERS_EQUITY_LINES: list[dict[str, Any]] = [
         "concepts": [
             "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
             "StockholdersEquity",
+            "Equity",
+            "EquityAttributableToOwnersOfParent",
         ],
     },
     {
         "key": "common_stock",
         "label": "Common stock",
-        "concepts": ["CommonStockValue", "CommonStocksIncludingAdditionalPaidInCapital"],
+        "concepts": [
+            "CommonStockValue",
+            "CommonStocksIncludingAdditionalPaidInCapital",
+            "IssuedCapital",
+        ],
     },
     {
         "key": "additional_paid_in_capital",
@@ -339,7 +365,10 @@ STOCKHOLDERS_EQUITY_LINES: list[dict[str, Any]] = [
     {
         "key": "aoci",
         "label": "Accumulated other comprehensive income (loss)",
-        "concepts": ["AccumulatedOtherComprehensiveIncomeLossNetOfTax"],
+        "concepts": [
+            "AccumulatedOtherComprehensiveIncomeLossNetOfTax",
+            "AccumulatedOtherComprehensiveIncome",
+        ],
     },
     {
         "key": "treasury_stock",
@@ -353,12 +382,17 @@ STOCKHOLDERS_EQUITY_LINES: list[dict[str, Any]] = [
         "concepts": [
             "OtherComprehensiveIncomeLossNetOfTaxPortionAttributableToParent",
             "OtherComprehensiveIncomeLossNetOfTax",
+            "OtherComprehensiveIncome",
         ],
     },
     {
         "key": "comprehensive_income",
         "label": "Comprehensive income",
-        "concepts": ["ComprehensiveIncomeNetOfTax", "ComprehensiveIncomeNetOfTaxIncludingPortionAttributableToNoncontrollingInterest"],
+        "concepts": [
+            "ComprehensiveIncomeNetOfTax",
+            "ComprehensiveIncomeNetOfTaxIncludingPortionAttributableToNoncontrollingInterest",
+            "ComprehensiveIncome",
+        ],
     },
     {
         "key": "share_based_comp",
@@ -386,6 +420,7 @@ STOCKHOLDERS_EQUITY_LINES: list[dict[str, Any]] = [
             "Dividends",
             "PaymentsOfDividends",
             "PaymentsOfDividendsCommonStock",
+            "DividendsPaid",
         ],
     },
     {
@@ -411,6 +446,8 @@ STOCKHOLDERS_EQUITY_LINES: list[dict[str, Any]] = [
         "concepts": [
             "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
             "StockholdersEquity",
+            "Equity",
+            "EquityAttributableToOwnersOfParent",
         ],
     },
     {
@@ -1486,6 +1523,59 @@ def _filter_snapshot(
     return _dedupe_observations(_sort_observations(snap))[:1]
 
 
+def _filter_interim_loose(
+    entries: list[dict[str, Any]],
+    period_filter: Any,
+) -> list[dict[str, Any]]:
+    """Match 6-K / foreign interim facts that omit standard fy/fp tags."""
+    if not period_filter or period_filter.kind != "interim":
+        return []
+
+    form_norm = (period_filter.form or "").replace("/A", "").upper()
+    allowed_forms = {form_norm} if form_norm else set(INTERIM_XBRL_FORMS)
+    candidates = [
+        e
+        for e in entries
+        if (e.get("form") or "").replace("/A", "").upper() in allowed_forms
+    ]
+    if period_filter.fiscal_year is not None:
+        fy = period_filter.fiscal_year
+        by_fy = [
+            e
+            for e in candidates
+            if e.get("fy") == fy or str(e.get("end") or "")[:4] == str(fy)
+        ]
+        if by_fy:
+            candidates = by_fy
+    if period_filter.fp:
+        by_fp = [e for e in candidates if e.get("fp") == period_filter.fp]
+        if by_fp:
+            candidates = by_fp
+    if period_filter.report_date:
+        by_end = [e for e in candidates if e.get("end") == period_filter.report_date]
+        if by_end:
+            candidates = by_end
+    return _dedupe_observations(_sort_observations(candidates))[:1]
+
+
+def _filter_latest_interim_for_fy(
+    entries: list[dict[str, Any]],
+    fiscal_year: int | None,
+) -> list[dict[str, Any]]:
+    """Latest interim/6-K observation for a fiscal year when annual filing is not available."""
+    candidates = [e for e in entries if (e.get("form") or "") in INTERIM_XBRL_FORMS]
+    if fiscal_year is not None:
+        fy = fiscal_year
+        by_fy = [
+            e
+            for e in candidates
+            if e.get("fy") == fy or str(e.get("end") or "")[:4] == str(fy)
+        ]
+        if by_fy:
+            candidates = by_fy
+    return _dedupe_observations(_sort_observations(candidates))[:1]
+
+
 def _obs_to_period(obs: dict[str, Any]) -> dict[str, Any]:
     return {
         "fy": obs.get("fy"),
@@ -1599,6 +1689,13 @@ def _pick_observation_for_period(
         annual = _filter_annual(entries, period_filter.fiscal_year)
         if annual:
             return annual[0]
+        # FY 10-K / 20-F not filed yet — use latest interim quarter or 6-K.
+        quarterly = _filter_quarterly(entries, period_filter.fiscal_year)
+        if quarterly:
+            return quarterly[0]
+        loose = _filter_latest_interim_for_fy(entries, period_filter.fiscal_year)
+        if loose:
+            return loose[0]
         return None
 
     quarterly = _filter_quarterly(entries, period_filter.fiscal_year)
@@ -1619,11 +1716,18 @@ def _pick_observation_for_period(
         exact = [e for e in quarterly if e.get("end") == period_filter.report_date]
         if exact:
             return exact[0]
-    return quarterly[0] if quarterly else None
+    if quarterly:
+        return quarterly[0]
+    if period_filter.report_date:
+        snap = _filter_snapshot(entries, period_filter.report_date)
+        if snap:
+            return snap[0]
+    loose = _filter_interim_loose(entries, period_filter)
+    return loose[0] if loose else None
 
 
 def _extract_statement_rows(
-    gaap: dict[str, Any],
+    facts: dict[str, Any],
     line_defs: list[dict[str, Any]],
     period_filter: Any | None,
 ) -> list[dict[str, Any]]:
@@ -1633,14 +1737,17 @@ def _extract_statement_rows(
         matched_concept: str | None = None
         unit = ""
         for concept_name in defn["concepts"]:
-            concept_data = gaap.get(concept_name)
-            if not concept_data:
-                continue
-            unit, entries = _unit_entries(concept_data)
-            candidate = _pick_observation_for_period(entries, period_filter)
-            if candidate is not None and candidate.get("val") is not None:
-                obs = candidate
-                matched_concept = concept_name
+            for taxonomy in _taxonomy_maps(facts):
+                concept_data = taxonomy.get(concept_name)
+                if not concept_data:
+                    continue
+                unit, entries = _unit_entries(concept_data)
+                candidate = _pick_observation_for_period(entries, period_filter)
+                if candidate is not None and candidate.get("val") is not None:
+                    obs = candidate
+                    matched_concept = concept_name
+                    break
+            if obs is not None:
                 break
         if obs is None or matched_concept is None:
             continue
@@ -1705,14 +1812,13 @@ def extract_statement_tables(
     """Extract full GAAP statement line items for one reporting period from companyfacts."""
     from sec.filing_periods import resolve_period_filter
 
-    gaap = (facts.get("facts") or {}).get("us-gaap") or {}
     period_filter = resolve_period_filter(fiscal_year, period)
 
     def _build_tables(pf: Any | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         built: dict[str, Any] = {}
         rows_out: list[dict[str, Any]] = []
         for stmt_key, lines, label in STATEMENT_TABLE_DEFS:
-            rows = _extract_statement_rows(gaap, lines, pf)
+            rows = _extract_statement_rows(facts, lines, pf)
             built[stmt_key] = {"label": label, "rows": rows}
             rows_out.extend(rows)
         return built, rows_out
@@ -1851,13 +1957,17 @@ async def fetch_ticker_financials(
     period: str | None = None,
     ticker_map: dict[str, dict[str, Any]] | None = None,
     headline_only: bool = False,
+    facts_cache: Any | None = None,
 ) -> dict[str, Any]:
     """Resolve ticker, fetch companyfacts, return structured financial metrics."""
     from sec.filing_periods import parse_period_param
 
     started = time.perf_counter()
     resolved = await resolve_ticker(ticker, ticker_map)
-    facts, from_cache = await fetch_company_facts(resolved["cik"])
+    if facts_cache is not None:
+        facts, from_cache = await facts_cache.get_company_facts(resolved["cik"])
+    else:
+        facts, from_cache = await fetch_company_facts(resolved["cik"])
     pf = parse_period_param(period)
     report_date = pf.report_date if pf and pf.kind == "interim" else None
     extracted = extract_financial_metrics(
@@ -1907,7 +2017,10 @@ async def fetch_tickers_financials_stream(
 
     yield json.dumps({"type": "start", "tickers": unique}) + "\n"
 
+    from sec.compare_context import CompareFactsCache
+
     ticker_map = await fetch_ticker_map()
+    facts_cache = CompareFactsCache()
 
     async def _fetch_one(ticker: str) -> tuple[str, dict[str, Any] | None, str | None]:
         try:
@@ -1917,6 +2030,7 @@ async def fetch_tickers_financials_stream(
                 period=period,
                 ticker_map=ticker_map,
                 headline_only=headline_only,
+                facts_cache=facts_cache,
             )
             return ticker, data, None
         except Exception as exc:

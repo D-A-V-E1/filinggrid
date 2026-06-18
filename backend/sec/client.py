@@ -160,11 +160,11 @@ async def _merge_submission_archives(data: dict[str, Any]) -> None:
     filings["_archives_merged"] = True
 
 
-async def fetch_submissions(cik: str) -> dict[str, Any]:
+async def fetch_submissions(cik: str, *, merge_archives: bool = False) -> dict[str, Any]:
     from filing_store import load_submissions, save_submissions
 
     cached = load_submissions(cik)
-    if cached and cached.get("filings", {}).get("_archives_merged"):
+    if cached and (cached.get("filings", {}).get("_archives_merged") or not merge_archives):
         return cached
 
     in_flight = _submissions_inflight.get(cik)
@@ -181,7 +181,8 @@ async def fetch_submissions(cik: str) -> dict[str, Any]:
             resp = await _rate_limited_get(client, url, data_api=True)
             resp.raise_for_status()
             data = resp.json()
-        await _merge_submission_archives(data)
+        if merge_archives:
+            await _merge_submission_archives(data)
         save_submissions(cik, data)
         return data
 

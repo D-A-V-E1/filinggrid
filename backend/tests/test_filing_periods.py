@@ -42,6 +42,10 @@ def test_parse_period_param_annual_and_interim():
     assert canonical.fp == "Q4"
     assert canonical.fiscal_year == 2025
     assert canonical.form == "10-Q"
+    slot_only = parse_period_param("interim-2025-Q3")
+    assert slot_only is not None
+    assert slot_only.fp == "Q3"
+    assert slot_only.form is None
 
 
 def test_find_filing_with_interim_period():
@@ -94,6 +98,40 @@ def test_find_filing_interim_slot_requires_xbrl_fiscal_fp():
     with_xbrl = find_filing(subs, period="interim-2024-Q2-10-Q", xbrl_periods=xbrl_q2)
     assert with_xbrl is not None
     assert with_xbrl["report_date"] == "2023-12-31"
+
+
+def test_find_filing_interim_slot_matches_fp_derived_from_period_end():
+    """6-K rows may lack fp; quarter is inferred from period end (e.g. TSM)."""
+    subs = _submissions(
+        [
+            {
+                "form": "6-K",
+                "accession": "0001193125-24-000010",
+                "filing_date": "2024-10-15",
+                "report_date": "2024-09-30",
+            },
+        ]
+    )
+    xbrl = [
+        {
+            "kind": "interim",
+            "fiscal_year": 2024,
+            "fp": None,
+            "end": "2024-09-30",
+            "form": "6-K",
+            "filed": "2024-10-15",
+            "accn": "0001193125-24-000010",
+        },
+    ]
+    filing = find_filing(
+        subs,
+        period="interim-2024-Q3",
+        interim_slot=(2024, "Q3", ""),
+        xbrl_periods=xbrl,
+    )
+    assert filing is not None
+    assert filing["form"] == "6-K"
+    assert filing["report_date"] == "2024-09-30"
 
 
 def test_find_filing_cross_ticker_via_interim_slot():
@@ -241,13 +279,47 @@ def test_list_comparable_filings_uses_xbrl_fy_and_fp():
     assert "Q1" in options[0]["label"]
 
 
-def test_merge_filing_periods_keeps_10k_and_20f_separate():
+def test_merge_filing_periods_unions_10k_and_20f_by_fiscal_year():
     us = [{"id": "annual-2024", "kind": "annual", "fiscal_year": 2024, "form": "10-K", "label": "FY24 · 10-K"}]
     foreign = [{"id": "annual-2024-20f", "kind": "annual", "fiscal_year": 2024, "form": "20-F", "label": "FY24 · 20-F"}]
     merged_same_form = merge_filing_periods([us, us])
     ids = {o["id"] for o in merged_same_form}
     assert "annual-2024" in ids
-    assert merge_filing_periods([us, foreign]) == []
+    merged_mixed = merge_filing_periods([us, foreign])
+    assert len(merged_mixed) == 1
+    assert merged_mixed[0]["id"] == "annual-2024"
+    assert merged_mixed[0]["label"] == "FY24"
+
+
+def test_merge_filing_periods_unions_10q_and_6k_by_fiscal_quarter():
+    us = [
+        {
+            "id": "interim-2025-Q3-10-Q",
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q3",
+            "form": "10-Q",
+            "label": "FY25 · Q3 · 10-Q",
+            "filing_date": "2025-08-01",
+            "period_end": "2025-06-28",
+        }
+    ]
+    foreign = [
+        {
+            "id": "interim-2025-Q3-6-K",
+            "kind": "interim",
+            "fiscal_year": 2025,
+            "fp": "Q3",
+            "form": "6-K",
+            "label": "FY25 · Q3 · 6-K",
+            "filing_date": "2025-08-15",
+            "period_end": "2025-06-30",
+        }
+    ]
+    merged = merge_filing_periods([us, foreign])
+    assert len(merged) == 1
+    assert merged[0]["id"] == "interim-2025-Q3"
+    assert merged[0]["label"] == "FY25 · Q3"
 
 
 def test_dedupe_period_options_collapses_duplicate_labels():
@@ -322,7 +394,8 @@ def test_merge_filing_periods_unions_by_fiscal_slot():
     ]
     merged = merge_filing_periods([aapl, msft])
     ids = {o["id"] for o in merged}
-    assert ids == {"interim-2025-Q3-10-Q"}
+    assert ids == {"interim-2025-Q3"}
+    assert merged[0]["label"] == "FY25 · Q3"
 
 
 def test_merge_filing_periods_intersection_drops_single_ticker_only():
@@ -472,7 +545,7 @@ async def test_fetch_submissions_merges_archives_when_cache_stale():
         patch("filing_store.save_submissions") as mock_save,
         patch.object(sec_client, "_rate_limited_get", new_callable=AsyncMock, return_value=mock_resp),
     ):
-        data = await sec_client.fetch_submissions("0000320193")
+        data = await sec_client.fetch_submissions("0000320193", merge_archives=True)
 
     assert data["filings"]["_archives_merged"] is True
     recent = data["filings"]["recent"]

@@ -473,6 +473,22 @@ See **[docs/GO_LIVE_CHECKLIST.md](docs/GO_LIVE_CHECKLIST.md)** for the full week
 - Set `ALLOW_DEV_TIER_TOGGLE=false` (or omit) in production
 - Optional: run `python backend/scripts/prewarm_cache.py` to warm filing cache
 
+### Empty disk cache (first load / fresh clone)
+
+The first compare load for each ticker downloads SEC submissions, companyfacts, and full filing HTML. That is much slower than repeat visits. After cloning or clearing `backend/.cache/filings`, pre-warm common tickers:
+
+```bash
+cd backend
+py -3 scripts/prewarm_cache.py
+# or: py -3 scripts/prewarm_cache.py --tickers AAPL NVDA TSM MSFT
+```
+
+Benchmark cold vs warm paths:
+
+```bash
+py -3 scripts/benchmark_load.py
+```
+
 ---
 
 ## License
