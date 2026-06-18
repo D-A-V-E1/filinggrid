@@ -14,7 +14,7 @@ export function getCompareColumnLayout(columnCount: number): CompareColumnLayout
     return { minWidth: 300, density: "comfortable", fixedColumns: false };
   }
   if (columnCount === 4) {
-    return { minWidth: 292, density: "comfortable", fixedColumns: false };
+    return { minWidth: 320, density: "compact", fixedColumns: true };
   }
   if (columnCount === 5) {
     return { minWidth: 320, density: "compact", fixedColumns: true };
