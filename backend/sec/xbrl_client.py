@@ -1689,13 +1689,6 @@ def _pick_observation_for_period(
         annual = _filter_annual(entries, period_filter.fiscal_year)
         if annual:
             return annual[0]
-        # FY 10-K / 20-F not filed yet — use latest interim quarter or 6-K.
-        quarterly = _filter_quarterly(entries, period_filter.fiscal_year)
-        if quarterly:
-            return quarterly[0]
-        loose = _filter_latest_interim_for_fy(entries, period_filter.fiscal_year)
-        if loose:
-            return loose[0]
         return None
 
     quarterly = _filter_quarterly(entries, period_filter.fiscal_year)

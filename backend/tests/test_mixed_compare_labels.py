@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 
 import pytest
@@ -53,7 +52,7 @@ async def _filing_form_for_ticker(ticker: str, period: str) -> str:
     return filing["form"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.integration
 async def test_domestic_filers_resolve_10k_and_10q():
     for ticker in DOMESTIC:
@@ -63,7 +62,7 @@ async def test_domestic_filers_resolve_10k_and_10q():
         assert DOMESTIC_INTERIM.match(interim), f"{ticker} interim: {interim}"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.integration
 async def test_foreign_filer_resolves_20f_and_6k():
     for ticker in FOREIGN:
@@ -73,7 +72,7 @@ async def test_foreign_filer_resolves_20f_and_6k():
         assert FOREIGN_INTERIM.match(interim), f"{ticker} interim: {interim}"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.integration
 async def test_mixed_compare_period_merge_and_labels():
     ticker_map = await fetch_ticker_map()
@@ -101,7 +100,7 @@ async def test_mixed_compare_period_merge_and_labels():
     assert "6-K" not in interim_opt["label"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.integration
 async def test_mixed_compare_parse_column_forms():
     for period, domestic_re, foreign_re in (

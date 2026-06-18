@@ -489,6 +489,19 @@ Benchmark cold vs warm paths:
 py -3 scripts/benchmark_load.py
 ```
 
+Auth and saved peer groups (API must be running on `:8000`):
+
+```bash
+# Dev-mode peer groups (in-memory)
+py -3 scripts/test_peer_groups_save.py
+
+# Signed-in Professional (paste JWT from browser session after magic-link sign-in)
+py -3 scripts/test_peer_groups_save.py --token YOUR_SUPABASE_ACCESS_TOKEN
+
+# Integration tests (JWT + PostgreSQL)
+.\.venv\Scripts\python.exe -m pytest tests/test_auth_peer_groups_integration.py -v
+```
+
 ---
 
 ## License

@@ -22,7 +22,7 @@ INTERIM_COMPARABLE_FORMS: tuple[str, ...] = ("10-Q", "10-Q/A", "6-K")
 COMPARABLE_FORM_TYPES: list[str] = list(ANNUAL_COMPARABLE_FORMS) + list(INTERIM_COMPARABLE_FORMS)
 
 _next_request_time = 0.0
-_request_lock = asyncio.Lock()
+_request_locks: dict[int, asyncio.Lock] = {}
 MIN_INTERVAL = 0.11  # ~9 req/sec to stay under SEC 10 req/sec limit
 
 _ticker_map_cache: dict[str, dict[str, Any]] | None = None
@@ -54,12 +54,22 @@ async def close_http_client() -> None:
     _http_client = None
 
 
+def _get_request_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    key = id(loop)
+    lock = _request_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _request_locks[key] = lock
+    return lock
+
+
 async def _rate_limited_get(client: httpx.AsyncClient, url: str, *, data_api: bool = False) -> httpx.Response:
     global _next_request_time
     headers = _data_headers() if data_api else None
 
     # Reserve the next SEC request slot while holding the scheduler lock.
-    async with _request_lock:
+    async with _get_request_lock():
         now = time.monotonic()
         send_at = _next_request_time if _next_request_time > now else now
         _next_request_time = send_at + MIN_INTERVAL

@@ -134,7 +134,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       ids.add(DEFAULT_ACTIVE_SECTION);
     }
     if (isPro) {
-      for (const id of GAAP_STATEMENT_SECTION_IDS) ids.add(id);
+      GAAP_STATEMENT_SECTION_IDS.forEach((id) => ids.add(id));
     }
     return ids;
   }, [data, isBootstrapMode, isPro]);
