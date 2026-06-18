@@ -406,7 +406,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-x-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden">
       <ApiHealthBanner healthy={apiHealthy} />
       <div className="relative z-30 flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
         <TickerSearchBar

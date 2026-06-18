@@ -147,11 +147,11 @@ alembic upgrade head
 ### Smoke test (production)
 
 - [ ] `GET https://api.yourdomain.com/health` → `{"status":"ok"}`
-- [ ] Free compare: 3 tickers, current year — no login
+- [ ] Free compare: 3 tickers, recent filing window — no login
 - [ ] 4th ticker → paywall
 - [ ] Sign in (corporate email) → checkout → real or live test payment
 - [ ] Webhook delivered (Stripe Dashboard → Events)
-- [ ] Professional features unlock (8 columns, historical year, peer groups)
+- [ ] Professional features unlock (8 columns, full archive, GAAP statements, peer groups)
 - [ ] Customer Portal opens from `/account`
 - [ ] Cancel subscription in portal → tier returns to free after `customer.subscription.deleted`
 

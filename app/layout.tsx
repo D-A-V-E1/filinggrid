@@ -39,9 +39,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${sourceSerif.variable} ${ibmPlexMono.variable}`}>
-      <body className="font-sans">
+      <body className="flex min-h-screen flex-col font-sans">
         <ChunkErrorRecovery />
-        <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between px-4">
             <Link href="/" className="flex items-center gap-2">
               <span className="font-mono text-lg font-bold tracking-tight text-slate-900">
@@ -56,14 +56,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <QueryStatusBanner />
           </Suspense>
         </header>
-        <main>{children}</main>
-        <footer className="border-t border-slate-200 bg-white py-8">
-          <div className="mx-auto max-w-screen-2xl px-4 text-center text-xs text-slate-400">
-            <p>FilingGrid is not affiliated with the U.S. Securities and Exchange Commission.</p>
-            <p className="mt-1">
-              SEC filings are public domain. Cached locally for performance — never stored in your account database.
+        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+        <footer className="shrink-0 border-t border-slate-200 bg-white py-3">
+          <div className="mx-auto max-w-screen-2xl px-4 text-center text-xs leading-snug text-slate-400">
+            <p>
+              FilingGrid is not affiliated with the U.S. Securities and Exchange Commission.
+              <span className="hidden sm:inline"> · </span>
+              <span className="mt-0.5 block sm:mt-0 sm:inline">
+                SEC filings are public domain. Cached locally for performance — never stored in your
+                account database.
+              </span>
             </p>
-            <nav className="mt-4 flex items-center justify-center gap-4 text-slate-500">
+            <nav className="mt-2 flex items-center justify-center gap-3 text-slate-500">
               <Link href="/privacy" className="hover:text-slate-700">
                 Privacy Policy
               </Link>

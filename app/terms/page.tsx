@@ -51,7 +51,7 @@ export default function TermsPage() {
         </p>
 
         <h2>4. Free and Professional tiers</h2>
-        <p>Feature limits (such as column count, historical year access, and saved peer groups) depend on your subscription tier. We may modify tier limits or features with notice, but will not reduce paid features during an active billing period without consent or a pro-rata remedy where required by law.</p>
+        <p>Feature limits (such as column count, filing period archive, full GAAP statement tables, and saved peer groups) depend on your subscription tier. We may modify tier limits or features with notice, but will not reduce paid features during an active billing period without consent or a pro-rata remedy where required by law.</p>
 
         <h2>5. Acceptable use</h2>
         <p>You agree not to:</p>

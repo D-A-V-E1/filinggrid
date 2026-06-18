@@ -7,16 +7,17 @@ Use this playbook to verify **Free** vs **Professional** behavior before Stripe 
 | Feature | Free | Professional |
 |---|---|---|
 | Max ticker columns | 3 | 8 |
-| Filing years | Current year only | All available (via `?year=`) |
+| Filing periods | Latest + last completed fiscal year | Full archive |
+| Headline XBRL metrics | Yes | Yes |
+| Full GAAP statement tables | No | Yes |
 | Login required | No (anonymous gets free limits) | Yes for billing & peer groups |
 | Saved peer groups | Blocked (402 + paywall UI) | Full CRUD at `/peer-groups` |
-| Historical parse/financials | Blocked at API (`check_parse_access`) | Allowed |
 | Billing | — | Stripe Checkout + Customer Portal |
 
 **Enforcement layers**
 
-- **Backend** (`backend/middleware.py`): `check_parse_access` on `/parse`, `/parse/stream`, `/filings/{ticker}/financials`, `/parse/section`; `check_professional_access` on `/peer-groups`.
-- **Frontend**: `YearPicker` blocks prior years; `PeerGroupsMenu` shows paywall; `CompareGrid` surfaces API 402 as `PaywallModal`.
+- **Backend** (`backend/middleware.py`): `check_parse_access` on parse/financials routes; `check_free_period_access` on period-scoped requests; `check_professional_access` on `/peer-groups` and GAAP statement endpoints.
+- **Frontend**: `FilingPeriodPicker` limits free-tier options; GAAP statement sections show upgrade UI on Free; `PeerGroupsMenu` shows paywall; `CompareGrid` surfaces API 402 as `PaywallModal`.
 - **Source of truth**: `organizations.subscription_tier` in PostgreSQL (updated by Stripe webhooks in production).
 
 ---
@@ -132,19 +133,21 @@ cd backend
 1. Ensure tier is **free** (Methods 2–4 or default for new orgs).
 2. Open `/compare/aapl-vs-msft-vs-nvda-vs-googl` (4 tickers).
 3. Expect **PaywallModal** — reason `column_limit`.
-4. On a 2-ticker compare, select a prior fiscal year in **Year picker**.
-5. Expect paywall — reason `historical_data`.
-6. Click **Saved groups** → paywall — reason `subscription_required`.
-7. `GET /auth/me` shows `tier: "free"`, `limits.max_columns: 3`.
+4. On a 2-ticker compare, **Filing period** picker shows the latest filing plus quarters and annual filings from the last completed fiscal year.
+5. Select a period **outside** that window (e.g. an annual filing from two or more years ago) — expect paywall — reason `historical_data`.
+6. Open a full GAAP statement section (Income, Balance Sheet, Cash Flow, or Equity) — expect locked panel with upgrade prompt.
+7. Click **Saved groups** → paywall — reason `subscription_required`.
+8. `GET /auth/me` shows `tier: "free"`, `limits.max_columns: 3`.
 
 ### Professional tier
 
 1. Enable Pro via any method above.
 2. Open `/compare/aapl-vs-msft-vs-nvda-vs-googl` — filings load (up to 8 columns).
-3. Select FY prior year — navigation works; data loads.
-4. **Saved groups** → save and reload a peer group.
-5. Header shows **Professional** badge on compare workspace.
-6. `GET /auth/me` shows `tier: "professional"`, `limits.max_columns: 8`.
+3. **Filing period** picker shows full archive; older periods load.
+4. Full GAAP statement tables load with line items.
+5. **Saved groups** → save and reload a peer group.
+6. Header shows **Professional** badge on compare workspace.
+7. `GET /auth/me` shows `tier: "professional"`, `limits.max_columns: 8`.
 
 ### Automated tests
 

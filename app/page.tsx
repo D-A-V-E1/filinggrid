@@ -5,7 +5,8 @@ import Link from "next/link";
 const FEATURES = [
   {
     title: "Side-by-side columns",
-    description: "Compare up to 8 peer filers simultaneously with synchronized section navigation.",
+    description:
+      "Compare up to 3 peers free (8 on Professional) with synchronized section navigation.",
   },
   {
     title: "Smart local caching",

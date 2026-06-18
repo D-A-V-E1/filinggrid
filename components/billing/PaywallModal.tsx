@@ -80,7 +80,7 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
     reason === "column_limit"
       ? "Compare more tickers"
       : reason === "historical_data"
-        ? "Access historical filings"
+        ? "Access full filing archive"
         : "Upgrade to Professional";
 
   return (
@@ -116,7 +116,10 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
             <span className="text-brand-600">✓</span> Up to 8 concurrent ticker columns
           </li>
           <li className="flex items-center gap-2">
-            <span className="text-brand-600">✓</span> Historical 10-K &amp; 10-Q filings
+            <span className="text-brand-600">✓</span> Full filing period archive
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-brand-600">✓</span> Full GAAP statement line items
           </li>
           <li className="flex items-center gap-2">
             <span className="text-brand-600">✓</span> Saved peer groups

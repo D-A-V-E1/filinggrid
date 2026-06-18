@@ -62,7 +62,7 @@ export default function FilingPeriodPicker({
         const detail = err.detail as { message?: string };
         onPaywall(
           "historical_data",
-          detail.message || "Historical filings require a Professional subscription."
+          detail.message || "Filings outside the free period window require a Professional subscription."
         );
       }
       setLoadError(err instanceof Error ? err.message : "Failed to load filing periods");

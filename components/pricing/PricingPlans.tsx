@@ -11,10 +11,11 @@ const PLANS = [
     name: "Free",
     price: "$0",
     period: "forever",
-    description: "For quick peer checks and current-year filings.",
+    description: "For quick peer checks with headline metrics and recent filings.",
     features: [
       "Up to 3 ticker columns",
-      "Current year 10-K / 10-Q only",
+      "Latest filing + last completed fiscal year (10-K / 10-Q / 20-F)",
+      "Headline XBRL financial metrics",
       "Synchronized section navigation",
       "No login required",
     ],
@@ -30,7 +31,8 @@ const PLANS = [
     description: "For analysts who need depth, history, and saved peer groups.",
     features: [
       "Up to 8 ticker columns",
-      "Historical filings (prior years)",
+      "Full filing period archive",
+      "Full GAAP statement line items",
       "Saved peer groups",
       "Stripe Customer Portal (self-serve billing)",
       "Corporate email required",
@@ -105,7 +107,7 @@ export default function PricingPlans() {
       <PaywallModal
         open={paywallOpen}
         reason="subscription_required"
-        message="Unlock up to 8 columns, historical filings, and saved peer groups."
+        message="Unlock up to 8 columns, full GAAP statements, complete filing history, and saved peer groups."
         onClose={() => setPaywallOpen(false)}
       />
     </>

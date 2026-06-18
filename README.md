@@ -352,12 +352,14 @@ Stripe Dashboard → Settings → Billing → Customer portal → Enable.
 | Feature | Free | Professional ($29/mo) |
 |---|---|---|
 | Ticker columns | 3 max | 8 max |
-| Filing years | Current year only | All available |
+| Filing periods | Latest + last completed fiscal year | Full archive |
+| Headline XBRL metrics | Yes | Yes |
+| Full GAAP statement tables | No | Yes |
 | Login required | No | Yes (corporate email) |
 | Saved peer groups | No | Yes |
 | Billing | — | Stripe Checkout + Portal |
 
-Paywall triggers automatically on the 4th ticker or a historical year request.
+Paywall triggers automatically on the 4th ticker, a filing period outside the free window, full GAAP statement access, or saved peer groups.
 
 **Local testing without Stripe:** see [docs/TIER_TESTING.md](docs/TIER_TESTING.md) for `ALLOW_DEV_TIER_TOGGLE`, `X-Dev-Tier`, `/dev/tier`, and the `set_org_tier.py` script.
 

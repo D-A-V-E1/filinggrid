@@ -116,7 +116,9 @@ export default function AccountPanel() {
             <dt className="text-slate-500">Compare limits</dt>
             <dd className="text-slate-700">
               {auth.limits.max_columns} columns
-              {auth.limits.historical ? ", historical filings" : ", current year only"}
+              {auth.limits.historical
+                ? ", full filing archive & GAAP statements"
+                : ", latest filing + last completed fiscal year"}
             </dd>
           </div>
         </dl>
@@ -130,7 +132,10 @@ export default function AccountPanel() {
           </p>
         ) : (
           <div className="mt-3 space-y-2 text-sm text-slate-600">
-            <p>Upgrade to Professional for 8 columns, historical filings, and saved peer groups.</p>
+            <p>
+              Upgrade to Professional for 8 columns, full GAAP statements, complete filing history,
+              and saved peer groups.
+            </p>
             <p className="text-xs text-slate-500">
               Checkout requires a <strong>work email</strong> (not Gmail, Yahoo, or other personal
               providers). This helps keep the product positioned for institutional analysts.

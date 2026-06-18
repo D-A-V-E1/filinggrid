@@ -52,7 +52,7 @@ Optional: add that folder to your user `PATH`, or create a WinGet shim link.
 1. Open [Stripe Dashboard → Products](https://dashboard.stripe.com/test/products).
 2. **+ Add product**
    - Name: `FilingGrid Professional`
-   - Description (optional): `Up to 8 columns, historical filings, saved peer groups`
+   - Description (optional): `Up to 8 columns, full GAAP statements, filing archive, saved peer groups`
 3. Under **Pricing**, add:
    - **Recurring** → **Monthly** → **$29.00 USD**
 4. Save and copy the **Price ID** (`price_...`).
@@ -166,7 +166,7 @@ Must match the browser origin users actually use (HTTPS in production). Also set
 6. After redirect, banner shows activation; tier becomes `professional` within a few seconds (webhook).
 7. Verify:
    - `GET /auth/me` → `tier: "professional"`
-   - 4+ ticker compare works; prior-year picker works
+   - 4+ ticker compare works; full filing period picker works
    - `/account` → **Manage billing** opens Customer Portal
 
 ### Useful Stripe CLI commands

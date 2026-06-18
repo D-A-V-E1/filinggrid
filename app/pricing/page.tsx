@@ -7,7 +7,7 @@ export default function PricingPage() {
       <div className="text-center">
         <h1 className="text-3xl font-semibold text-slate-900">Simple, transparent pricing</h1>
         <p className="mt-3 text-slate-600">
-          Free for quick comparisons. Professional unlocks when you need more columns or history.
+          Free for quick comparisons. Professional unlocks more columns, full statements, and complete filing history.
         </p>
       </div>
 

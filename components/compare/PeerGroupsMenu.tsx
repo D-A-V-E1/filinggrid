@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SignInModal from "@/components/auth/SignInModal";
 import {
@@ -21,6 +29,38 @@ interface PeerGroupsMenuProps {
   isSignedIn: boolean;
   authConfigured: boolean;
   onPaywall: (reason: string, message: string) => void;
+}
+
+const VIEWPORT_PADDING = 8;
+const MENU_GAP = 4;
+
+function computeMenuPosition(
+  trigger: DOMRect,
+  panel: { width: number; height: number }
+): CSSProperties {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  let left = trigger.right - panel.width;
+  left = Math.max(VIEWPORT_PADDING, left);
+  left = Math.min(left, viewportWidth - VIEWPORT_PADDING - panel.width);
+
+  const spaceBelow = viewportHeight - trigger.bottom - VIEWPORT_PADDING - MENU_GAP;
+  const spaceAbove = trigger.top - VIEWPORT_PADDING - MENU_GAP;
+  const preferBelow = spaceBelow >= panel.height || spaceBelow >= spaceAbove;
+
+  let top: number;
+  let maxHeight: number;
+  if (preferBelow) {
+    top = trigger.bottom + MENU_GAP;
+    maxHeight = spaceBelow;
+  } else {
+    maxHeight = spaceAbove;
+    const visibleHeight = Math.min(panel.height, maxHeight);
+    top = Math.max(VIEWPORT_PADDING, trigger.top - MENU_GAP - visibleHeight);
+  }
+
+  return { top, left, maxHeight };
 }
 
 export default function PeerGroupsMenu({
@@ -45,6 +85,9 @@ export default function PeerGroupsMenu({
   const [saveOpen, setSaveOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [signInOpen, setSignInOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const isPro = tier === "professional";
   const devProLocal = isDevTierToggleEnabled() && isPro;
@@ -88,6 +131,36 @@ export default function PeerGroupsMenu({
       void loadGroups();
     }
   }, [open, isPro, needsSignIn, loadGroups]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuStyle(null);
+      return;
+    }
+
+    function updatePosition() {
+      const trigger = triggerRef.current;
+      const panel = panelRef.current;
+      if (!trigger || !panel) return;
+
+      setMenuStyle(
+        computeMenuPosition(trigger.getBoundingClientRect(), {
+          width: panel.offsetWidth,
+          height: panel.offsetHeight,
+        })
+      );
+    }
+
+    updatePosition();
+
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, saveOpen, loading, groups.length, error]);
 
   function handleOpen() {
     if (!isPro) {
@@ -146,6 +219,7 @@ export default function PeerGroupsMenu({
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={handleOpen}
         className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -156,7 +230,13 @@ export default function PeerGroupsMenu({
       {open && isPro && !needsSignIn && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          <div
+            ref={panelRef}
+            className={`fixed z-50 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg ${
+              menuStyle ? "" : "invisible"
+            }`}
+            style={menuStyle ?? undefined}
+          >
             <div className="border-b border-slate-100 px-3 py-2">
               <button
                 type="button"
