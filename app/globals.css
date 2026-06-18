@@ -16,8 +16,27 @@
   .compare-columns-grid > .compare-column {
     height: 100%;
     min-height: 0;
-    min-width: 0;
     overflow: hidden;
+  }
+
+  .compare-columns-grid:not(.compare-columns-grid--fixed) > .compare-column {
+    min-width: 0;
+  }
+
+  .compare-columns-grid--fixed > .compare-column {
+    box-sizing: border-box;
+  }
+
+  .compare-column--compact .xbrl-metrics-scroll {
+    overflow-x: hidden;
+  }
+
+  .compare-column--compact:not(.compare-column--table-fit) .xbrl-metrics-scroll {
+    overflow-x: auto;
+  }
+
+  .compare-column--compact .filing-column-scroll {
+    overflow-x: hidden;
   }
 
   .compare-column--compact .column-header-bar {
@@ -43,14 +62,6 @@
 
   .compare-column--compact .compare-column-body {
     padding: 0.875rem;
-  }
-
-  .compare-column--compact .filing-column-scroll {
-    overflow-x: hidden;
-  }
-
-  .compare-column--compact .xbrl-metrics-scroll {
-    overflow-x: hidden;
   }
 
   .compare-column--compact .xbrl-metrics-table {

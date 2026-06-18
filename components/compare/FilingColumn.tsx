@@ -411,7 +411,8 @@ function FilingColumn({
   onPaywall,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
-  const tableFit = columnCount >= 5;
+  const isCompact = columnLayout?.density === "compact";
+  const tableFit = isCompact;
   const headlineMetricRows = tableFit ? FINANCIAL_STATEMENT_ROWS_DENSE : FINANCIAL_STATEMENT_ROWS;
   const displayForm = form ?? formFromPeriodId(period);
   const formLabel = displayForm ? displayFormLabel(displayForm) : null;
@@ -636,13 +637,16 @@ function FilingColumn({
     );
   }
 
-  const isCompact = columnLayout?.density === "compact";
+  const columnStyle = columnLayout?.fixedColumns
+    ? { minWidth: columnLayout.minWidth, maxWidth: columnLayout.minWidth }
+    : undefined;
 
   return (
     <div
       className={`compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-slate-50/50 last:border-r-0${
         isCompact ? " compare-column--compact" : ""
-      }`}
+      }${tableFit ? " compare-column--table-fit" : ""}`}
+      style={columnStyle}
     >
       <ColumnHeader
         ticker={ticker}
@@ -650,9 +654,14 @@ function FilingColumn({
         form={formLabel}
         filingDate={filingDate}
         fiscalYear={fiscalYear}
+        compact={isCompact}
       />
 
-      <div className="section-title-bar shrink-0 border-b border-slate-200 bg-white px-5 py-3">
+      <div
+        className={`section-title-bar shrink-0 border-b border-slate-200 bg-white ${
+          isCompact ? "px-3.5 py-2" : "px-5 py-3"
+        }`}
+      >
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wider text-brand-700">
           {displayLabel}
         </p>
@@ -662,7 +671,7 @@ function FilingColumn({
         ref={scrollRef}
         className="filing-column-scroll min-h-0 flex-1 overflow-y-scroll overscroll-y-contain"
       >
-        <div className="compare-column-body px-5 py-5">
+        <div className={`compare-column-body ${isCompact ? "px-3.5 py-3.5" : "px-5 py-5"}`}>
           {xbrlPanel}
 
           {activeSection === "financial-statements" && hasXbrlData && !isPro && (
@@ -789,15 +798,21 @@ function ColumnHeader({
   form,
   filingDate,
   fiscalYear,
+  compact = false,
 }: {
   ticker: string;
   companyName: string;
   form: string | null;
   filingDate: string | null;
   fiscalYear: number | null;
+  compact?: boolean;
 }) {
   return (
-    <header className="column-header-bar shrink-0 border-b border-slate-200 bg-white px-5 py-3">
+    <header
+      className={`column-header-bar shrink-0 border-b border-slate-200 bg-white ${
+        compact ? "px-3.5 py-2.5" : "px-5 py-3"
+      }`}
+    >
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-lg font-bold text-slate-900">{ticker}</span>
         {form && (

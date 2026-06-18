@@ -534,7 +534,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               </button>
               <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
                 <div
-                  className="compare-columns-grid grid h-full min-h-0"
+                  className={`compare-columns-grid grid h-full min-h-0${
+                    columnLayout.fixedColumns ? " compare-columns-grid--fixed" : ""
+                  }`}
                   style={{
                     gridTemplateColumns: compareGridTemplateColumns(tickers.length, columnLayout),
                     minWidth: `${tickers.length * columnLayout.minWidth}px`,
@@ -546,7 +548,12 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                       return (
                         <div
                           key={ticker}
-                          className="flex min-h-0 flex-col border-r border-slate-200 bg-slate-50"
+                          className="compare-column flex min-h-0 flex-col border-r border-slate-200 bg-slate-50"
+                          style={
+                            columnLayout.fixedColumns
+                              ? { minWidth: columnLayout.minWidth, maxWidth: columnLayout.minWidth }
+                              : undefined
+                          }
                         >
                           <div className="border-b border-slate-200 px-4 py-3">
                             <p className="font-mono text-sm font-semibold text-slate-900">{ticker}</p>
