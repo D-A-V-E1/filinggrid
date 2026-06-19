@@ -27,6 +27,7 @@ import re
 import time
 from collections.abc import AsyncIterator
 from html import unescape
+from pathlib import Path
 from typing import Any
 
 from sec.client import (
@@ -41,6 +42,35 @@ from sec.client import (
 
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 _companyfacts_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
+
+FOREIGN_FILING_FALLBACK_VERSION = 1
+_DEBUG_LOG_PATH = Path(__file__).resolve().parent.parent.parent / "debug-dee3fe.log"
+
+
+def _agent_debug_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, Any] | None = None,
+    *,
+    run_id: str = "fallback",
+) -> None:
+    # #region agent log
+    try:
+        payload = {
+            "sessionId": "dee3fe",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time.time() * 1000),
+        }
+        with _DEBUG_LOG_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload) + "\n")
+    except OSError:
+        pass
+    # #endregion
 
 # Metric key -> candidate us-gaap concept names (first match wins)
 METRIC_CONCEPTS: dict[str, list[str]] = {
@@ -2340,6 +2370,187 @@ def extract_note_disclosures(
     return notes
 
 
+def _statement_tables_from_metrics(
+    metrics_payload: dict[str, Any],
+    period_filter: Any | None,
+    form: str | None,
+) -> dict[str, Any]:
+    """Build minimal GAAP statement tables from filing-level headline metrics."""
+    summary_rows = metrics_payload.get("annual_summary") or []
+    if not summary_rows:
+        empty = {key: {"label": label, "rows": []} for key, _, label in STATEMENT_TABLE_DEFS}
+        return {"period": _period_meta_from_filter(period_filter, []), "statements": empty}
+
+    summary = summary_rows[0]
+    metrics_detail = metrics_payload.get("metrics") or {}
+    all_rows: list[dict[str, Any]] = []
+    statements: dict[str, Any] = {}
+    default_end = next(
+        (summary.get(f"{key}_end") for key in METRIC_CONCEPTS if summary.get(f"{key}_end")),
+        None,
+    )
+    fp = period_filter.fp if period_filter and period_filter.kind == "interim" else "FY"
+
+    for stmt_key, line_defs, label in STATEMENT_TABLE_DEFS:
+        rows: list[dict[str, Any]] = []
+        for defn in line_defs:
+            key = defn["key"]
+            value = summary.get(key)
+            if value is None:
+                continue
+            unit = (metrics_detail.get(key) or {}).get("unit") or "USD"
+            rows.append(
+                {
+                    "key": key,
+                    "label": defn.get("label", key),
+                    "concept": defn["concepts"][0],
+                    "unit": unit,
+                    "value": value,
+                    "fy": summary.get("fy"),
+                    "fp": fp,
+                    "end": summary.get(f"{key}_end") or default_end,
+                    "form": form,
+                }
+            )
+        statements[stmt_key] = {"label": label, "rows": rows}
+        all_rows.extend(rows)
+
+    return {
+        "period": _period_meta_from_filter(period_filter, all_rows),
+        "statements": statements,
+    }
+
+
+def _statements_have_rows(extracted: dict[str, Any]) -> bool:
+    statements = extracted.get("statements") or {}
+    return any((stmt.get("rows") or []) for stmt in statements.values())
+
+
+async def _apply_filing_level_financial_fallback(
+    cik: str,
+    fiscal_year: int | None,
+    period: str | None,
+    *,
+    pf: Any | None,
+    period_kind: str,
+    report_date: str | None,
+    extracted: dict[str, Any],
+) -> tuple[dict[str, Any], str, bytes | None, dict[str, Any] | None]:
+    """When companyfacts lags, parse 20-F / 6-K filing HTML or iXBRL for headline metrics."""
+    source = "sec_companyfacts"
+    filing_html: bytes | None = None
+    filing_meta: dict[str, Any] | None = None
+
+    needs_fallback = not _extracted_has_period_data(
+        extracted,
+        fiscal_year=fiscal_year,
+        report_date=report_date,
+        period_kind=period_kind,
+    )
+    _agent_debug_log(
+        "A",
+        "xbrl_client:_apply_filing_level_financial_fallback",
+        "evaluate fallback",
+        {
+            "cik": cik,
+            "fiscal_year": fiscal_year,
+            "period": period,
+            "period_kind": period_kind,
+            "needs_fallback": needs_fallback,
+        },
+    )
+    if not needs_fallback:
+        return extracted, source, filing_html, filing_meta
+
+    can_fallback = bool(report_date or (period_kind == "annual" and fiscal_year is not None))
+    if not can_fallback:
+        _agent_debug_log(
+            "C",
+            "xbrl_client:_apply_filing_level_financial_fallback",
+            "skipped — no report_date or fiscal year",
+            {"period_kind": period_kind},
+        )
+        return extracted, source, filing_html, filing_meta
+
+    filing_html, filing_meta = await _load_filing_html_for_period(
+        cik,
+        fiscal_year,
+        period,
+        prefer_ixbrl=True,
+    )
+    if not filing_html:
+        _agent_debug_log(
+            "B",
+            "xbrl_client:_apply_filing_level_financial_fallback",
+            "no filing HTML resolved",
+            {"filing_meta": filing_meta},
+        )
+        return extracted, source, filing_html, filing_meta
+
+    effective_report_date = report_date or (filing_meta or {}).get("report_date")
+    html_text = filing_html.decode("utf-8", errors="replace")
+    from sec.client import _html_has_ixbrl_facts
+
+    form_normalized = (filing_meta or {}).get("form", "").replace("/A", "").upper()
+
+    if _html_has_ixbrl_facts(filing_html):
+        ixbrl = extract_financial_metrics_from_ixbrl(
+            html_text,
+            fiscal_year=fiscal_year,
+            report_date=effective_report_date,
+            form=(filing_meta or {}).get("form"),
+            fp=pf.fp if pf else None,
+            period_kind=period_kind,
+        )
+        if ixbrl.get("annual_summary"):
+            _agent_debug_log(
+                "D",
+                "xbrl_client:_apply_filing_level_financial_fallback",
+                "iXBRL metrics extracted",
+                {"form": form_normalized, "rows": len(ixbrl["annual_summary"])},
+            )
+            return ixbrl, "sec_ixbrl_filing", filing_html, filing_meta
+        _agent_debug_log(
+            "D",
+            "xbrl_client:_apply_filing_level_financial_fallback",
+            "iXBRL present but no metrics",
+            {"form": form_normalized},
+        )
+
+    if form_normalized == "6-K":
+        report_html, report_meta = await _load_filing_html_for_period(
+            cik,
+            fiscal_year,
+            period,
+            prefer_report=True,
+        )
+        if report_html:
+            html_result = extract_financial_metrics_from_html_tables(
+                report_html.decode("utf-8", errors="replace"),
+                fiscal_year=fiscal_year,
+                report_date=effective_report_date,
+                form=(report_meta or filing_meta or {}).get("form"),
+                fp=pf.fp if pf else None,
+                period_kind=period_kind,
+            )
+            if html_result.get("annual_summary"):
+                _agent_debug_log(
+                    "E",
+                    "xbrl_client:_apply_filing_level_financial_fallback",
+                    "6-K HTML table metrics extracted",
+                    {"rows": len(html_result["annual_summary"])},
+                )
+                return html_result, "sec_html_filing", report_html, report_meta or filing_meta
+
+    _agent_debug_log(
+        "B",
+        "xbrl_client:_apply_filing_level_financial_fallback",
+        "fallback exhausted",
+        {"form": form_normalized},
+    )
+    return extracted, source, filing_html, filing_meta
+
+
 async def fetch_ticker_financial_statements(
     ticker: str,
     fiscal_year: int | None = None,
@@ -2348,10 +2559,42 @@ async def fetch_ticker_financial_statements(
     ticker_map: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Resolve ticker, load cached companyfacts, return full statement tables."""
+    from sec.filing_periods import parse_period_param, resolve_period_filter
+
     started = time.perf_counter()
     resolved = await resolve_ticker(ticker, ticker_map)
     facts, from_cache = await fetch_company_facts(resolved["cik"])
+    pf = parse_period_param(period)
+    period_kind = pf.kind if pf else "annual"
+    report_date = pf.report_date if pf and pf.kind == "interim" else None
+    period_filter = resolve_period_filter(fiscal_year, period)
+
     extracted = extract_statement_tables(facts, fiscal_year=fiscal_year, period=period)
+    source = "sec_companyfacts"
+
+    if not _statements_have_rows(extracted):
+        metrics_seed = extract_financial_metrics(
+            facts,
+            fiscal_year=fiscal_year,
+            report_date=report_date,
+        )
+        if pf and pf.kind == "interim" and not report_date:
+            filing_meta = await _resolve_filing_for_period(resolved["cik"], fiscal_year, period)
+            if filing_meta:
+                report_date = filing_meta.get("report_date")
+        fallback_metrics, source, _, filing_meta = await _apply_filing_level_financial_fallback(
+            resolved["cik"],
+            fiscal_year,
+            period,
+            pf=pf,
+            period_kind=period_kind,
+            report_date=report_date,
+            extracted=metrics_seed,
+        )
+        if fallback_metrics.get("annual_summary"):
+            form = (filing_meta or {}).get("form")
+            extracted = _statement_tables_from_metrics(fallback_metrics, period_filter, form)
+
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
 
     return {
@@ -2360,7 +2603,7 @@ async def fetch_ticker_financial_statements(
         "entity_name": facts.get("entityName") or resolved["company_name"],
         "fiscal_year_filter": fiscal_year,
         "period_filter": period,
-        "source": "sec_companyfacts",
+        "source": source,
         "from_cache": from_cache,
         "fetch_ms": elapsed_ms,
         **extracted,
@@ -2400,58 +2643,15 @@ async def fetch_ticker_financials(
         fiscal_year=fiscal_year,
         report_date=report_date,
     )
-    source = "sec_companyfacts"
-    filing_html: bytes | None = None
-
-    needs_ixbrl = not _extracted_has_period_data(
-        extracted,
-        fiscal_year=fiscal_year,
-        report_date=report_date,
+    extracted, source, filing_html, filing_meta = await _apply_filing_level_financial_fallback(
+        resolved["cik"],
+        fiscal_year,
+        period,
+        pf=pf,
         period_kind=period_kind,
+        report_date=report_date,
+        extracted=extracted,
     )
-    if needs_ixbrl and (report_date or (period_kind == "annual" and fiscal_year is not None)):
-        filing_html, filing_meta = await _load_filing_html_for_period(
-            resolved["cik"],
-            fiscal_year,
-            period,
-            prefer_ixbrl=True,
-        )
-        if filing_html:
-            effective_report_date = report_date or (filing_meta or {}).get("report_date")
-            html_text = filing_html.decode("utf-8", errors="replace")
-            from sec.client import _html_has_ixbrl_facts
-
-            if _html_has_ixbrl_facts(filing_html):
-                ixbrl = extract_financial_metrics_from_ixbrl(
-                    html_text,
-                    fiscal_year=fiscal_year,
-                    report_date=effective_report_date,
-                    form=(filing_meta or {}).get("form"),
-                    fp=pf.fp if pf else None,
-                    period_kind=period_kind,
-                )
-                if ixbrl.get("annual_summary"):
-                    extracted = ixbrl
-                    source = "sec_ixbrl_filing"
-            elif (filing_meta or {}).get("form", "").replace("/A", "").upper() == "6-K":
-                report_html, _ = await _load_filing_html_for_period(
-                    resolved["cik"],
-                    fiscal_year,
-                    period,
-                    prefer_report=True,
-                )
-                if report_html:
-                    html_result = extract_financial_metrics_from_html_tables(
-                        report_html.decode("utf-8", errors="replace"),
-                        fiscal_year=fiscal_year,
-                        report_date=effective_report_date,
-                        form=(filing_meta or {}).get("form"),
-                        fp=pf.fp if pf else None,
-                        period_kind=period_kind,
-                    )
-                    if html_result.get("annual_summary"):
-                        extracted = html_result
-                        source = "sec_html_filing"
 
     notes_xbrl: dict[str, Any] = {}
     if not headline_only:

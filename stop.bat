@@ -15,9 +15,7 @@ if not errorlevel 1 (
 )
 
 :: Kill processes listening on FilingGrid ports (8000 API, 3000/3001 web)
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8000" ^| findstr "LISTENING"') do (
-    taskkill /F /PID %%a >nul 2>&1
-)
+call "%ROOT%scripts\kill-api-port.bat"
 call "%ROOT%scripts\kill-web-ports.bat"
 
 echo [OK] Ports 3000, 3001, and 8000 cleared.

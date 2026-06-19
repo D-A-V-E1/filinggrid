@@ -156,7 +156,15 @@ async def filing_periods_endpoint(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "filinggrid-api"}
+    from sec.xbrl_client import FOREIGN_FILING_FALLBACK_VERSION
+
+    return {
+        "status": "ok",
+        "service": "filinggrid-api",
+        "features": {
+            "foreign_filing_fallback": FOREIGN_FILING_FALLBACK_VERSION,
+        },
+    }
 
 
 @app.get("/auth/me", response_model=AuthMeResponse)

@@ -124,9 +124,20 @@ echo.
 
 :: ---- Launch (use /D for paths with spaces) ---------------------------------
 echo [INFO] Opening API window  - http://localhost:8000
+call "%ROOT%scripts\kill-api-port.bat"
 start "FilingGrid API" /D "%ROOT%" cmd /k run-api.bat
 
 timeout /t 2 /nobreak >nul
+
+echo [INFO] Waiting for API (20-F/6-K fallback enabled)...
+"%VENV_PY%" "%ROOT%scripts\wait_api_ready.py"
+if errorlevel 1 (
+    echo [WARN] API health check failed. Compare may miss foreign issuer XBRL until API restarts.
+) else (
+    echo [OK]   API is ready.
+)
+
+timeout /t 1 /nobreak >nul
 
 echo [INFO] Opening Web window - http://localhost:3000
 call "%ROOT%scripts\kill-web-ports.bat"
