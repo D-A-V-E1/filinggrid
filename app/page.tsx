@@ -3,25 +3,39 @@ import Link from "next/link";
 
 const FEATURES = [
   {
-    title: "Side-by-side columns",
+    title: "Synchronized section navigation",
     description:
-      "Compare up to 3 peers free (8 on Professional) with synchronized section navigation.",
+      "Jump to Business, Risk Factors, MD&A, or footnotes — every column moves to the same disclosure at once.",
   },
   {
-    title: "Smart local caching",
+    title: "XBRL financials in context",
     description:
-      "Public SEC filings are cached on the server after first fetch so repeat views load faster — without re-downloading from EDGAR each time.",
+      "Headline revenue, income, and balance-sheet metrics load from SEC XBRL alongside the narrative. Professional adds full GAAP statements — Income, Balance Sheet, Cash Flow, and Equity.",
   },
   {
-    title: "Institutional typography",
-    description: "Serif filing body, mono tabular figures, compact density for data-heavy review.",
+    title: "Domestic and ADR filers together",
+    description:
+      "Compare 10-K and 10-Q issuers with 20-F and 6-K filers in one grid. Periods align by fiscal quarter, not just form type.",
   },
+  {
+    title: "Streamed from EDGAR, cached for speed",
+    description:
+      "Filings parse into standard sections as columns load. Repeat views hit the server cache instead of re-fetching from EDGAR.",
+  },
+];
+
+const PRO_HIGHLIGHTS = [
+  "Up to 8 ticker columns",
+  "Historical filing periods",
+  "Full GAAP statement tables",
+  "Saved peer groups",
 ];
 
 const POPULAR = [
   { slug: "aapl-vs-msft", label: "Apple vs Microsoft" },
   { slug: "nvda-vs-amd-vs-intc", label: "NVDA vs AMD vs Intel" },
   { slug: "jpm-vs-gs-vs-ms", label: "JPM vs Goldman vs Morgan Stanley" },
+  { slug: "aapl-vs-nvda-vs-tsm", label: "Apple vs NVDA vs TSMC" },
 ];
 
 export default function HomePage() {
@@ -31,17 +45,19 @@ export default function HomePage() {
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-screen-xl px-4 py-20 text-center">
           <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-600">
-            SEC Disclosure Workspace
+            SEC filing workspace
           </p>
           <h1 className="mx-auto max-w-2xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
-            Review multiple SEC filings
-            <span className="block text-slate-400">fast, side by side</span>
+            Compare peer disclosures
+            <span className="block text-slate-400">in one synchronized view</span>
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-600">
-            Stream 10-K and 10-Q disclosures from EDGAR into standard sections across
-            synchronized columns — jump between peers in one workspace without losing your
-            place, and revisit comparisons without re-downloading from EDGAR. Only account
-            and billing data are stored in our database.
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-slate-600">
+            FilingGrid pulls 10-K, 10-Q, 20-F, and 6-K filings from EDGAR, maps them to
+            comparable sections, and lines up XBRL financials — so you can review MD&amp;A,
+            risk factors, and footnotes side by side without juggling browser tabs.
+          </p>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-slate-500">
+            Start free with three tickers and current-year filings. No login required.
           </p>
           <div className="mx-auto mt-10">
             <TickerSearchBar />
@@ -51,7 +67,7 @@ export default function HomePage() {
 
       {/* Features */}
       <section className="mx-auto max-w-screen-xl px-4 py-16">
-        <div className="grid gap-8 sm:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2">
           {FEATURES.map((f) => (
             <div key={f.title} className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="text-sm font-semibold text-slate-900">{f.title}</h2>
@@ -61,12 +77,47 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Pro callout */}
+      <section className="border-y border-slate-200 bg-slate-50 py-12">
+        <div className="mx-auto max-w-screen-xl px-4 text-center">
+          <p className="text-xs font-semibold uppercase tracking-widest text-brand-600">
+            Professional
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+            Go deeper when the compare gets serious
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-600">
+            Unlock historical filing periods, detailed GAAP statement tables, and saved peer
+            groups — built for analysts who live in footnotes and financials.
+          </p>
+          <ul className="mx-auto mt-6 flex max-w-lg flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-700">
+            {PRO_HIGHLIGHTS.map((item) => (
+              <li key={item} className="flex items-center gap-1.5">
+                <span className="text-brand-600" aria-hidden="true">
+                  ✓
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/pricing"
+            className="mt-8 inline-flex items-center rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-800"
+          >
+            View pricing — $29/mo
+          </Link>
+        </div>
+      </section>
+
       {/* Popular comparisons */}
-      <section className="border-t border-slate-200 bg-slate-50 py-12">
+      <section className="py-12">
         <div className="mx-auto max-w-screen-xl px-4">
           <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
             Popular comparisons
           </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Jump in with a preset peer set, or search any tickers above.
+          </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {POPULAR.map((p) => (
               <Link

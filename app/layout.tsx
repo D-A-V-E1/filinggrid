@@ -32,8 +32,17 @@ export const metadata: Metadata = {
     template: "%s | FilingGrid",
   },
   description:
-    "Side-by-side SEC 10-K and 10-Q disclosure comparison for institutional analysts. Public filings cached for fast repeat access. Compare footnotes, MD&A, and financial notes across peer companies.",
-  keywords: ["SEC filing", "10-K comparison", "footnote analysis", "MD&A", "peer comparison"],
+    "Compare SEC 10-K, 10-Q, 20-F, and 6-K filings side by side with synchronized sections and XBRL financials. Free for current-year peer review; Professional adds history, full GAAP statements, and saved peer groups.",
+  keywords: [
+    "SEC filing",
+    "10-K comparison",
+    "XBRL financials",
+    "footnote analysis",
+    "MD&A",
+    "peer comparison",
+    "20-F",
+    "ADR filers",
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
