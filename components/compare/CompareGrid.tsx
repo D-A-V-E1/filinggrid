@@ -77,6 +77,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>({});
   const loadIdRef = useRef(0);
   const upgradedFullFinancialsRef = useRef(new Set<string>());
+  const notesRetriedAfterParseRef = useRef(new Set<string>());
+  const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
 
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
 
@@ -149,6 +151,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       const upper = ticker.toUpperCase();
       if (upgradedFullFinancialsRef.current.has(upper)) return;
       upgradedFullFinancialsRef.current.add(upper);
+      setUpgradingNotesTickers((prev) => new Set(prev).add(upper));
       void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
         .then((full) => {
           setFinancialsByTicker((prev) => ({ ...prev, [upper]: full }));
@@ -163,6 +166,13 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           upgradedFullFinancialsRef.current.delete(upper);
           const message = err instanceof Error ? err.message : "Failed to load financials";
           setFinancialsErrors((prev) => ({ ...prev, [upper]: message }));
+        })
+        .finally(() => {
+          setUpgradingNotesTickers((prev) => {
+            const next = new Set(prev);
+            next.delete(upper);
+            return next;
+          });
         });
     },
     [resolvedFiscalYear, period]
@@ -174,14 +184,42 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       const upper = ticker.toUpperCase();
       const fin = financialsByTicker[upper];
       if (!fin) continue;
-      const hasNotes = fin.notes_xbrl && Object.keys(fin.notes_xbrl).length > 0;
+      const notes = fin.notes_xbrl;
+      const hasNotes = notes && Object.keys(notes).length > 0;
       if (!hasNotes) upgradeFullFinancials(upper);
     }
   }, [activeSection, tickers, financialsByTicker, upgradeFullFinancials]);
 
+  useEffect(() => {
+    if (loadingSections || !activeSection?.startsWith("note-")) return;
+    for (const ticker of tickers) {
+      const upper = ticker.toUpperCase();
+      if (notesRetriedAfterParseRef.current.has(upper)) continue;
+      const fin = financialsByTicker[upper];
+      const notes = fin?.notes_xbrl;
+      if (!notes || Object.keys(notes).length === 0) continue;
+      const disclosureCount = Object.values(notes).reduce(
+        (count, note) => count + (note.disclosures?.length ?? 0),
+        0
+      );
+      if (disclosureCount > 0) continue;
+      notesRetriedAfterParseRef.current.add(upper);
+      upgradedFullFinancialsRef.current.delete(upper);
+      upgradeFullFinancials(upper);
+    }
+  }, [
+    loadingSections,
+    activeSection,
+    tickers,
+    financialsByTicker,
+    upgradeFullFinancials,
+  ]);
+
   const loadFilings = useCallback(() => {
     const loadId = ++loadIdRef.current;
     upgradedFullFinancialsRef.current = new Set();
+    notesRetriedAfterParseRef.current = new Set();
+    setUpgradingNotesTickers(new Set());
     setActiveSection(DEFAULT_ACTIVE_SECTION);
     setError("");
     setSectionsParseError("");
@@ -582,6 +620,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         error={col.error}
                         financialsXbrl={financialsByTicker[col.ticker] ?? null}
                         financialsPending={loadingFinancials && !(col.ticker in financialsByTicker)}
+                        notesPending={upgradingNotesTickers.has(col.ticker)}
                         financialsError={financialsErrors[col.ticker] ?? null}
                         sectionsPending={loadingSections && col.sections.length === 0}
                         columnCount={tickers.length}

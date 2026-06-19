@@ -29,9 +29,12 @@ export default function QueryStatusBanner() {
   const router = useRouter();
   const { refresh } = useAuth();
   const [checkoutPending, setCheckoutPending] = useState(false);
+  const [dismissedBannerKey, setDismissedBannerKey] = useState<string | null>(null);
+  const queryString = searchParams.toString();
 
   useEffect(() => {
-    if (searchParams.get("checkout") !== "success") {
+    const params = new URLSearchParams(queryString);
+    if (params.get("checkout") !== "success") {
       setCheckoutPending(false);
       return;
     }
@@ -61,10 +64,15 @@ export default function QueryStatusBanner() {
     return () => {
       cancelled = true;
     };
-  }, [searchParams, refresh]);
+  }, [queryString, refresh]);
+
+  useEffect(() => {
+    setDismissedBannerKey(null);
+  }, [queryString]);
 
   const banner = useMemo((): BannerConfig | null => {
-    if (searchParams.get("auth") === "error") {
+    const params = new URLSearchParams(queryString);
+    if (params.get("auth") === "error") {
       return {
         variant: "error",
         message: "Sign-in failed. Check your link or try again.",
@@ -72,7 +80,7 @@ export default function QueryStatusBanner() {
         paramValue: "error",
       };
     }
-    if (searchParams.get("auth") === "success") {
+    if (params.get("auth") === "success") {
       return {
         variant: "success",
         message: "Signed in successfully.",
@@ -80,7 +88,7 @@ export default function QueryStatusBanner() {
         paramValue: "success",
       };
     }
-    if (searchParams.get("checkout") === "success") {
+    if (params.get("checkout") === "success") {
       return {
         variant: "success",
         message: checkoutPending
@@ -94,7 +102,7 @@ export default function QueryStatusBanner() {
         }),
       };
     }
-    if (searchParams.get("checkout") === "cancelled") {
+    if (params.get("checkout") === "cancelled") {
       return {
         variant: "info",
         message: "Checkout was cancelled. You can upgrade anytime from the compare workspace.",
@@ -103,17 +111,20 @@ export default function QueryStatusBanner() {
       };
     }
     return null;
-  }, [searchParams, checkoutPending]);
+  }, [queryString, checkoutPending]);
+
+  const bannerKey = banner ? `${banner.paramKey}=${banner.paramValue}` : null;
 
   const dismiss = useCallback(() => {
     if (!banner) return;
-    const params = new URLSearchParams(searchParams.toString());
+    setDismissedBannerKey(`${banner.paramKey}=${banner.paramValue}`);
+    const params = new URLSearchParams(queryString);
     params.delete(banner.paramKey);
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname);
-  }, [banner, pathname, router, searchParams]);
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [banner, pathname, queryString, router]);
 
-  if (!banner) return null;
+  if (!banner || dismissedBannerKey === bannerKey) return null;
 
   return (
     <div

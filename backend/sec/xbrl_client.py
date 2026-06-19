@@ -30,6 +30,8 @@ from html import unescape
 from typing import Any
 
 from sec.client import (
+    fetch_filing_html,
+    fetch_submissions,
     fetch_ticker_map,
     find_filing,
     get_http_client,
@@ -1312,6 +1314,19 @@ def _load_cached_filing_html(cik: str, fiscal_year: int | None) -> bytes | None:
     return load_filing_html(cik, filing["accession_no_dash"])
 
 
+async def _load_filing_html_for_notes(cik: str, fiscal_year: int | None) -> bytes | None:
+    """Load filing HTML for footnote iXBRL extraction; fetch from SEC when not cached."""
+    from filing_store import load_submissions
+
+    submissions = load_submissions(cik)
+    if not submissions:
+        submissions = await fetch_submissions(cik, merge_archives=False)
+    filing = find_filing(submissions, fiscal_year=fiscal_year)
+    if not filing:
+        return None
+    return await fetch_filing_html(cik, filing)
+
+
 async def fetch_company_facts(cik: str) -> tuple[dict[str, Any], bool]:
     """Fetch raw companyfacts JSON; returns (data, from_cache)."""
     from filing_store import load_company_facts, save_company_facts
@@ -1970,7 +1985,7 @@ async def fetch_ticker_financials(
     )
     notes_xbrl: dict[str, Any] = {}
     if not headline_only:
-        filing_html = _load_cached_filing_html(resolved["cik"], fiscal_year)
+        filing_html = await _load_filing_html_for_notes(resolved["cik"], fiscal_year)
         notes_xbrl = extract_note_disclosures(
             facts,
             filing_html,

@@ -7,7 +7,7 @@ import { isSupabaseConfigured } from "@/lib/auth-config";
 import { isCorporateEmail } from "@/lib/utils";
 import { waitForBackendAuth } from "@/hooks/useAuth";
 
-export type MagicLinkStep = "email" | "sent" | "verifying" | "done";
+export type MagicLinkStep = "email" | "sent" | "verifying" | "verify_failed" | "done";
 
 interface MagicLinkFormProps {
   returnPath: string;
@@ -52,7 +52,7 @@ export default function MagicLinkForm({
           setError(
             "Signed in, but the API could not verify your session. Is the backend and database running?"
           );
-          setStep("sent");
+          setStep("verify_failed");
         }
       }
     });
@@ -115,6 +115,29 @@ export default function MagicLinkForm({
     );
   }
 
+  if (step === "verify_failed") {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-medium">Sign-in needs a moment</p>
+          <p className="mt-1">{error}</p>
+        </div>
+        <p className="text-xs text-slate-500">
+          <button
+            type="button"
+            className="text-brand-700 underline"
+            onClick={() => {
+              setError("");
+              setStep("email");
+            }}
+          >
+            Try again
+          </button>
+        </p>
+      </div>
+    );
+  }
+
   if (step === "sent") {
     return (
       <div className="space-y-3">
@@ -130,7 +153,10 @@ export default function MagicLinkForm({
           <button
             type="button"
             className="text-brand-700 underline"
-            onClick={() => setStep("email")}
+            onClick={() => {
+              setError("");
+              setStep("email");
+            }}
           >
             try again
           </button>

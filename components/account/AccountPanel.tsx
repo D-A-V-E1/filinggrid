@@ -21,31 +21,44 @@ export default function AccountPanel() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [showWelcome, setShowWelcome] = useState(false);
-
-  const welcomeTriggered =
-    searchParams.get("welcome") === "1" ||
-    searchParams.get("auth") === "success" ||
-    searchParams.get("checkout") === "success";
+  const queryString = searchParams.toString();
 
   useEffect(() => {
-    if (!isSignedIn || !welcomeTriggered) {
+    if (!isSignedIn) {
       setShowWelcome(false);
       return;
     }
-    const dismissed = sessionStorage.getItem(WELCOME_DISMISSED_KEY) === "1";
-    setShowWelcome(!dismissed);
-  }, [isSignedIn, welcomeTriggered]);
+    const params = new URLSearchParams(queryString);
+    const triggered =
+      params.get("welcome") === "1" ||
+      params.get("auth") === "success" ||
+      params.get("checkout") === "success";
+    if (!triggered) {
+      setShowWelcome(false);
+      return;
+    }
+    try {
+      const dismissed = sessionStorage.getItem(WELCOME_DISMISSED_KEY) === "1";
+      setShowWelcome(!dismissed);
+    } catch {
+      setShowWelcome(true);
+    }
+  }, [isSignedIn, queryString]);
 
   const dismissWelcome = useCallback(() => {
-    sessionStorage.setItem(WELCOME_DISMISSED_KEY, "1");
+    try {
+      sessionStorage.setItem(WELCOME_DISMISSED_KEY, "1");
+    } catch {
+      /* sessionStorage unavailable */
+    }
     setShowWelcome(false);
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(queryString);
     params.delete("welcome");
     params.delete("auth");
     params.delete("checkout");
     const query = params.toString();
-    router.replace(query ? `/account?${query}` : "/account");
-  }, [router, searchParams]);
+    router.replace(query ? `/account?${query}` : "/account", { scroll: false });
+  }, [router, queryString]);
 
   async function handleSignOut() {
     setActionLoading(true);
