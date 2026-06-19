@@ -31,6 +31,7 @@ if /i "%~1"=="api" (
 
 if /i "%~1"=="web" (
     cd /d "%ROOT%"
+    call "%ROOT%scripts\kill-web-ports.bat"
     call "%NPM%" run dev
     goto :eof
 )

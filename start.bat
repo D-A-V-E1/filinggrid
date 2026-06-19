@@ -100,15 +100,12 @@ if not exist "%VENV_PY%" (
     )
 )
 
-echo [INFO] Installing Python packages...
-"%VENV_PIP%" install --upgrade pip setuptools wheel -q
-"%VENV_PIP%" install "greenlet==3.1.1" --only-binary=:all: -q
-"%VENV_PIP%" install -r "%ROOT%backend\requirements.txt"
+echo [INFO] Checking Python packages...
+"%VENV_PY%" "%ROOT%scripts\ensure_backend_deps.py"
 if errorlevel 1 (
-    echo [ERROR] pip install failed.
+    echo [ERROR] Backend dependency install failed.
     goto :fail
 )
-echo [OK]   Backend ready.
 echo.
 
 :: ---- npm packages ----------------------------------------------------------
@@ -132,22 +129,15 @@ start "FilingGrid API" /D "%ROOT%" cmd /k run-api.bat
 timeout /t 2 /nobreak >nul
 
 echo [INFO] Opening Web window - http://localhost:3000
+call "%ROOT%scripts\kill-web-ports.bat"
 start "FilingGrid Web" /D "%ROOT%" cmd /k run-web.bat
 
-timeout /t 4 /nobreak >nul
-
-echo [INFO] Waiting for web server on port 3000...
-set "READY=0"
-for /L %%i in (1,1,45) do (
-    netstat -an | findstr ":3000" | findstr "LISTENING" >nul 2>&1
-    if not errorlevel 1 set "READY=1" & goto :servers_ready
-    timeout /t 2 /nobreak >nul
-)
-:servers_ready
-if "!READY!"=="0" (
-    echo [WARN] Port 3000 not ready yet. Check the FilingGrid Web window for errors.
+echo [INFO] Waiting for web server (HTTP ready on port 3000)...
+"%VENV_PY%" "%ROOT%scripts\wait_web_ready.py"
+if errorlevel 1 (
+    echo [WARN] Homepage not ready yet. Check the FilingGrid Web window for errors.
 ) else (
-    echo [OK]   Web server is listening.
+    echo [OK]   Web server is ready.
 )
 
 echo.
