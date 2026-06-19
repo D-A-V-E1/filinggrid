@@ -86,6 +86,26 @@ def save_filing_html(cik: str, accession: str, html_bytes: bytes) -> None:
     path.write_bytes(gzip.compress(html_bytes, compresslevel=6))
 
 
+def load_filing_ixbrl_html(cik: str, accession: str) -> bytes | None:
+    if not settings.filing_cache_enabled:
+        return None
+    path = _cache_root() / "html" / f"{int(cik)}_{accession}_ixbrl.html.gz"
+    if not path.exists():
+        return None
+    try:
+        return gzip.decompress(path.read_bytes())
+    except OSError:
+        return None
+
+
+def save_filing_ixbrl_html(cik: str, accession: str, html_bytes: bytes) -> None:
+    if not settings.filing_cache_enabled:
+        return
+    path = _cache_root() / "html" / f"{int(cik)}_{accession}_ixbrl.html.gz"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(gzip.compress(html_bytes, compresslevel=6))
+
+
 def load_submissions(cik: str) -> dict[str, Any] | None:
     if not settings.filing_cache_enabled:
         return None

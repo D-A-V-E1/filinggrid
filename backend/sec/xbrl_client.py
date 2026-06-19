@@ -1301,6 +1301,358 @@ def _extract_disclosures_from_html(
     return disclosures
 
 
+_IX_CONTEXT_RE = re.compile(
+    r'<xbrli:context\b[^>]*\bid="([^"]+)"[^>]*>(.*?)</xbrli:context>',
+    re.I | re.S,
+)
+_IX_UNIT_RE = re.compile(
+    r'<xbrli:unit\b[^>]*\bid="([^"]+)"[^>]*>(.*?)</xbrli:unit>',
+    re.I | re.S,
+)
+_IX_MEASURE_RE = re.compile(r"<xbrli:measure>([^<]+)</xbrli:measure>", re.I)
+_IX_PERIOD_RE = re.compile(r"<xbrli:period>(.*?)</xbrli:period>", re.I | re.S)
+_IX_START_RE = re.compile(r"<xbrli:startDate>([^<]+)</xbrli:startDate>", re.I)
+_IX_END_RE = re.compile(r"<xbrli:endDate>([^<]+)</xbrli:endDate>", re.I)
+_IX_INSTANT_RE = re.compile(r"<xbrli:instant>([^<]+)</xbrli:instant>", re.I)
+_IX_NONFRACTION_RE = re.compile(
+    r"<ix:nonFraction\b([^>]*)>([^<]*)</ix:nonFraction>",
+    re.I,
+)
+_IX_ATTR = re.compile(r'\b([a-zA-Z_:][\w:.-]*)="([^"]*)"')
+
+# Balance-sheet / point-in-time tags use instant contexts; P&L lines use duration.
+_IX_INSTANT_METRIC_KEYS: frozenset[str] = frozenset(
+    {"total_assets", "total_liabilities", "stockholders_equity", "cash"}
+)
+_IX_UNIT_RANK: dict[str, int] = {
+    "USD": 0,
+    "EUR": 1,
+    "GBP": 2,
+    "TWD": 3,
+    "CNY": 4,
+    "JPY": 5,
+}
+
+
+def _parse_ixbrl_contexts(html: str) -> dict[str, dict[str, Any]]:
+    contexts: dict[str, dict[str, Any]] = {}
+    for cid, body in _IX_CONTEXT_RE.findall(html):
+        period_m = _IX_PERIOD_RE.search(body)
+        if not period_m:
+            continue
+        pbody = period_m.group(1)
+        start_m = _IX_START_RE.search(pbody)
+        end_m = _IX_END_RE.search(pbody)
+        instant_m = _IX_INSTANT_RE.search(pbody)
+        contexts[cid] = {
+            "start": start_m.group(1) if start_m else None,
+            "end": (end_m or instant_m).group(1) if (end_m or instant_m) else None,
+            "instant": instant_m is not None,
+            "segmented": bool(re.search(r"<xbrli:segment\b", body, re.I)),
+        }
+    return contexts
+
+
+def _parse_ixbrl_units(html: str) -> dict[str, str]:
+    units: dict[str, str] = {}
+    for uid, body in _IX_UNIT_RE.findall(html):
+        measure_m = _IX_MEASURE_RE.search(body)
+        if not measure_m:
+            continue
+        measure = measure_m.group(1).strip()
+        if ":" in measure:
+            measure = measure.rsplit(":", 1)[-1]
+        units[uid.lower()] = measure.upper()
+    return units
+
+
+def _parse_ixbrl_attrs(tag_attrs: str) -> dict[str, str]:
+    return {k.lower(): v for k, v in _IX_ATTR.findall(tag_attrs)}
+
+
+def _scale_ixbrl_raw_value(raw: str, scale: str | None) -> float | None:
+    text = raw.replace(",", "").replace("\xa0", " ").strip()
+    if not text or text in {"—", "-", "–"}:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    if scale:
+        try:
+            value *= 10 ** int(scale)
+        except ValueError:
+            pass
+    return value
+
+
+def _unit_rank(unit: str | None) -> int:
+    if not unit:
+        return 99
+    return _IX_UNIT_RANK.get(unit.upper(), 50)
+
+
+def _context_matches_period(
+    ctx: dict[str, Any],
+    *,
+    period_end: str,
+    duration: bool,
+) -> bool:
+    if ctx.get("end") != period_end:
+        return False
+    if duration:
+        return not ctx.get("instant") and bool(ctx.get("start"))
+    return bool(ctx.get("instant"))
+
+
+def _fp_label_for_ixbrl(
+    *,
+    period_kind: str,
+    fp: str | None,
+    period_end: str,
+) -> str:
+    if period_kind == "interim":
+        if fp in ("Q1", "Q2", "Q3", "Q4"):
+            return fp
+        from sec.filing_periods import _quarter_from_report_date
+
+        quarter = _quarter_from_report_date(period_end)
+        if quarter is not None:
+            return f"Q{quarter}"
+        return "Q"
+    return "FY"
+
+
+def _pick_ixbrl_observation(
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not candidates:
+        return None
+    ranked = sorted(
+        candidates,
+        key=lambda c: (
+            1 if c.get("segmented") else 0,
+            _unit_rank(c.get("unit")),
+            -abs(c.get("value") or 0),
+        ),
+    )
+    return ranked[0]
+
+
+def extract_financial_metrics_from_ixbrl(
+    html: str,
+    *,
+    fiscal_year: int | None = None,
+    report_date: str | None = None,
+    form: str | None = None,
+    fp: str | None = None,
+    period_kind: str = "annual",
+) -> dict[str, Any]:
+    """Extract headline metrics from inline XBRL when companyfacts lags a new filing."""
+    period_end = report_date
+    if not period_end and period_kind == "annual" and fiscal_year is not None:
+        period_end = f"{fiscal_year}-12-31"
+
+    contexts = _parse_ixbrl_contexts(html)
+    units = _parse_ixbrl_units(html)
+    if not contexts or not period_end:
+        return {"metrics": {}, "annual_summary": []}
+
+    period_fp = _fp_label_for_ixbrl(
+        period_kind=period_kind,
+        fp=fp,
+        period_end=period_end,
+    )
+    metric_defs = _metric_defs_from_concepts(METRIC_CONCEPTS, METRIC_LABELS)
+    metrics: dict[str, Any] = {}
+    fy = fiscal_year or int(period_end[:4])
+
+    for defn in metric_defs:
+        key = defn["key"]
+        duration = key not in _IX_INSTANT_METRIC_KEYS
+        matches: list[dict[str, Any]] = []
+
+        for tag_attrs, raw in _IX_NONFRACTION_RE.findall(html):
+            attrs = _parse_ixbrl_attrs(tag_attrs)
+            name = attrs.get("name", "")
+            concept = name.rsplit(":", 1)[-1]
+            if concept not in defn["concepts"]:
+                continue
+            ctx_ref = attrs.get("contextref")
+            ctx = contexts.get(ctx_ref or "")
+            if not ctx or not _context_matches_period(ctx, period_end=period_end, duration=duration):
+                continue
+            value = _scale_ixbrl_raw_value(raw, attrs.get("scale"))
+            if value is None:
+                continue
+            unit_ref = (attrs.get("unitref") or "").lower()
+            unit = units.get(unit_ref, unit_ref.upper() if unit_ref else "")
+            matches.append(
+                {
+                    "value": value,
+                    "unit": unit,
+                    "end": ctx.get("end"),
+                    "fy": fy,
+                    "fp": period_fp,
+                    "form": form,
+                    "segmented": ctx.get("segmented"),
+                }
+            )
+
+        picked = _pick_ixbrl_observation(matches)
+        if not picked:
+            continue
+        metrics[key] = {
+            "label": defn.get("label", key),
+            "concept": defn["concepts"][0],
+            "unit": picked["unit"],
+            "annual": [
+                {
+                    "fy": fy,
+                    "fp": period_fp,
+                    "end": picked.get("end"),
+                    "value": picked["value"],
+                    "form": form,
+                }
+            ],
+            "quarterly": [],
+        }
+
+    return {"metrics": metrics, "annual_summary": _build_annual_summary(metrics)}
+
+
+_HTML_NUMBER_RE = re.compile(r">([\d,]+\.?\d*)<")
+
+_HTML_METRIC_LABELS: dict[str, list[str]] = {
+    "revenue": ["NET REVENUE", "Net revenue", "Total revenue", "Revenue"],
+    "net_income": ["NET INCOME", "Net income", "Profit for the period", "Net profit"],
+    "total_assets": ["TOTAL ASSETS", "Total assets"],
+    "total_liabilities": ["TOTAL LIABILITIES", "Total liabilities"],
+    "stockholders_equity": ["TOTAL EQUITY", "Stockholders' equity", "Total equity", "Shareholders' equity"],
+    "operating_income": ["OPERATING INCOME", "Income from operations", "Operating income"],
+    "cash": ["CASH AND CASH EQUIVALENTS", "Cash and cash equivalents"],
+}
+
+
+def _monetary_values_after_label(html: str, labels: list[str], *, window: int = 8000) -> list[float]:
+    for label in labels:
+        idx = html.upper().find(label.upper())
+        if idx < 0:
+            continue
+        chunk = html[idx : idx + window]
+        values: list[float] = []
+        for match in _HTML_NUMBER_RE.finditer(chunk):
+            try:
+                val = float(match.group(1).replace(",", ""))
+            except ValueError:
+                continue
+            if val < 1000:
+                continue
+            values.append(val)
+        if values:
+            return values
+    return []
+
+
+def _normalize_reported_amount(raw: float) -> float:
+    if raw >= 1e9:
+        return raw
+    if raw >= 1e5:
+        return raw * 1000.0
+    if raw >= 1e3:
+        return raw * 1_000_000.0
+    return raw
+
+
+def _pick_interim_html_amount(values: list[float]) -> float | None:
+    if not values:
+        return None
+    if len(values) >= 3:
+        return _normalize_reported_amount(values[2])
+    return _normalize_reported_amount(values[0])
+
+
+def extract_financial_metrics_from_html_tables(
+    html: str,
+    *,
+    fiscal_year: int | None = None,
+    report_date: str | None = None,
+    form: str | None = None,
+    fp: str | None = None,
+    period_kind: str = "interim",
+) -> dict[str, Any]:
+    """Best-effort headline metrics from 6-K consolidated HTML when iXBRL tags are absent."""
+    if not report_date and period_kind == "interim":
+        return {"metrics": {}, "annual_summary": []}
+
+    period_end = report_date or (f"{fiscal_year}-12-31" if fiscal_year else None)
+    if not period_end:
+        return {"metrics": {}, "annual_summary": []}
+
+    period_fp = _fp_label_for_ixbrl(
+        period_kind=period_kind,
+        fp=fp,
+        period_end=period_end,
+    )
+    fy = fiscal_year or int(period_end[:4])
+    metrics: dict[str, Any] = {}
+
+    for key, labels in _HTML_METRIC_LABELS.items():
+        values = _monetary_values_after_label(html, labels)
+        amount = _pick_interim_html_amount(values)
+        if amount is None:
+            continue
+        metrics[key] = {
+            "label": METRIC_LABELS.get(key, key.replace("_", " ").title()),
+            "concept": labels[0],
+            "unit": "TWD" if amount >= 1e11 else "USD",
+            "annual": [
+                {
+                    "fy": fy,
+                    "fp": period_fp,
+                    "end": period_end,
+                    "value": amount,
+                    "form": form,
+                }
+            ],
+            "quarterly": [],
+        }
+
+    return {"metrics": metrics, "annual_summary": _build_annual_summary(metrics)}
+
+
+def _extracted_has_period_data(
+    extracted: dict[str, Any],
+    *,
+    fiscal_year: int | None,
+    report_date: str | None,
+    period_kind: str = "annual",
+) -> bool:
+    rows = extracted.get("annual_summary") or []
+    if not rows:
+        return False
+    if report_date:
+        for row in rows:
+            for key, value in row.items():
+                if key.endswith("_end") and value == report_date:
+                    return True
+        return False
+    if fiscal_year is None:
+        return True
+    if period_kind == "interim":
+        return False
+    return any(r.get("fy") == fiscal_year for r in rows)
+
+
+def _annual_summary_has_fy(extracted: dict[str, Any], fiscal_year: int | None) -> bool:
+    return _extracted_has_period_data(
+        extracted,
+        fiscal_year=fiscal_year,
+        report_date=None,
+        period_kind="annual",
+    )
+
+
 def _load_cached_filing_html(cik: str, fiscal_year: int | None) -> bytes | None:
     """Load filing HTML from disk cache only (no SEC network fetch)."""
     from filing_store import load_filing_html, load_submissions
@@ -1314,17 +1666,50 @@ def _load_cached_filing_html(cik: str, fiscal_year: int | None) -> bytes | None:
     return load_filing_html(cik, filing["accession_no_dash"])
 
 
-async def _load_filing_html_for_notes(cik: str, fiscal_year: int | None) -> bytes | None:
-    """Load filing HTML for footnote iXBRL extraction; fetch from SEC when not cached."""
+async def _resolve_filing_for_period(
+    cik: str,
+    fiscal_year: int | None,
+    period: str | None = None,
+) -> dict[str, Any] | None:
+    """Resolve the filing metadata for an annual or interim compare period."""
     from filing_store import load_submissions
 
     submissions = load_submissions(cik)
     if not submissions:
         submissions = await fetch_submissions(cik, merge_archives=False)
-    filing = find_filing(submissions, fiscal_year=fiscal_year)
+    return find_filing(submissions, fiscal_year=fiscal_year, period=period)
+
+
+async def _load_filing_html_for_period(
+    cik: str,
+    fiscal_year: int | None,
+    period: str | None = None,
+    *,
+    prefer_ixbrl: bool = False,
+    prefer_report: bool = False,
+) -> tuple[bytes | None, dict[str, Any] | None]:
+    """Load filing HTML for a resolved annual/interim period; fetch from SEC when not cached."""
+    from sec.client import fetch_filing_html, fetch_filing_ixbrl_html, fetch_filing_report_html
+
+    filing = await _resolve_filing_for_period(cik, fiscal_year, period)
     if not filing:
-        return None
-    return await fetch_filing_html(cik, filing)
+        return None, None
+    form = (filing.get("form") or "").replace("/A", "").upper()
+    if prefer_report and form == "6-K":
+        return await fetch_filing_report_html(cik, filing), filing
+    if prefer_ixbrl or form == "6-K":
+        return await fetch_filing_ixbrl_html(cik, filing), filing
+    return await fetch_filing_html(cik, filing), filing
+
+
+async def _load_filing_html_for_notes(
+    cik: str,
+    fiscal_year: int | None,
+    period: str | None = None,
+) -> bytes | None:
+    """Load filing HTML for footnote iXBRL extraction; fetch from SEC when not cached."""
+    html, _ = await _load_filing_html_for_period(cik, fiscal_year, period)
+    return html
 
 
 async def fetch_company_facts(cik: str) -> tuple[dict[str, Any], bool]:
@@ -1647,11 +2032,35 @@ def _extract_metrics_from_defs(
         if not concept:
             continue
         unit, entries = _unit_entries(concept)
-        annual = _filter_annual(entries, fiscal_year)
-        quarterly = _filter_quarterly(entries, fiscal_year)
-        snapshot = _filter_snapshot(entries, report_date)
-        if report_date and snapshot and not annual and not quarterly:
-            annual = snapshot
+        annual: list[dict[str, Any]] = []
+        quarterly: list[dict[str, Any]] = []
+        if report_date:
+            snapshot = _filter_snapshot(entries, report_date)
+            quarterly = _filter_quarterly(entries, fiscal_year)
+            by_end = [e for e in quarterly if e.get("end") == report_date]
+            if snapshot:
+                annual = snapshot
+            elif by_end:
+                annual = by_end
+            else:
+                from sec.filing_periods import PeriodFilter, _quarter_from_report_date
+
+                quarter = _quarter_from_report_date(report_date)
+                fp = f"Q{quarter}" if quarter else None
+                loose = _filter_interim_loose(
+                    entries,
+                    PeriodFilter(
+                        kind="interim",
+                        fiscal_year=fiscal_year,
+                        report_date=report_date,
+                        fp=fp,
+                    ),
+                )
+                if loose:
+                    annual = loose
+        else:
+            annual = _filter_annual(entries, fiscal_year)
+            quarterly = _filter_quarterly(entries, fiscal_year)
         if not annual and not quarterly:
             continue
         metrics[key] = {
@@ -1977,15 +2386,81 @@ async def fetch_ticker_financials(
     else:
         facts, from_cache = await fetch_company_facts(resolved["cik"])
     pf = parse_period_param(period)
+    period_kind = pf.kind if pf else "annual"
     report_date = pf.report_date if pf and pf.kind == "interim" else None
+    filing_meta: dict[str, Any] | None = None
+
+    if pf and pf.kind == "interim" and not report_date:
+        filing_meta = await _resolve_filing_for_period(resolved["cik"], fiscal_year, period)
+        if filing_meta:
+            report_date = filing_meta.get("report_date")
+
     extracted = extract_financial_metrics(
         facts,
         fiscal_year=fiscal_year,
         report_date=report_date,
     )
+    source = "sec_companyfacts"
+    filing_html: bytes | None = None
+
+    needs_ixbrl = not _extracted_has_period_data(
+        extracted,
+        fiscal_year=fiscal_year,
+        report_date=report_date,
+        period_kind=period_kind,
+    )
+    if needs_ixbrl and (report_date or (period_kind == "annual" and fiscal_year is not None)):
+        filing_html, filing_meta = await _load_filing_html_for_period(
+            resolved["cik"],
+            fiscal_year,
+            period,
+            prefer_ixbrl=True,
+        )
+        if filing_html:
+            effective_report_date = report_date or (filing_meta or {}).get("report_date")
+            html_text = filing_html.decode("utf-8", errors="replace")
+            from sec.client import _html_has_ixbrl_facts
+
+            if _html_has_ixbrl_facts(filing_html):
+                ixbrl = extract_financial_metrics_from_ixbrl(
+                    html_text,
+                    fiscal_year=fiscal_year,
+                    report_date=effective_report_date,
+                    form=(filing_meta or {}).get("form"),
+                    fp=pf.fp if pf else None,
+                    period_kind=period_kind,
+                )
+                if ixbrl.get("annual_summary"):
+                    extracted = ixbrl
+                    source = "sec_ixbrl_filing"
+            elif (filing_meta or {}).get("form", "").replace("/A", "").upper() == "6-K":
+                report_html, _ = await _load_filing_html_for_period(
+                    resolved["cik"],
+                    fiscal_year,
+                    period,
+                    prefer_report=True,
+                )
+                if report_html:
+                    html_result = extract_financial_metrics_from_html_tables(
+                        report_html.decode("utf-8", errors="replace"),
+                        fiscal_year=fiscal_year,
+                        report_date=effective_report_date,
+                        form=(filing_meta or {}).get("form"),
+                        fp=pf.fp if pf else None,
+                        period_kind=period_kind,
+                    )
+                    if html_result.get("annual_summary"):
+                        extracted = html_result
+                        source = "sec_html_filing"
+
     notes_xbrl: dict[str, Any] = {}
     if not headline_only:
-        filing_html = await _load_filing_html_for_notes(resolved["cik"], fiscal_year)
+        if filing_html is None:
+            filing_html = await _load_filing_html_for_notes(
+                resolved["cik"],
+                fiscal_year,
+                period,
+            )
         notes_xbrl = extract_note_disclosures(
             facts,
             filing_html,
@@ -2000,7 +2475,7 @@ async def fetch_ticker_financials(
         "cik": resolved["cik"],
         "entity_name": extracted.get("entity_name") or resolved["company_name"],
         "fiscal_year_filter": fiscal_year,
-        "source": "sec_companyfacts",
+        "source": source,
         "api_url": COMPANYFACTS_URL.format(cik=cik_padded),
         "from_cache": from_cache,
         "fetch_ms": elapsed_ms,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Any
 
@@ -32,6 +33,18 @@ _ticker_map_inflight: asyncio.Task[dict[str, dict[str, Any]]] | None = None
 
 _submissions_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
 _filing_html_inflight: dict[tuple[str, str], asyncio.Task[bytes]] = {}
+_filing_ixbrl_inflight: dict[tuple[str, str], asyncio.Task[bytes]] = {}
+
+_IX_NONFRACTION_PROBE = re.compile(r"<ix:nonFraction\b", re.I)
+_IXBRL_DOC_KEYWORDS: tuple[str, ...] = (
+    "consolidated",
+    "financial",
+    "ex99",
+    "ex-99",
+    "report",
+    "statements",
+    "earnings",
+)
 
 _http_client: httpx.AsyncClient | None = None
 
@@ -329,3 +342,140 @@ async def fetch_filing_html(cik: str, filing: dict[str, Any]) -> bytes:
         return await task
     finally:
         _filing_html_inflight.pop(key, None)
+
+
+def _html_has_ixbrl_facts(html: bytes) -> bool:
+    return bool(_IX_NONFRACTION_PROBE.search(html.decode("utf-8", errors="replace")))
+
+
+def _rank_ixbrl_document_candidates(
+    items: list[dict[str, Any]],
+    primary_document: str | None,
+) -> list[str]:
+    ranked: list[tuple[tuple[int, int], str]] = []
+    for item in items:
+        name = str(item.get("name") or "")
+        lower = name.lower()
+        if not lower.endswith((".htm", ".html")):
+            continue
+        if lower.endswith("-index.html") or lower.endswith("-index-headers.html"):
+            continue
+        try:
+            size = int(item.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        keyword_rank = next(
+            (idx for idx, token in enumerate(_IXBRL_DOC_KEYWORDS) if token in lower),
+            len(_IXBRL_DOC_KEYWORDS),
+        )
+        primary_penalty = 1 if primary_document and name == primary_document else 0
+        ranked.append(((keyword_rank, primary_penalty, -size), name))
+    ranked.sort(key=lambda row: row[0])
+    return [name for _, name in ranked]
+
+
+async def _fetch_filing_index(cik: str, filing: dict[str, Any]) -> list[dict[str, Any]]:
+    cik_int = str(int(cik))
+    accession = filing["accession_no_dash"]
+    url = f"{ARCHIVES_BASE}/{cik_int}/{accession}/index.json"
+    client = await get_http_client()
+    resp = await _rate_limited_get(client, url)
+    resp.raise_for_status()
+    data = resp.json()
+    items = data.get("directory", {}).get("item", [])
+    if isinstance(items, dict):
+        return [items]
+    return list(items)
+
+
+async def fetch_filing_document(cik: str, accession_no_dash: str, document_name: str) -> bytes:
+    url = f"{ARCHIVES_BASE}/{int(cik)}/{accession_no_dash}/{document_name}"
+    client = await get_http_client()
+    resp = await _rate_limited_get(client, url)
+    resp.raise_for_status()
+    return await resp.aread()
+
+
+async def fetch_filing_ixbrl_html(cik: str, filing: dict[str, Any]) -> bytes:
+    """Load the best inline-XBRL HTML for a filing (primary doc or 6-K exhibit)."""
+    from filing_store import load_filing_ixbrl_html, save_filing_ixbrl_html
+
+    accession = filing["accession_no_dash"]
+    cached = load_filing_ixbrl_html(cik, accession)
+    if cached:
+        return cached
+
+    key = (cik, accession)
+    in_flight = _filing_ixbrl_inflight.get(key)
+    if in_flight is not None:
+        return await in_flight
+
+    async def _load() -> bytes:
+        primary_html = await fetch_filing_html(cik, filing)
+        if _html_has_ixbrl_facts(primary_html):
+            save_filing_ixbrl_html(cik, accession, primary_html)
+            return primary_html
+
+        form = (filing.get("form") or "").replace("/A", "").upper()
+        if form != "6-K":
+            save_filing_ixbrl_html(cik, accession, primary_html)
+            return primary_html
+
+        try:
+            index_items = await _fetch_filing_index(cik, filing)
+        except httpx.HTTPError:
+            return primary_html
+
+        for doc_name in _rank_ixbrl_document_candidates(
+            index_items,
+            filing.get("primary_document"),
+        ):
+            if doc_name == filing.get("primary_document"):
+                continue
+            try:
+                html = await fetch_filing_document(cik, accession, doc_name)
+            except httpx.HTTPError:
+                continue
+            if _html_has_ixbrl_facts(html):
+                save_filing_ixbrl_html(cik, accession, html)
+                return html
+
+        return primary_html
+
+    task = asyncio.create_task(_load())
+    _filing_ixbrl_inflight[key] = task
+    try:
+        return await task
+    finally:
+        _filing_ixbrl_inflight.pop(key, None)
+
+
+async def fetch_filing_report_html(cik: str, filing: dict[str, Any]) -> bytes:
+    """Load the best financial report HTML for a filing (6-K exhibits are often separate)."""
+    primary_html = await fetch_filing_html(cik, filing)
+    form = (filing.get("form") or "").replace("/A", "").upper()
+    if form != "6-K":
+        return primary_html
+
+    try:
+        index_items = await _fetch_filing_index(cik, filing)
+    except httpx.HTTPError:
+        return primary_html
+
+    best = primary_html
+    for doc_name in _rank_ixbrl_document_candidates(
+        index_items,
+        filing.get("primary_document"),
+    ):
+        if doc_name == filing.get("primary_document"):
+            continue
+        try:
+            html = await fetch_filing_document(cik, filing["accession_no_dash"], doc_name)
+        except httpx.HTTPError:
+            continue
+        lower = html.lower()
+        if len(html) > len(best) and (
+            b"consolidated" in lower or b"financial" in lower or b"revenue" in lower
+        ):
+            best = html
+    return best

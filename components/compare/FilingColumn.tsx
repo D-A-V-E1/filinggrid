@@ -54,11 +54,18 @@ function formatMetricValue(value: number, unit?: string): string {
     }
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
+  const normalized = unit?.toUpperCase();
+  const prefix =
+    !unit || normalized === "USD"
+      ? "$"
+      : normalized === "TWD"
+        ? "NT$"
+        : `${normalized} `;
   const abs = Math.abs(value);
-  if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
-  return `$${value.toLocaleString()}`;
+  if (abs >= 1e12) return `${prefix}${(value / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${prefix}${(value / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${prefix}${(value / 1e6).toFixed(1)}M`;
+  return `${prefix}${value.toLocaleString()}`;
 }
 
 const FINANCIAL_STATEMENT_ROWS: { key: string; label: string; unit?: string }[] = [
@@ -415,7 +422,20 @@ function FilingColumn({
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const isCompact = columnLayout?.density === "compact";
   const tableFit = isCompact;
-  const headlineMetricRows = tableFit ? FINANCIAL_STATEMENT_ROWS_DENSE : FINANCIAL_STATEMENT_ROWS;
+  const headlineMetricRows = useMemo(() => {
+    const base = tableFit ? FINANCIAL_STATEMENT_ROWS_DENSE : FINANCIAL_STATEMENT_ROWS;
+    const metrics = financialsXbrl?.metrics;
+    if (!metrics) return base;
+    return base.map((row) => ({
+      ...row,
+      unit: metrics[row.key]?.unit ?? row.unit,
+    }));
+  }, [financialsXbrl?.metrics, tableFit]);
+  const xbrlMetricsSubtitle =
+    financialsXbrl?.source === "sec_ixbrl_filing" ||
+    financialsXbrl?.source === "sec_html_filing"
+      ? "Headline metrics from the filed document (SEC companyfacts not updated yet)."
+      : "Headline GAAP metrics from SEC companyfacts.";
   const displayForm = form ?? formFromPeriodId(period);
   const formLabel = displayForm ? displayFormLabel(displayForm) : null;
   const resolvedFiscalYear =
@@ -494,7 +514,7 @@ function FilingColumn({
           annualSummary={rows}
           fetchMs={financialsXbrl.fetch_ms}
           fromCache={financialsXbrl.from_cache}
-          subtitle="Headline GAAP metrics from SEC companyfacts."
+          subtitle={xbrlMetricsSubtitle}
           fiscalYearFilter={resolvedFiscalYear}
           maxFyColumns={maxFyColumns}
           tableFit={tableFit}
@@ -532,7 +552,7 @@ function FilingColumn({
         {metricsPanel}
       </>
     );
-  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows]);
+  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows, xbrlMetricsSubtitle]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
