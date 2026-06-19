@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "@/lib/api";
+import { AUTH_SIGN_IN_REQUEST_EVENT } from "@/lib/auth-errors";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import SignInModal from "@/components/auth/SignInModal";
@@ -16,6 +17,14 @@ export default function HeaderNav() {
   const { isPro } = useEffectiveTier(auth);
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    function openSignIn() {
+      setSignInOpen(true);
+    }
+    window.addEventListener(AUTH_SIGN_IN_REQUEST_EVENT, openSignIn);
+    return () => window.removeEventListener(AUTH_SIGN_IN_REQUEST_EVENT, openSignIn);
+  }, []);
 
   const returnPath =
     pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");

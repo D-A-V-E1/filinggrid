@@ -2,8 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getAuthMe } from "@/lib/api";
+import {
+  cleanAuthErrorFromUrl,
+  getAuthErrorMessage,
+  parseAuthHashError,
+  requestOpenSignIn,
+  shouldOfferNewMagicLink,
+} from "@/lib/auth-errors";
 import { useAuth } from "@/hooks/useAuth";
 
 type BannerVariant = "success" | "error" | "info";
@@ -15,6 +22,7 @@ interface BannerConfig {
   paramValue: string;
   actionHref?: string;
   actionLabel?: string;
+  onAction?: () => void;
 }
 
 const VARIANT_STYLES: Record<BannerVariant, string> = {
@@ -29,7 +37,9 @@ export default function QueryStatusBanner() {
   const router = useRouter();
   const { refresh } = useAuth();
   const [checkoutPending, setCheckoutPending] = useState(false);
+  const [authBanner, setAuthBanner] = useState<BannerConfig | null>(null);
   const [dismissedBannerKey, setDismissedBannerKey] = useState<string | null>(null);
+  const authErrorHandled = useRef(false);
   const queryString = searchParams.toString();
 
   useEffect(() => {
@@ -70,16 +80,40 @@ export default function QueryStatusBanner() {
     setDismissedBannerKey(null);
   }, [queryString]);
 
-  const banner = useMemo((): BannerConfig | null => {
+  useEffect(() => {
+    if (authErrorHandled.current) return;
+
     const params = new URLSearchParams(queryString);
-    if (params.get("auth") === "error") {
-      return {
-        variant: "error",
-        message: "Sign-in failed. Check your link or try again.",
-        paramKey: "auth",
-        paramValue: "error",
-      };
+    const hashError = parseAuthHashError();
+    const queryAuthError = params.get("auth") === "error";
+    if (!queryAuthError && !hashError) return;
+
+    authErrorHandled.current = true;
+    const errorCode = hashError?.errorCode ?? params.get("error_code");
+    const offerNewLink = shouldOfferNewMagicLink(errorCode);
+
+    setAuthBanner({
+      variant: "error",
+      message: getAuthErrorMessage(errorCode),
+      paramKey: "auth",
+      paramValue: "error",
+      ...(offerNewLink && {
+        actionLabel: "Request new magic link",
+        onAction: requestOpenSignIn,
+      }),
+    });
+
+    const cleanUrl = cleanAuthErrorFromUrl(pathname, queryString);
+    if (window.location.hash || queryAuthError || params.has("error_code")) {
+      window.history.replaceState(null, "", cleanUrl);
+      router.replace(cleanUrl, { scroll: false });
     }
+  }, [pathname, queryString, router]);
+
+  const banner = useMemo((): BannerConfig | null => {
+    if (authBanner) return authBanner;
+
+    const params = new URLSearchParams(queryString);
     if (params.get("auth") === "success") {
       return {
         variant: "success",
@@ -111,13 +145,17 @@ export default function QueryStatusBanner() {
       };
     }
     return null;
-  }, [queryString, checkoutPending]);
+  }, [authBanner, queryString, checkoutPending]);
 
   const bannerKey = banner ? `${banner.paramKey}=${banner.paramValue}` : null;
 
   const dismiss = useCallback(() => {
     if (!banner) return;
     setDismissedBannerKey(`${banner.paramKey}=${banner.paramValue}`);
+    if (banner.paramKey === "auth" && banner.paramValue === "error") {
+      setAuthBanner(null);
+      return;
+    }
     const params = new URLSearchParams(queryString);
     params.delete(banner.paramKey);
     const query = params.toString();
@@ -133,7 +171,16 @@ export default function QueryStatusBanner() {
     >
       <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-center gap-4">
         <p>{banner.message}</p>
-        {banner.actionHref && banner.actionLabel && (
+        {banner.actionLabel && banner.onAction && (
+          <button
+            type="button"
+            onClick={banner.onAction}
+            className="shrink-0 font-medium underline-offset-2 hover:underline"
+          >
+            {banner.actionLabel}
+          </button>
+        )}
+        {banner.actionHref && banner.actionLabel && !banner.onAction && (
           <Link
             href={banner.actionHref}
             className="shrink-0 font-medium underline-offset-2 hover:underline"

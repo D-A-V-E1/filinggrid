@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
   const destination = appendQueryParam(next, "auth", "success");
 
   if (!code || !isSupabaseConfigured()) {
-    return NextResponse.redirect(`${origin}/?auth=error`);
+    const errParams = new URLSearchParams({ auth: "error" });
+    const errorCode = searchParams.get("error_code");
+    if (errorCode) errParams.set("error_code", errorCode);
+    return NextResponse.redirect(`${origin}/?${errParams.toString()}`);
   }
 
   let response = NextResponse.redirect(`${origin}${destination}`);
@@ -39,7 +42,9 @@ export async function GET(request: NextRequest) {
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    return NextResponse.redirect(`${origin}/?auth=error`);
+    const errParams = new URLSearchParams({ auth: "error" });
+    if (error.code) errParams.set("error_code", error.code);
+    return NextResponse.redirect(`${origin}/?${errParams.toString()}`);
   }
 
   return response;

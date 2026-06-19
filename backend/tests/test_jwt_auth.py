@@ -92,6 +92,27 @@ def test_decode_jwt_falls_back_to_hs256(mock_jwks, mock_hs256, monkeypatch):
     mock_hs256.assert_called_once_with("hs256-token")
 
 
+@patch("middleware._decode_jwt_hs256")
+@patch("middleware._decode_jwt_jwks")
+def test_decode_jwt_hs256_skips_jwks_when_both_configured(mock_jwks, mock_hs256, monkeypatch):
+    mock_settings = MagicMock()
+    mock_settings.auth_configured = True
+    mock_settings.supabase_jwks_url_resolved = "https://example.supabase.co/auth/v1/.well-known/jwks.json"
+    mock_settings.supabase_jwt_secret_effective = "legacy-secret"
+    mock_hs256.return_value = {"email": "test@corp.com", "sub": "user-id"}
+    monkeypatch.setattr("middleware.settings", mock_settings)
+
+    token = jwt.encode(
+        {"sub": "user-id", "email": "test@corp.com", "aud": "authenticated", "role": "authenticated"},
+        "legacy-secret",
+        algorithm="HS256",
+    )
+    payload = decode_jwt(token)
+    assert payload["email"] == "test@corp.com"
+    mock_jwks.assert_not_called()
+    mock_hs256.assert_called_once_with(token)
+
+
 @patch("middleware._decode_jwt_jwks")
 def test_decode_jwt_expired_token(mock_jwks, monkeypatch):
     mock_settings = MagicMock()

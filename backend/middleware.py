@@ -117,7 +117,28 @@ def decode_jwt(token: str) -> dict:
 
     jwks_configured = bool(settings.supabase_jwks_url_resolved)
     legacy_configured = bool(settings.supabase_jwt_secret_effective)
-    last_error: Optional[jwt.InvalidTokenError] = None
+    last_error: Optional[Exception] = None
+
+    header_alg: Optional[str] = None
+    try:
+        header_alg = jwt.get_unverified_header(token).get("alg")
+    except jwt.InvalidTokenError as exc:
+        last_error = exc
+
+    # HS256 tokens (local tests, legacy Supabase) have no JWKS kid — route directly.
+    if header_alg == "HS256" and legacy_configured:
+        try:
+            return _decode_jwt_hs256(token)
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "TOKEN_EXPIRED", "message": "Session expired. Please sign in again."},
+            )
+        except jwt.InvalidTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "INVALID_TOKEN", "message": str(exc)},
+            )
 
     if jwks_configured:
         try:
@@ -127,7 +148,7 @@ def decode_jwt(token: str) -> dict:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"code": "TOKEN_EXPIRED", "message": "Session expired. Please sign in again."},
             )
-        except jwt.InvalidTokenError as exc:
+        except (jwt.InvalidTokenError, jwt.PyJWKClientError) as exc:
             last_error = exc
             if not legacy_configured:
                 raise HTTPException(
