@@ -12,6 +12,13 @@ if not exist "%VENV_PY%" (
     exit /b 1
 )
 
+set "STRIPE_CLI="
+where stripe >nul 2>&1
+if not errorlevel 1 set "STRIPE_CLI=stripe"
+if not defined STRIPE_CLI if exist "%LOCALAPPDATA%\Microsoft\WinGet\Packages\Stripe.StripeCli_Microsoft.Winget.Source_8wekyb3d8bbwe\stripe.exe" (
+    set "STRIPE_CLI=%LOCALAPPDATA%\Microsoft\WinGet\Packages\Stripe.StripeCli_Microsoft.Winget.Source_8wekyb3d8bbwe\stripe.exe"
+)
+
 echo.
 echo  FilingGrid Stripe webhook forwarder
 echo  ===================================
@@ -21,6 +28,21 @@ echo.
 echo   Output appears below. Keep this window open during checkout.
 echo   Press Ctrl+C to stop.
 echo.
+
+if defined STRIPE_CLI if not exist "%USERPROFILE%\.config\stripe\config.toml" (
+    echo  [INFO] Stripe CLI is not logged in yet.
+    echo         A browser pairing step runs next - approve it within ~90 seconds.
+    echo.
+    "%STRIPE_CLI%" login
+    echo.
+)
+
+if defined STRIPE_CLI if not exist "%USERPROFILE%\.config\stripe\config.toml" (
+    echo  [WARN] Stripe CLI login did not complete.
+    echo         You can paste your test secret key instead:
+    echo         "%STRIPE_CLI%" login --interactive
+    echo.
+)
 
 "%VENV_PY%" "%ROOT%scripts\run_stripe_listen.py"
 set "EXIT_CODE=%ERRORLEVEL%"
