@@ -1,11 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { buildAuthCallbackUrl } from "@/lib/auth-redirect";
 import { isSupabaseConfigured } from "@/lib/auth-config";
 import { isCorporateEmail } from "@/lib/utils";
 import { waitForBackendAuth } from "@/hooks/useAuth";
+
+const OTP_COOLDOWN_MS = 60_000;
+const OTP_COOLDOWN_KEY = "filinggrid:otp-last-sent";
+
+function otpCooldownKey(email: string): string {
+  return `${OTP_COOLDOWN_KEY}:${email.trim().toLowerCase()}`;
+}
+
+function getOtpCooldownRemainingMs(email: string): number {
+  try {
+    const raw = sessionStorage.getItem(otpCooldownKey(email));
+    if (!raw) return 0;
+    return Math.max(0, OTP_COOLDOWN_MS - (Date.now() - Number(raw)));
+  } catch {
+    return 0;
+  }
+}
+
+function markOtpRequested(email: string): void {
+  try {
+    sessionStorage.setItem(otpCooldownKey(email), String(Date.now()));
+  } catch {
+    /* sessionStorage unavailable */
+  }
+}
+
+function isEmailRateLimitError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const rec = err as { message?: string; code?: string; status?: number };
+  const msg = (rec.message ?? "").toLowerCase();
+  return (
+    rec.status === 429 ||
+    rec.code === "over_email_send_rate_limit" ||
+    msg.includes("rate limit")
+  );
+}
+
+function formatAuthError(err: unknown): string {
+  if (isEmailRateLimitError(err)) {
+    return "Too many sign-in emails were sent for this address. Supabase limits magic links (often ~4 per hour on free tier). Wait about an hour, try a different email, or use an existing magic link from your inbox.";
+  }
+  return err instanceof Error ? err.message : "Failed to send magic link";
+}
 
 export type MagicLinkStep = "email" | "sent" | "verifying" | "verify_failed" | "done";
 
@@ -30,6 +73,7 @@ export default function MagicLinkForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const configured = isSupabaseConfigured();
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     onStepChange?.(step);
@@ -61,6 +105,11 @@ export default function MagicLinkForm({
   }, [step, onComplete]);
 
   async function handleSubmit() {
+    if (submittingRef.current || loading) return;
+
+    const trimmedEmail = email.trim();
+    const cooldownMs = getOtpCooldownRemainingMs(trimmedEmail);
+
     setError("");
     if (!configured) {
       setError("Sign-in is not configured. Add Supabase keys to .env (see README).");
@@ -72,18 +121,30 @@ export default function MagicLinkForm({
       );
       return;
     }
+    if (cooldownMs > 0) {
+      const secs = Math.ceil(cooldownMs / 1000);
+      setError(`Please wait ${secs}s before requesting another magic link.`);
+      return;
+    }
+
+    submittingRef.current = true;
     setLoading(true);
     try {
       const supabase = createClient();
       const { error: authError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
+        email: trimmedEmail,
         options: { emailRedirectTo: buildAuthCallbackUrl(returnPath) },
       });
       if (authError) throw authError;
+      markOtpRequested(trimmedEmail);
       setStep("sent");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send magic link");
+      if (isEmailRateLimitError(err)) {
+        markOtpRequested(trimmedEmail);
+      }
+      setError(formatAuthError(err));
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
@@ -183,14 +244,18 @@ export default function MagicLinkForm({
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && email && handleSubmit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && email.trim() && !loading && !submittingRef.current) {
+            void handleSubmit();
+          }
+        }}
         placeholder={requireCorporateEmail ? "you@company.com" : "you@email.com"}
         className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         autoComplete="email"
       />
       <button
         type="button"
-        onClick={handleSubmit}
+        onClick={() => void handleSubmit()}
         disabled={loading || !email.trim()}
         className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
       >

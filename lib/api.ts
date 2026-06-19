@@ -250,6 +250,26 @@ async function buildAuthHeaders(extra: Record<string, string> = {}): Promise<Rec
   return headers;
 }
 
+/** Public GET without waiting on Supabase session (e.g. ticker autocomplete). */
+export async function apiFetchPublic<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) {
+    let detail: PaywallError | string | Record<string, unknown> = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? body;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, detail);
+  }
+
+  return res.json();
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -608,5 +628,5 @@ export async function deletePeerGroup(groupId: string): Promise<void> {
 }
 
 export async function searchTickers(q: string): Promise<{ ticker: string; company_name: string }[]> {
-  return apiFetch(`/tickers/search?q=${encodeURIComponent(q)}&limit=8`);
+  return apiFetchPublic(`/tickers/search?q=${encodeURIComponent(q)}&limit=8`);
 }

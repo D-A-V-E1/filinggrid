@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
 import { comparePathWithPeriod, resolveComparePeriod } from "@/lib/filing-period";
@@ -14,6 +21,32 @@ import PrivacyStrip from "./PrivacyStrip";
 interface TickerChip {
   ticker: string;
   name?: string;
+}
+
+const POPULAR_TICKERS = [
+  { ticker: "AAPL", company_name: "Apple Inc." },
+  { ticker: "MSFT", company_name: "Microsoft Corporation" },
+  { ticker: "NVDA", company_name: "NVIDIA Corporation" },
+  { ticker: "GOOGL", company_name: "Alphabet Inc." },
+  { ticker: "JPM", company_name: "JPMorgan Chase & Co." },
+  { ticker: "GS", company_name: "Goldman Sachs Group Inc." },
+];
+
+const WARMUP_BACKOFF_MS = [0, 400, 1200];
+const DROPDOWN_WIDTH = 288;
+const VIEWPORT_PADDING = 8;
+const DROPDOWN_GAP = 4;
+
+function computeDropdownPosition(trigger: DOMRect): CSSProperties {
+  const viewportWidth = window.innerWidth;
+  let left = trigger.left;
+  left = Math.max(VIEWPORT_PADDING, left);
+  left = Math.min(left, viewportWidth - VIEWPORT_PADDING - DROPDOWN_WIDTH);
+
+  const top = trigger.bottom + DROPDOWN_GAP;
+  const maxHeight = window.innerHeight - top - VIEWPORT_PADDING;
+
+  return { top, left, maxHeight, width: DROPDOWN_WIDTH };
 }
 
 export default function TickerSearchBar({
@@ -47,7 +80,13 @@ export default function TickerSearchBar({
   const [suggestions, setSuggestions] = useState<{ ticker: string; company_name: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const queryRequestIdRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLUListElement>(null);
+  const blurCloseTimerRef = useRef<number | null>(null);
 
   const compareUrl = useMemo(() => {
     if (tickers.length < 2 || tickers.length > maxColumns) return null;
@@ -67,6 +106,81 @@ export default function TickerSearchBar({
     setInternalPaywall({ open: true, reason: "column_limit", message });
   }
 
+  function popularSuggestions() {
+    return POPULAR_TICKERS.filter((r) => !tickers.some((t) => t.ticker === r.ticker));
+  }
+
+  function localMatches(q: string) {
+    const normalized = q.trim().toUpperCase();
+    if (!normalized) return popularSuggestions();
+    return POPULAR_TICKERS.filter(
+      (r) =>
+        !tickers.some((t) => t.ticker === r.ticker) &&
+        (r.ticker.includes(normalized) || r.company_name.toUpperCase().includes(normalized))
+    );
+  }
+
+  function openSuggestions(next: { ticker: string; company_name: string }[]) {
+    setSuggestions(next);
+    setSearchError("");
+    setShowSuggestions(true);
+  }
+
+  function showPopularSuggestions() {
+    openSuggestions(popularSuggestions());
+  }
+
+  function scheduleCloseSuggestions() {
+    if (blurCloseTimerRef.current != null) {
+      window.clearTimeout(blurCloseTimerRef.current);
+    }
+    blurCloseTimerRef.current = window.setTimeout(() => {
+      blurCloseTimerRef.current = null;
+      setShowSuggestions(false);
+    }, 150);
+  }
+
+  function cancelCloseSuggestions() {
+    if (blurCloseTimerRef.current != null) {
+      window.clearTimeout(blurCloseTimerRef.current);
+      blurCloseTimerRef.current = null;
+    }
+  }
+
+  async function warmupApi(attempt = 0): Promise<boolean> {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, WARMUP_BACKOFF_MS[attempt] ?? 1200));
+    }
+    try {
+      await searchTickers("A");
+      setSearchError("");
+      return true;
+    } catch {
+      if (attempt < WARMUP_BACKOFF_MS.length - 1) {
+        return warmupApi(attempt + 1);
+      }
+      setSearchError("Ticker search unavailable — is the API running?");
+      return false;
+    }
+  }
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ok = await warmupApi();
+      if (!cancelled && !ok) {
+        console.warn("[TickerSearchBar] API warmup failed after retries");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!compareUrl) return;
     router.prefetch(compareUrl);
@@ -84,28 +198,71 @@ export default function TickerSearchBar({
     return () => window.clearTimeout(timer);
   }, [isNavigating]);
 
+  useLayoutEffect(() => {
+    if (!showSuggestions) {
+      setDropdownStyle(null);
+      return;
+    }
+
+    function updatePosition() {
+      const input = inputRef.current;
+      if (!input) return;
+      setDropdownStyle(computeDropdownPosition(input.getBoundingClientRect()));
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [showSuggestions, suggestions.length, searching, searchError, query]);
+
+  async function runSearch(normalized: string, requestId: number) {
+    setSearching(true);
+    openSuggestions(localMatches(normalized));
+    try {
+      const results = await searchTickers(normalized);
+      if (requestId !== queryRequestIdRef.current) return;
+      const filtered = results.filter((r) => !tickers.some((t) => t.ticker === r.ticker));
+      setSuggestions(filtered);
+      setSearchError("");
+    } catch {
+      if (requestId !== queryRequestIdRef.current) return;
+      setSuggestions([]);
+      setShowSuggestions(true);
+      setSearchError("Ticker search unavailable — is the API running?");
+    } finally {
+      if (requestId === queryRequestIdRef.current) setSearching(false);
+    }
+  }
+
   async function handleQueryChange(value: string) {
     const normalized = value.toUpperCase();
     const requestId = ++queryRequestIdRef.current;
 
     setQuery(normalized);
-    setSearchError("");
     if (normalized.trim().length >= 1) {
-      try {
-        const results = await searchTickers(normalized);
-        if (requestId !== queryRequestIdRef.current) return;
-        const filtered = results.filter((r) => !tickers.some((t) => t.ticker === r.ticker));
-        setSuggestions(filtered);
-        setShowSuggestions(filtered.length > 0);
-      } catch {
-        if (requestId !== queryRequestIdRef.current) return;
-        setSuggestions([]);
-        setSearchError("Ticker search unavailable — is the API running?");
-      }
+      setSearchError("");
+      await runSearch(normalized, requestId);
     } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
+      setSearching(false);
+      showPopularSuggestions();
     }
+  }
+
+  async function retrySearch() {
+    if (query.trim()) {
+      const requestId = ++queryRequestIdRef.current;
+      setSearchError("");
+      await runSearch(query, requestId);
+      return;
+    }
+    setSearchError("");
+    setShowSuggestions(true);
+    const ok = await warmupApi();
+    if (ok) showPopularSuggestions();
   }
 
   function addTicker(ticker: string, name?: string) {
@@ -153,6 +310,26 @@ export default function TickerSearchBar({
     }
   }
 
+  const hasQuery = query.trim().length > 0;
+  const showNoMatches =
+    hasQuery && !searching && !searchError && suggestions.length === 0;
+
+  if (!hydrated) {
+    return (
+      <div className={compact ? "w-full" : "mx-auto w-full max-w-3xl"}>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 p-3">
+            <div className="min-w-[120px] flex-1">
+              <div className="h-5 w-48 max-w-full rounded bg-slate-100" aria-hidden />
+            </div>
+            <div className="h-9 w-20 rounded-lg bg-brand-600/40" aria-hidden />
+          </div>
+        </div>
+        {!compact && <PrivacyStrip className="mt-3 px-1" />}
+      </div>
+    );
+  }
+
   return (
     <div className={compact ? "w-full" : "mx-auto w-full max-w-3xl"}>
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -178,20 +355,79 @@ export default function TickerSearchBar({
             </span>
           ))}
 
-          <div className="relative min-w-[120px] flex-1">
+          <div
+            className="relative min-w-[120px] flex-1"
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              cancelCloseSuggestions();
+              if (!query.trim()) showPopularSuggestions();
+            }}
+          >
             <input
+              ref={inputRef}
               type="text"
               value={query}
-              onChange={(e) => handleQueryChange(e.target.value)}
+              onChange={(e) => void handleQueryChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              onFocus={() => query && suggestions.length > 0 && setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              onFocus={() => {
+                cancelCloseSuggestions();
+                if (query.trim()) {
+                  setShowSuggestions(true);
+                  if (!searching && suggestions.length === 0 && !searchError) {
+                    void handleQueryChange(query);
+                  }
+                } else {
+                  showPopularSuggestions();
+                }
+              }}
+              onBlur={(e) => {
+                const next = e.relatedTarget as Node | null;
+                if (next && panelRef.current?.contains(next)) return;
+                scheduleCloseSuggestions();
+              }}
               placeholder={tickers.length ? "Add ticker…" : "Enter ticker (e.g. AAPL)"}
               className="w-full bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
               aria-label="Ticker search"
+              aria-expanded={showSuggestions}
+              aria-haspopup="listbox"
             />
-            {showSuggestions && suggestions.length > 0 && (
-              <ul className="absolute left-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+            {showSuggestions && (
+              <ul
+                ref={panelRef}
+                className={`fixed z-50 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg transition-opacity ${
+                  dropdownStyle ? "opacity-100" : "pointer-events-none opacity-0"
+                }`}
+                style={dropdownStyle ?? undefined}
+                role="listbox"
+              >
+                {!hasQuery && suggestions.length > 0 && (
+                  <li className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                    Popular tickers
+                  </li>
+                )}
+                {searching && suggestions.length === 0 && !searchError && (
+                  <li className="px-3 py-2 text-sm text-slate-500">Searching tickers…</li>
+                )}
+                {showNoMatches && (
+                  <li className="px-3 py-2 text-sm text-slate-500">No matches for “{query}”</li>
+                )}
+                {searchError && (
+                  <li className="px-3 py-2">
+                    <p className="text-sm text-amber-700" role="alert">
+                      {searchError}
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        void retrySearch();
+                      }}
+                    >
+                      Retry search
+                    </button>
+                  </li>
+                )}
                 {suggestions.map((s) => (
                   <li key={s.ticker}>
                     <button
@@ -219,7 +455,7 @@ export default function TickerSearchBar({
         </div>
       </div>
       {!compact && <PrivacyStrip className="mt-3 px-1" />}
-      {searchError && (
+      {searchError && !showSuggestions && (
         <p className="mt-2 px-1 text-xs text-amber-700" role="alert">
           {searchError}
         </p>
