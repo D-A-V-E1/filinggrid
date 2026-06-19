@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { clearAuthTokenCache, getAuthMe, type AuthMe } from "@/lib/api";
 import { isSupabaseConfigured } from "@/lib/auth-config";
+import { clearLocalSignOut, isLocalSignOut, setLocalSignOut } from "@/lib/local-sign-out";
+import { clearAllOtpSession } from "@/lib/otp-session";
 import { DEV_TIER_CHANGE_EVENT, isDevTierToggleEnabled } from "@/lib/dev-tier";
 
 const EMPTY_AUTH: AuthMe = {
@@ -17,6 +19,18 @@ const EMPTY_AUTH: AuthMe = {
   },
   organization_id: null,
 };
+
+/** Clear local sign-out flag so an existing Supabase session can be used again. */
+export async function resumeStoredSession(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const supabase = createClient();
+  const { data } = await supabase.auth.getSession();
+  const email = data.session?.user?.email?.trim() ?? null;
+  if (!email) return null;
+  clearLocalSignOut();
+  clearAuthTokenCache();
+  return email;
+}
 
 export function useAuth() {
   const [auth, setAuth] = useState<AuthMe | null>(null);
@@ -32,17 +46,28 @@ export function useAuth() {
       return;
     }
 
+    let sessionEmail: string | null = null;
     try {
       const supabase = createClient();
       const { data } = await supabase.auth.getSession();
       if (!data.session?.access_token) {
         clearAuthTokenCache();
+        clearLocalSignOut();
       }
-      setSupabaseEmail(data.session?.user?.email ?? null);
+      sessionEmail = data.session?.user?.email ?? null;
     } catch {
       clearAuthTokenCache();
-      setSupabaseEmail(null);
+      sessionEmail = null;
     }
+
+    if (isLocalSignOut()) {
+      setSupabaseEmail(null);
+      setAuth(EMPTY_AUTH);
+      setLoading(false);
+      return;
+    }
+
+    setSupabaseEmail(sessionEmail);
 
     try {
       const me = await getAuthMe();
@@ -76,15 +101,28 @@ export function useAuth() {
     return () => window.removeEventListener(DEV_TIER_CHANGE_EVENT, onDevTierChange);
   }, [refresh]);
 
+  /** Hide signed-in UI on this device; keep Supabase session for same-email return. */
   const signOut = useCallback(async () => {
     if (!configured) return;
     clearAuthTokenCache();
+    clearAllOtpSession();
+    setLocalSignOut(true);
+    setAuth(EMPTY_AUTH);
+    setSupabaseEmail(null);
+  }, [configured]);
+
+  /** Revoke Supabase session everywhere (requires a new magic link next time). */
+  const signOutEverywhere = useCallback(async () => {
+    if (!configured) return;
+    clearAuthTokenCache();
+    clearAllOtpSession();
+    clearLocalSignOut();
     const supabase = createClient();
     await supabase.auth.signOut();
     await refresh();
   }, [configured, refresh]);
 
-  const isSignedIn = Boolean(auth?.is_authenticated);
+  const isSignedIn = Boolean(auth?.is_authenticated) && !isLocalSignOut();
 
   return {
     auth,
@@ -94,6 +132,7 @@ export function useAuth() {
     isSignedIn,
     refresh,
     signOut,
+    signOutEverywhere,
   };
 }
 

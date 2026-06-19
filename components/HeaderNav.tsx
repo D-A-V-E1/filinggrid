@@ -13,8 +13,10 @@ export default function HeaderNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { auth, loading, configured, isSignedIn, refresh, signOut } = useAuth();
+  const { auth, loading, configured, isSignedIn, supabaseEmail, refresh, signOut } = useAuth();
   const { isPro } = useEffectiveTier(auth);
+  const hasSession = isSignedIn || Boolean(supabaseEmail);
+  const displayEmail = auth?.email ?? supabaseEmail;
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -58,7 +60,7 @@ export default function HeaderNav() {
 
         {loading ? (
           <span className="text-slate-400">…</span>
-        ) : isSignedIn && auth ? (
+        ) : hasSession && displayEmail ? (
           <div className="flex items-center gap-3">
             {isPro ? (
               <span className="hidden rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 sm:inline">
@@ -72,9 +74,9 @@ export default function HeaderNav() {
             <Link
               href="/account"
               className="hidden max-w-[140px] truncate text-slate-600 hover:text-slate-900 sm:inline"
-              title={auth.email ?? ""}
+              title={displayEmail}
             >
-              {auth.email}
+              {displayEmail}
             </Link>
             <Link href="/account" className="text-slate-600 hover:text-slate-900 sm:hidden">
               Account

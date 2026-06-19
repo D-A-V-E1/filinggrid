@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import MagicLinkForm from "@/components/auth/MagicLinkForm";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -12,14 +12,12 @@ interface SignInModalProps {
 }
 
 export default function SignInModal({ open, returnPath, onClose, onSignedIn }: SignInModalProps) {
-  const [key, setKey] = useState(0);
-  const { auth, loading, isSignedIn, refresh } = useAuth();
+  const { auth, loading, isSignedIn, supabaseEmail, refresh } = useAuth();
+  const sessionEmail = auth?.email ?? supabaseEmail;
+  const hasActiveSession = isSignedIn || Boolean(supabaseEmail);
 
   useEffect(() => {
-    if (!open) {
-      setKey((k) => k + 1);
-      return;
-    }
+    if (!open) return;
     void refresh();
   }, [open, refresh]);
 
@@ -49,13 +47,13 @@ export default function SignInModal({ open, returnPath, onClose, onSignedIn }: S
 
         {loading ? (
           <p className="mt-6 text-sm text-slate-500">Checking your session…</p>
-        ) : isSignedIn && auth ? (
+        ) : hasActiveSession && sessionEmail ? (
           <div className="mt-6 space-y-4">
             <div className="rounded-lg bg-brand-50 p-4 text-sm text-brand-800">
               <p className="font-medium">You&apos;re already signed in</p>
               <p className="mt-1">
-                Signed in as <span className="font-medium">{auth.email}</span>. Return visits stay
-                signed in until you sign out or clear browser cookies.
+                Signed in as <span className="font-medium">{sessionEmail}</span>. Return visits stay
+                signed in until you sign out or clear browser cookies — no new magic link needed.
               </p>
             </div>
             <button
@@ -72,10 +70,10 @@ export default function SignInModal({ open, returnPath, onClose, onSignedIn }: S
         ) : (
           <>
             <p className="mt-2 text-sm text-slate-600">
-              First time on this device? We&apos;ll email a one-time magic link. After that, your
-              session persists across visits — no password needed.
+              First time on this device? We&apos;ll email a one-time magic link. After you sign out,
+              signing back in with the same email here won&apos;t send another email.
             </p>
-            <div className="mt-6" key={key}>
+            <div className="mt-6">
               <MagicLinkForm
                 returnPath={returnPath}
                 requireCorporateEmail={false}

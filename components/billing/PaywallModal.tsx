@@ -20,7 +20,8 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
   const returnPath =
     pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
 
-  const { auth, isSignedIn, refresh } = useAuth();
+  const { auth, isSignedIn, supabaseEmail, refresh } = useAuth();
+  const hasSession = isSignedIn || Boolean(supabaseEmail);
   const { isPro } = useEffectiveTier(auth);
   const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,19 +29,19 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
   const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
-    if (open) {
-      refresh();
-      setShowCheckout(false);
-      setError("");
+    if (!open) return;
+    setError("");
+    void refresh();
+    if (!hasSession) {
       setFormKey((k) => k + 1);
     }
-  }, [open, refresh]);
+  }, [open, refresh, hasSession]);
 
   useEffect(() => {
-    if (open && isSignedIn) {
-      setShowCheckout(true);
+    if (open) {
+      setShowCheckout(hasSession);
     }
-  }, [open, isSignedIn]);
+  }, [open, hasSession]);
 
   useEffect(() => {
     if (open && isPro) {

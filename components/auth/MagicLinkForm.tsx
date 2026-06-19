@@ -4,33 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { buildAuthCallbackUrl } from "@/lib/auth-redirect";
 import { isSupabaseConfigured } from "@/lib/auth-config";
+import {
+  clearOtpSessionForEmail,
+  getOtpCooldownRemainingMs,
+  getRecentPendingOtpEmail,
+  markOtpRequested,
+} from "@/lib/otp-session";
 import { isCorporateEmail } from "@/lib/utils";
-import { waitForBackendAuth } from "@/hooks/useAuth";
-
-const OTP_COOLDOWN_MS = 60_000;
-const OTP_COOLDOWN_KEY = "filinggrid:otp-last-sent";
-
-function otpCooldownKey(email: string): string {
-  return `${OTP_COOLDOWN_KEY}:${email.trim().toLowerCase()}`;
-}
-
-function getOtpCooldownRemainingMs(email: string): number {
-  try {
-    const raw = sessionStorage.getItem(otpCooldownKey(email));
-    if (!raw) return 0;
-    return Math.max(0, OTP_COOLDOWN_MS - (Date.now() - Number(raw)));
-  } catch {
-    return 0;
-  }
-}
-
-function markOtpRequested(email: string): void {
-  try {
-    sessionStorage.setItem(otpCooldownKey(email), String(Date.now()));
-  } catch {
-    /* sessionStorage unavailable */
-  }
-}
+import { clearLocalSignOut, isLocalSignOut } from "@/lib/local-sign-out";
+import { resumeStoredSession, waitForBackendAuth } from "@/hooks/useAuth";
 
 function isEmailRateLimitError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -72,12 +54,44 @@ export default function MagicLinkForm({
   const [step, setStep] = useState<MagicLinkStep>("email");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [linkJustSent, setLinkJustSent] = useState(false);
+  const [canResumeSession, setCanResumeSession] = useState(false);
   const configured = isSupabaseConfigured();
   const submittingRef = useRef(false);
 
   useEffect(() => {
     onStepChange?.(step);
   }, [step, onStepChange]);
+
+  useEffect(() => {
+    if (!configured) return;
+    const supabase = createClient();
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      const sessionEmail = session?.user?.email?.trim();
+      if (sessionEmail && isLocalSignOut()) {
+        setEmail(sessionEmail);
+        setCanResumeSession(true);
+        return;
+      }
+      if (sessionEmail && !isLocalSignOut()) {
+        setEmail(sessionEmail);
+        void waitForBackendAuth(5, 400).then((me) => {
+          if (me?.is_authenticated) {
+            setStep("done");
+            onComplete?.();
+          }
+        });
+        return;
+      }
+      setCanResumeSession(false);
+      const pendingEmail = getRecentPendingOtpEmail();
+      if (pendingEmail) {
+        setEmail(pendingEmail);
+        setLinkJustSent(false);
+        setStep("sent");
+      }
+    });
+  }, [configured, onComplete]);
 
   useEffect(() => {
     if (step !== "sent") return;
@@ -90,6 +104,7 @@ export default function MagicLinkForm({
         setStep("verifying");
         const me = await waitForBackendAuth(15, 1000);
         if (me?.is_authenticated) {
+          clearOtpSessionForEmail(me.email ?? email);
           setStep("done");
           onComplete?.();
         } else {
@@ -103,6 +118,32 @@ export default function MagicLinkForm({
 
     return () => subscription.unsubscribe();
   }, [step, onComplete]);
+
+  async function completeIfAlreadySignedIn(
+    trimmedEmail: string,
+    sessionEmail: string | undefined
+  ): Promise<boolean> {
+    if (!sessionEmail || sessionEmail.toLowerCase() !== trimmedEmail.toLowerCase()) {
+      return false;
+    }
+    if (isLocalSignOut()) {
+      const resumed = await resumeStoredSession();
+      if (!resumed) return false;
+    }
+    setStep("verifying");
+    const me = await waitForBackendAuth(15, 1000);
+    if (me?.is_authenticated) {
+      clearOtpSessionForEmail(me.email ?? trimmedEmail);
+      setStep("done");
+      onComplete?.();
+      return true;
+    }
+    setError(
+      "Could not restore your session. Try sending a magic link, or sign out everywhere from Account."
+    );
+    setStep("verify_failed");
+    return true;
+  }
 
   async function handleSubmit() {
     if (submittingRef.current || loading) return;
@@ -121,22 +162,35 @@ export default function MagicLinkForm({
       );
       return;
     }
-    if (cooldownMs > 0) {
-      const secs = Math.ceil(cooldownMs / 1000);
-      setError(`Please wait ${secs}s before requesting another magic link.`);
-      return;
-    }
 
     submittingRef.current = true;
     setLoading(true);
     try {
       const supabase = createClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const sessionEmail = sessionData.session?.user?.email?.trim();
+
+      if (sessionEmail && sessionEmail.toLowerCase() !== trimmedEmail.toLowerCase()) {
+        await supabase.auth.signOut();
+        clearLocalSignOut();
+        clearOtpSessionForEmail(sessionEmail);
+      } else if (await completeIfAlreadySignedIn(trimmedEmail, sessionEmail)) {
+        return;
+      }
+
+      if (cooldownMs > 0) {
+        setLinkJustSent(false);
+        setStep("sent");
+        return;
+      }
+
       const { error: authError } = await supabase.auth.signInWithOtp({
         email: trimmedEmail,
         options: { emailRedirectTo: buildAuthCallbackUrl(returnPath) },
       });
       if (authError) throw authError;
       markOtpRequested(trimmedEmail);
+      setLinkJustSent(true);
       setStep("sent");
     } catch (err) {
       if (isEmailRateLimitError(err)) {
@@ -205,12 +259,21 @@ export default function MagicLinkForm({
         <div className="rounded-lg bg-brand-50 p-4 text-sm text-brand-800">
           <p className="font-medium">Check your inbox</p>
           <p className="mt-1">
-            We sent a sign-in link to <span className="font-medium">{email}</span>. Click it in
-            this browser — you&apos;ll return here automatically.
+            {linkJustSent ? (
+              <>
+                We sent a sign-in link to <span className="font-medium">{email}</span>. Click it in
+                this browser — you&apos;ll return here automatically.
+              </>
+            ) : (
+              <>
+                A sign-in link was recently sent to <span className="font-medium">{email}</span>.
+                Check your inbox (including spam) — another email was not sent.
+              </>
+            )}
           </p>
         </div>
         <p className="text-xs text-slate-500">
-          Link didn&apos;t arrive? Check spam, or{" "}
+          Link didn&apos;t arrive? Check spam. You can request another link after the cooldown, or{" "}
           <button
             type="button"
             className="text-brand-700 underline"
@@ -219,7 +282,7 @@ export default function MagicLinkForm({
               setStep("email");
             }}
           >
-            try again
+            use a different email
           </button>
           .
         </p>
@@ -236,14 +299,17 @@ export default function MagicLinkForm({
         </p>
       ) : (
         <p className="text-xs leading-relaxed text-slate-500">
-          Sign in with any email. A <strong>work email</strong> is only required when upgrading to
-          Professional.
+          First time on this device? We&apos;ll email a one-time magic link. After that, signing
+          back in with the same email on this browser won&apos;t send another email.
         </p>
       )}
       <input
         type="email"
         value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        onChange={(e) => {
+          setEmail(e.target.value);
+          setCanResumeSession(false);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && email.trim() && !loading && !submittingRef.current) {
             void handleSubmit();
@@ -259,7 +325,11 @@ export default function MagicLinkForm({
         disabled={loading || !email.trim()}
         className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
       >
-        {loading ? "Sending…" : submitLabel}
+        {loading
+          ? "Signing in…"
+          : canResumeSession
+            ? "Sign back in"
+            : submitLabel}
       </button>
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>

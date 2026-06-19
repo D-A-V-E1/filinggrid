@@ -15,7 +15,10 @@ const WELCOME_DISMISSED_KEY = "filinggrid:welcome-dismissed";
 export default function AccountPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { auth, loading, configured, isSignedIn, refresh, signOut } = useAuth();
+  const { auth, loading, configured, isSignedIn, supabaseEmail, refresh, signOut, signOutEverywhere } =
+    useAuth();
+  const hasSession = isSignedIn || Boolean(supabaseEmail);
+  const displayEmail = auth?.email ?? supabaseEmail;
   const { isPro } = useEffectiveTier(auth);
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -70,6 +73,19 @@ export default function AccountPanel() {
     }
   }
 
+  async function handleSignOutEverywhere() {
+    if (!confirm("Sign out on all devices? You will need a new magic link to sign in again.")) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await signOutEverywhere();
+      router.refresh();
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleUpgrade() {
     setError("");
     if (auth?.email && !isCorporateEmail(auth.email)) {
@@ -116,7 +132,11 @@ export default function AccountPanel() {
     );
   }
 
-  if (!isSignedIn || !auth) {
+  if (!isSignedIn && hasSession) {
+    return <p className="text-sm text-slate-500">Completing sign-in…</p>;
+  }
+
+  if (!hasSession || !displayEmail) {
     return (
       <>
         <div className="rounded-xl border border-slate-200 bg-white p-8">
@@ -225,6 +245,18 @@ export default function AccountPanel() {
             Sign out
           </button>
         </div>
+        <p className="mt-3 text-xs text-slate-500">
+          <button
+            type="button"
+            onClick={handleSignOutEverywhere}
+            disabled={actionLoading}
+            className="text-slate-500 underline hover:text-slate-700 disabled:opacity-50"
+          >
+            Sign out everywhere
+          </button>
+          {" "}
+          — revokes this browser&apos;s saved session; next sign-in needs a magic link.
+        </p>
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       </section>
 
