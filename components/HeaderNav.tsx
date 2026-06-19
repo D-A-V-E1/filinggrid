@@ -19,6 +19,8 @@ export default function HeaderNav() {
   const displayEmail = auth?.email ?? supabaseEmail;
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState("");
+  const hasRealSubscription = auth?.tier === "professional";
 
   useEffect(() => {
     function openSignIn() {
@@ -43,81 +45,86 @@ export default function HeaderNav() {
 
   async function handleManageBilling() {
     setActionLoading(true);
+    setError("");
     try {
       const { portal_url } = await createPortal(returnPath);
       window.location.href = portal_url;
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Billing portal unavailable");
       setActionLoading(false);
     }
   }
 
   return (
     <>
-      <nav className="flex items-center gap-4 text-sm">
-        <Link href="/pricing" className="text-slate-600 hover:text-slate-900">
-          Pricing
-        </Link>
+      <div className="flex flex-col items-end gap-1">
+        <nav className="flex items-center gap-4 text-sm">
+          <Link href="/pricing" className="text-slate-600 hover:text-slate-900">
+            Pricing
+          </Link>
 
-        {loading ? (
-          <span className="text-slate-400">…</span>
-        ) : hasSession && displayEmail ? (
-          <div className="flex items-center gap-3">
-            {isPro ? (
-              <span className="hidden rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 sm:inline">
-                Pro
-              </span>
-            ) : (
-              <span className="hidden rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 sm:inline">
-                Free
-              </span>
-            )}
-            <Link
-              href="/account"
-              className="hidden max-w-[140px] truncate text-slate-600 hover:text-slate-900 sm:inline"
-              title={displayEmail}
-            >
-              {displayEmail}
-            </Link>
-            <Link href="/account" className="text-slate-600 hover:text-slate-900 sm:hidden">
-              Account
-            </Link>
-            {isPro && (
+          {loading ? (
+            <span className="text-slate-400">…</span>
+          ) : hasSession && displayEmail ? (
+            <div className="flex items-center gap-3">
+              {isPro ? (
+                <span className="hidden rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 sm:inline">
+                  Pro
+                </span>
+              ) : (
+                <span className="hidden rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 sm:inline">
+                  Free
+                </span>
+              )}
+              <Link
+                href="/account"
+                className="hidden max-w-[140px] truncate text-slate-600 hover:text-slate-900 sm:inline"
+                title={displayEmail}
+              >
+                {displayEmail}
+              </Link>
+              <Link href="/account" className="text-slate-600 hover:text-slate-900 sm:hidden">
+                Account
+              </Link>
+              {hasRealSubscription && (
+                <button
+                  type="button"
+                  onClick={handleManageBilling}
+                  disabled={actionLoading}
+                  className="text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                >
+                  Billing
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleManageBilling}
+                onClick={handleSignOut}
                 disabled={actionLoading}
                 className="text-slate-600 hover:text-slate-900 disabled:opacity-50"
               >
-                Billing
+                Sign out
               </button>
-            )}
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={handleSignOut}
-              disabled={actionLoading}
-              className="text-slate-600 hover:text-slate-900 disabled:opacity-50"
+              onClick={() => setSignInOpen(true)}
+              className="text-slate-600 hover:text-slate-900"
+              title={configured ? undefined : "Supabase not configured"}
             >
-              Sign out
+              Sign in
             </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setSignInOpen(true)}
-            className="text-slate-600 hover:text-slate-900"
-            title={configured ? undefined : "Supabase not configured"}
-          >
-            Sign in
-          </button>
-        )}
+          )}
 
-        <Link
-          href="/compare/aapl-vs-msft"
-          className="rounded-lg bg-brand-600 px-3 py-1.5 font-medium text-white hover:bg-brand-700"
-        >
-          Try demo
-        </Link>
-      </nav>
+          <Link
+            href="/compare/aapl-vs-msft"
+            className="rounded-lg bg-brand-600 px-3 py-1.5 font-medium text-white hover:bg-brand-700"
+          >
+            Try demo
+          </Link>
+        </nav>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </div>
 
       <SignInModal
         open={signInOpen}
