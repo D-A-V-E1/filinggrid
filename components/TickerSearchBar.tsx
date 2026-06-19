@@ -82,7 +82,6 @@ export default function TickerSearchBar({
   const [searchError, setSearchError] = useState("");
   const [searching, setSearching] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
-  const [hydrated, setHydrated] = useState(false);
   const queryRequestIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLUListElement>(null);
@@ -163,10 +162,6 @@ export default function TickerSearchBar({
       return false;
     }
   }
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -313,22 +308,6 @@ export default function TickerSearchBar({
   const hasQuery = query.trim().length > 0;
   const showNoMatches =
     hasQuery && !searching && !searchError && suggestions.length === 0;
-
-  if (!hydrated) {
-    return (
-      <div className={compact ? "w-full" : "mx-auto w-full max-w-3xl"}>
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center gap-2 p-3">
-            <div className="min-w-[120px] flex-1">
-              <div className="h-5 w-48 max-w-full rounded bg-slate-100" aria-hidden />
-            </div>
-            <div className="h-9 w-20 rounded-lg bg-brand-600/40" aria-hidden />
-          </div>
-        </div>
-        {!compact && <PrivacyStrip className="mt-3 px-1" />}
-      </div>
-    );
-  }
 
   return (
     <div className={compact ? "w-full" : "mx-auto w-full max-w-3xl"}>
