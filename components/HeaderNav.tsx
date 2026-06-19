@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { createPortal } from "@/lib/api";
-import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import SignInModal from "@/components/auth/SignInModal";
@@ -13,7 +12,7 @@ export default function HeaderNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { auth, loading, configured, isSignedIn, refresh } = useAuth();
+  const { auth, loading, configured, isSignedIn, refresh, signOut } = useAuth();
   const { isPro } = useEffectiveTier(auth);
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -24,9 +23,7 @@ export default function HeaderNav() {
   async function handleSignOut() {
     setActionLoading(true);
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-      await refresh();
+      await signOut();
       router.refresh();
     } finally {
       setActionLoading(false);

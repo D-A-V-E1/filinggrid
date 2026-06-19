@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import AccountPanel from "@/components/account/AccountPanel";
 
 export const metadata: Metadata = {
@@ -14,7 +15,9 @@ export default function AccountPage() {
         Sign-in, subscription tier, and billing settings.
       </p>
       <div className="mt-8">
-        <AccountPanel />
+        <Suspense fallback={<p className="text-sm text-slate-500">Loading account…</p>}>
+          <AccountPanel />
+        </Suspense>
       </div>
     </div>
   );

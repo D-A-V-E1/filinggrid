@@ -208,6 +208,29 @@ stripe events list --limit 5
 
 ---
 
+## 9. Customer emails (receipts & failed payments)
+
+Stripe sends billing emails when enabled — not configured in app code.
+
+### Test mode
+
+1. [Settings → Customer emails](https://dashboard.stripe.com/test/settings/emails) (test mode toggle on)
+2. Enable:
+   - **Successful payments** — receipt after Checkout / invoice paid
+   - **Failed payments** — dunning when card fails (pairs with `invoice.payment_failed` webhook)
+3. Optional: **Upcoming invoice reminders** for renewals
+4. Complete a test checkout (`4242...`) → confirm receipt arrives at checkout email
+
+### Live mode (before launch)
+
+Repeat the same toggles under [live Customer emails](https://dashboard.stripe.com/settings/emails).
+
+### Branding (optional)
+
+[Settings → Branding](https://dashboard.stripe.com/settings/branding) — logo and colors appear on Checkout, Portal, and customer emails.
+
+---
+
 ## Related docs
 
 - [GO_LIVE_CHECKLIST.md](./GO_LIVE_CHECKLIST.md) — full production launch timeline

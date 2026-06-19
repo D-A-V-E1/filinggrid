@@ -56,6 +56,8 @@ Double-click **`start.bat`** in the project root (or run it from a terminal). It
 
 To stop, close those windows or run **`stop.bat`**.
 
+For **Stripe checkout testing** (Pro upgrade E2E), use **`start-with-stripe.bat`** instead. It starts the same stack plus `stripe listen`, auto-writes `STRIPE_WEBHOOK_SECRET` to `.env` and `backend/.env`, then launches the API. Requires `stripe login` once (`winget install Stripe.StripeCli`).
+
 ### Manual setup
 
 ### 1. Clone or initialize the repository

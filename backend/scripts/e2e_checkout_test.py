@@ -76,7 +76,7 @@ def _simulate_webhook(org_id: str, customer_id: str, subscription_id: str) -> in
         secret=settings.stripe_webhook_secret,
     )
     req = urllib.request.Request(
-        "http://127.0.0.1:8000/billing/webhooks/stripe",
+        "http://127.0.0.1:8000/webhooks/stripe",
         data=payload,
         headers={"stripe-signature": sig, "Content-Type": "application/json"},
         method="POST",

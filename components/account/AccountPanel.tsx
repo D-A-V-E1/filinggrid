@@ -1,27 +1,56 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { createCheckout, createPortal } from "@/lib/api";
-import { createClient } from "@/lib/supabase/client";
+import { isCorporateEmail } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import SignInModal from "@/components/auth/SignInModal";
+import AccountWelcome from "@/components/account/AccountWelcome";
+
+const WELCOME_DISMISSED_KEY = "filinggrid:welcome-dismissed";
 
 export default function AccountPanel() {
   const router = useRouter();
-  const { auth, loading, configured, isSignedIn, refresh } = useAuth();
+  const searchParams = useSearchParams();
+  const { auth, loading, configured, isSignedIn, refresh, signOut } = useAuth();
   const { isPro } = useEffectiveTier(auth);
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  const welcomeTriggered =
+    searchParams.get("welcome") === "1" ||
+    searchParams.get("auth") === "success" ||
+    searchParams.get("checkout") === "success";
+
+  useEffect(() => {
+    if (!isSignedIn || !welcomeTriggered) {
+      setShowWelcome(false);
+      return;
+    }
+    const dismissed = sessionStorage.getItem(WELCOME_DISMISSED_KEY) === "1";
+    setShowWelcome(!dismissed);
+  }, [isSignedIn, welcomeTriggered]);
+
+  const dismissWelcome = useCallback(() => {
+    sessionStorage.setItem(WELCOME_DISMISSED_KEY, "1");
+    setShowWelcome(false);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("welcome");
+    params.delete("auth");
+    params.delete("checkout");
+    const query = params.toString();
+    router.replace(query ? `/account?${query}` : "/account");
+  }, [router, searchParams]);
 
   async function handleSignOut() {
     setActionLoading(true);
     try {
-      await createClient().auth.signOut();
-      await refresh();
+      await signOut();
       router.refresh();
     } finally {
       setActionLoading(false);
@@ -29,8 +58,14 @@ export default function AccountPanel() {
   }
 
   async function handleUpgrade() {
-    setActionLoading(true);
     setError("");
+    if (auth?.email && !isCorporateEmail(auth.email)) {
+      setError(
+        "Professional requires a work email. Consumer providers (Gmail, Yahoo, Outlook personal, etc.) are not accepted."
+      );
+      return;
+    }
+    setActionLoading(true);
     try {
       const { checkout_url } = await createCheckout({ returnPath: "/account" });
       window.location.href = checkout_url;
@@ -77,6 +112,10 @@ export default function AccountPanel() {
             Use a magic link to access saved peer groups, billing, and Professional features. The
             compare workspace is free without an account.
           </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Professional checkout requires a <strong>work email</strong> (not Gmail, Yahoo, or other
+            personal providers).
+          </p>
           <button
             type="button"
             onClick={() => setSignInOpen(true)}
@@ -99,6 +138,8 @@ export default function AccountPanel() {
 
   return (
     <div className="space-y-6">
+      {showWelcome && <AccountWelcome isPro={isProUser} onDismiss={dismissWelcome} />}
+
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500">Profile</h2>
         <dl className="mt-4 space-y-3 text-sm">

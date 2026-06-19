@@ -202,6 +202,12 @@ export function prefetchAuthToken(): void {
   void getAuthToken();
 }
 
+/** Drop cached JWT so the next API call reflects the current Supabase session. */
+export function clearAuthTokenCache(): void {
+  _authTokenCache = null;
+  _authTokenInflight = null;
+}
+
 async function getAuthToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   const now = Date.now();

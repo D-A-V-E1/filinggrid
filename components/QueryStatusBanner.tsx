@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAuthMe } from "@/lib/api";
@@ -12,6 +13,8 @@ interface BannerConfig {
   message: string;
   paramKey: string;
   paramValue: string;
+  actionHref?: string;
+  actionLabel?: string;
 }
 
 const VARIANT_STYLES: Record<BannerVariant, string> = {
@@ -85,6 +88,10 @@ export default function QueryStatusBanner() {
           : "Subscription active — Professional features are now unlocked.",
         paramKey: "checkout",
         paramValue: "success",
+        ...(!checkoutPending && {
+          actionHref: "/compare/aapl-vs-msft-vs-nvda-vs-googl",
+          actionLabel: "Open compare with 8 tickers",
+        }),
       };
     }
     if (searchParams.get("checkout") === "cancelled") {
@@ -113,8 +120,16 @@ export default function QueryStatusBanner() {
       className={`border-b px-4 py-3 text-center text-sm ${VARIANT_STYLES[banner.variant]}`}
       role="status"
     >
-      <div className="mx-auto flex max-w-screen-2xl items-center justify-center gap-4">
+      <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-center gap-4">
         <p>{banner.message}</p>
+        {banner.actionHref && banner.actionLabel && (
+          <Link
+            href={banner.actionHref}
+            className="shrink-0 font-medium underline-offset-2 hover:underline"
+          >
+            {banner.actionLabel}
+          </Link>
+        )}
         <button
           type="button"
           onClick={dismiss}

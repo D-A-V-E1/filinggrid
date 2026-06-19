@@ -177,6 +177,55 @@ Use **test keys only** (`sk_test_...`, `pk_test_...`) in `.env`. Never use live 
 
 ---
 
+## Sign-up & onboarding E2E (manual + automated)
+
+Full flow audit: sign-in → welcome checklist → upgrade → Pro unlock → portal cancel.
+
+### Automated (no browser)
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts/signup_e2e_automated.py
+```
+
+Runs JWT auth, peer-group integration, tier gates, webhook handler tests (34+ tests). If API is on `:8000`, also runs `scripts/e2e_checkout_test.py` (checkout session + signed webhook → `professional` tier).
+
+### Manual browser script
+
+**Prerequisites:** Supabase magic link configured, `stripe listen --forward-to localhost:8000/webhooks/stripe`, API + frontend running.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | `/account` → sign in with any email → magic link | `?auth=success` banner; welcome checklist on `/account` |
+| 2 | `GET /auth/me` with JWT | `is_authenticated: true`, `tier: free` |
+| 3 | Sign in with Gmail → **Upgrade to Professional** on `/account` | Inline error: work email required (no Stripe redirect) |
+| 4 | Paywall (4 tickers) → work email magic link → checkout `4242...` | Redirect `?checkout=success`; banner polls tier |
+| 5 | After activation | Banner link **Open compare with 8 tickers**; Pro badge; 8 columns load |
+| 6 | Saved groups + GAAP Income Statement | CRUD works; full line items |
+| 7 | `/account` → **Manage billing** → cancel in Portal | Tier returns to `free` after webhook |
+| 8 | Check inboxes | Supabase magic-link email; Stripe receipt (if § Customer emails enabled) |
+
+**Email rules by entry point:**
+
+| Entry | Corporate email at sign-in? |
+|-------|----------------------------|
+| Header / `/account` | No — any email |
+| Paywall magic link | Yes — blocked before send |
+| `/account` upgrade button | Yes — blocked before Stripe redirect |
+
+**Onboarding UI (post-P1):**
+
+- [`AccountWelcome`](../../components/account/AccountWelcome.tsx) on `/account` when `?auth=success`, `?welcome=1`, or `?checkout=success`
+- [`QueryStatusBanner`](../../components/QueryStatusBanner.tsx) post-checkout link to 8-ticker compare
+- Dismiss welcome → stored in `sessionStorage` key `filinggrid:welcome-dismissed`
+
+**Dashboard ops (not in repo):**
+
+- Supabase: Magic Link template + optional custom SMTP — [SETUP_RUNBOOK.md § 2d–2e](./SETUP_RUNBOOK.md)
+- Stripe: Customer receipt / failed-payment emails — [STRIPE_SETUP.md § 9](./STRIPE_SETUP.md)
+
+---
+
 ## Safety notes
 
 - `ALLOW_DEV_TIER_TOGGLE` must **never** be `true` in production unless you explicitly accept the risk; `/dev/tier` and header overrides would be exposed.

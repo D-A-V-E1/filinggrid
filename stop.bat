@@ -23,7 +23,11 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000" ^| findstr "LISTENING
 )
 
 echo [OK] Ports 3000 and 8000 cleared.
-echo      Close any remaining "FilingGrid API" / "FilingGrid Web" terminal windows manually.
+
+:: Stop Stripe CLI listen processes (start-with-stripe.bat)
+taskkill /F /IM stripe.exe >nul 2>&1
+
+echo      Close any remaining "FilingGrid API" / "FilingGrid Web" / "FilingGrid Stripe" windows manually.
 echo.
 pause
 endlocal

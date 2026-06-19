@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { getAuthMe, type AuthMe } from "@/lib/api";
+import { clearAuthTokenCache, getAuthMe, type AuthMe } from "@/lib/api";
 import { isSupabaseConfigured } from "@/lib/auth-config";
 import { DEV_TIER_CHANGE_EVENT, isDevTierToggleEnabled } from "@/lib/dev-tier";
 
@@ -35,8 +35,12 @@ export function useAuth() {
     try {
       const supabase = createClient();
       const { data } = await supabase.auth.getSession();
+      if (!data.session?.access_token) {
+        clearAuthTokenCache();
+      }
       setSupabaseEmail(data.session?.user?.email ?? null);
     } catch {
+      clearAuthTokenCache();
       setSupabaseEmail(null);
     }
 
@@ -72,6 +76,14 @@ export function useAuth() {
     return () => window.removeEventListener(DEV_TIER_CHANGE_EVENT, onDevTierChange);
   }, [refresh]);
 
+  const signOut = useCallback(async () => {
+    if (!configured) return;
+    clearAuthTokenCache();
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    await refresh();
+  }, [configured, refresh]);
+
   const isSignedIn = Boolean(auth?.is_authenticated);
 
   return {
@@ -81,6 +93,7 @@ export function useAuth() {
     configured,
     isSignedIn,
     refresh,
+    signOut,
   };
 }
 

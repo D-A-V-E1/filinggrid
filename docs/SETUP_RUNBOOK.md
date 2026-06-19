@@ -235,6 +235,37 @@ Frontend uses URL + publishable/anon key for `@supabase/ssr` sign-in.
 
 > **Note:** FilingGrid uses a **local PostgreSQL** (`DATABASE_URL`) for users/orgs/tiers, not Supabase Postgres, unless you point `DATABASE_URL` at Supabase's connection string intentionally.
 
+### 2d. Magic Link email template (go-live branding)
+
+Supabase sends the only sign-in email today — there is no FilingGrid-owned welcome email in code.
+
+1. **Authentication → Email Templates → Magic Link**
+2. Suggested **subject:** `Sign in to FilingGrid`
+3. Suggested **body** (HTML):
+
+```html
+<h2>Sign in to FilingGrid</h2>
+<p>Click the link below to sign in. This link expires in one hour and works once.</p>
+<p><a href="{{ .ConfirmationURL }}">Sign in to FilingGrid</a></p>
+<p>If you did not request this email, you can ignore it.</p>
+<p>— FilingGrid · support@filinggrid.com</p>
+```
+
+4. **Authentication → Settings → Email** — confirm rate limits and link expiry suit your QA
+5. Test: sign in from `/account` → confirm branded email arrives (check spam)
+
+### 2e. Custom SMTP (optional — send from @filinggrid.com)
+
+Default Supabase SMTP works for dev; production should use your domain.
+
+1. **Project Settings → Authentication → SMTP Settings** → enable custom SMTP
+2. Provider examples: [Resend](https://resend.com), SendGrid, Postmark, Amazon SES
+3. Set **Sender email** e.g. `noreply@filinggrid.com`, **Sender name** `FilingGrid`
+4. Add DNS records (SPF, DKIM) per provider docs
+5. Re-send magic link and verify `From:` header shows your domain
+
+Without custom SMTP, magic links still work but may show Supabase as sender and land in spam more often.
+
 ---
 
 ## Step 3 — Environment files

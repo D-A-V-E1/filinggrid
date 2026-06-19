@@ -1,5 +1,4 @@
 import TickerSearchBar from "@/components/TickerSearchBar";
-import PrivacyStrip from "@/components/PrivacyStrip";
 import Link from "next/link";
 
 const FEATURES = [
@@ -35,14 +34,14 @@ export default function HomePage() {
             SEC Disclosure Workspace
           </p>
           <h1 className="mx-auto max-w-2xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
-            Compare SEC filings
-            <span className="block text-slate-400">side by side, without the wait</span>
+            Review multiple SEC filings
+            <span className="block text-slate-400">fast, side by side</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-600">
-            FilingGrid streams 10-K and 10-Q disclosures from EDGAR, splits them into
-            standard sections, and renders a synchronized multi-column workspace. Public
-            filings are cached locally for faster repeat access — only account and billing
-            data are stored in our database.
+            Stream 10-K and 10-Q disclosures from EDGAR into standard sections across
+            synchronized columns — jump between peers in one workspace without losing your
+            place, and revisit comparisons without re-downloading from EDGAR. Only account
+            and billing data are stored in our database.
           </p>
           <div className="mx-auto mt-10">
             <TickerSearchBar />
@@ -79,13 +78,6 @@ export default function HomePage() {
               </Link>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Privacy */}
-      <section className="mx-auto max-w-screen-xl px-4 py-12">
-        <div className="rounded-xl border border-slate-200 bg-white p-6">
-          <PrivacyStrip />
         </div>
       </section>
     </div>
