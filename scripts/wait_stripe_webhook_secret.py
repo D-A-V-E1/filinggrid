@@ -35,6 +35,15 @@ def patch_env(path: Path, key: str, value: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def read_log_text(path: Path) -> str:
+    raw = path.read_bytes()
+    if raw.startswith(b"\xff\xfe"):
+        return raw.decode("utf-16-le")
+    if raw.startswith(b"\xfe\xff"):
+        return raw.decode("utf-16-be")
+    return raw.decode("utf-8", errors="replace")
+
+
 def extract_secret(log_text: str) -> str | None:
     match = re.search(r"(whsec_[A-Za-z0-9]+)", log_text)
     return match.group(1) if match else None
@@ -51,7 +60,7 @@ def main() -> int:
 
     while time.time() < deadline:
         if LOG.exists():
-            log_text = LOG.read_text(encoding="utf-8", errors="replace")
+            log_text = read_log_text(LOG)
 
             if not warned_login and login_blocked(log_text) and not extract_secret(log_text):
                 warned_login = True
@@ -83,7 +92,7 @@ def main() -> int:
     print("[ERROR] Timed out waiting for Stripe webhook secret (120s).")
     print("        Check the FilingGrid Stripe window for errors.")
     if LOG.exists():
-        tail = LOG.read_text(encoding="utf-8", errors="replace")[-800:]
+        tail = read_log_text(LOG)[-800:]
         if tail.strip():
             print("\n--- stripe listen log (tail) ---")
             print(tail)
