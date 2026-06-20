@@ -25,7 +25,7 @@ import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import { compareUrlLimitMessage } from "@/lib/tier-limits";
-import { isDevTierToggleEnabled } from "@/lib/dev-tier";
+import { isDevTierToggleEnabled, shouldShowDevTierUI } from "@/lib/dev-tier";
 import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
 import SectionNav from "./SectionNav";
@@ -470,12 +470,15 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           onPaywall={handlePaywall}
         />
         <div className="ml-auto flex items-center gap-3">
-          <DevTierToggle
-            currentTier={tier}
-            onChange={() => {
-              void refreshAuth();
-            }}
-          />
+          {shouldShowDevTierUI(auth?.tier) && (
+            <DevTierToggle
+              authTier={auth?.tier}
+              currentTier={tier}
+              onChange={() => {
+                void refreshAuth();
+              }}
+            />
+          )}
           {tier === "professional" ? (
             <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
               Professional

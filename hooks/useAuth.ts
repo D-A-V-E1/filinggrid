@@ -6,7 +6,13 @@ import { clearAuthTokenCache, getAuthMe, type AuthMe } from "@/lib/api";
 import { isSupabaseConfigured } from "@/lib/auth-config";
 import { clearLocalSignOut, isLocalSignOut, setLocalSignOut } from "@/lib/local-sign-out";
 import { clearAllOtpSession } from "@/lib/otp-session";
-import { DEV_TIER_CHANGE_EVENT, isDevTierToggleEnabled } from "@/lib/dev-tier";
+import {
+  clearDevTierOverride,
+  DEV_TIER_CHANGE_EVENT,
+  hasRealProfessionalSubscription,
+  isDevTierToggleEnabled,
+  setAuthTierForDevGate,
+} from "@/lib/dev-tier";
 
 const EMPTY_AUTH: AuthMe = {
   email: null,
@@ -40,6 +46,7 @@ export function useAuth() {
 
   const refresh = useCallback(async () => {
     if (!configured) {
+      setAuthTierForDevGate(null);
       setAuth(EMPTY_AUTH);
       setSupabaseEmail(null);
       setLoading(false);
@@ -61,6 +68,7 @@ export function useAuth() {
     }
 
     if (isLocalSignOut()) {
+      setAuthTierForDevGate(null);
       setSupabaseEmail(null);
       setAuth(EMPTY_AUTH);
       setLoading(false);
@@ -71,8 +79,13 @@ export function useAuth() {
 
     try {
       const me = await getAuthMe();
+      setAuthTierForDevGate(me.tier);
+      if (hasRealProfessionalSubscription(me.tier)) {
+        clearDevTierOverride();
+      }
       setAuth(me);
     } catch {
+      setAuthTierForDevGate(null);
       setAuth(EMPTY_AUTH);
     } finally {
       setLoading(false);
@@ -106,6 +119,7 @@ export function useAuth() {
     if (!configured) return;
     clearAuthTokenCache();
     clearAllOtpSession();
+    setAuthTierForDevGate(null);
     setLocalSignOut(true);
     setAuth(EMPTY_AUTH);
     setSupabaseEmail(null);

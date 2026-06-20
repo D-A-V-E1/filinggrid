@@ -116,12 +116,14 @@ export default function HeaderNav() {
             </button>
           )}
 
-          <Link
-            href="/compare/aapl-vs-msft"
-            className="rounded-lg bg-brand-600 px-3 py-1.5 font-medium text-white hover:bg-brand-700"
-          >
-            Try demo
-          </Link>
+          {!hasRealSubscription && (
+            <Link
+              href="/compare/aapl-vs-msft"
+              className="rounded-lg bg-brand-600 px-3 py-1.5 font-medium text-white hover:bg-brand-700"
+            >
+              Try demo
+            </Link>
+          )}
         </nav>
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>

@@ -7,11 +7,14 @@ import {
   getDevTierFromStorage,
   isDevTierToggleEnabled,
   setDevTierInStorage,
+  shouldShowDevTierUI,
 } from "@/lib/dev-tier";
 import { getMaxColumns } from "@/lib/tier-limits";
 
 interface DevTierToggleProps {
-  /** Effective tier from `/auth/me` (before or without dev override). */
+  /** Real tier from `/auth/me` (Stripe subscription). */
+  authTier?: string | null;
+  /** Effective tier for which button appears selected. */
   currentTier: string;
   onChange?: (tier: DevTier) => void;
 }
@@ -20,7 +23,7 @@ function normalizeTier(tier: string): DevTier {
   return tier === "professional" ? "professional" : "free";
 }
 
-export default function DevTierToggle({ currentTier, onChange }: DevTierToggleProps) {
+export default function DevTierToggle({ authTier, currentTier, onChange }: DevTierToggleProps) {
   const enabled = isDevTierToggleEnabled();
   const [tier, setTier] = useState<DevTier>(() => normalizeTier(currentTier));
 
@@ -43,7 +46,7 @@ export default function DevTierToggle({ currentTier, onChange }: DevTierTogglePr
     [onChange]
   );
 
-  if (!enabled) return null;
+  if (!enabled || !shouldShowDevTierUI(authTier)) return null;
 
   const maxColumns = getMaxColumns(tier);
 
