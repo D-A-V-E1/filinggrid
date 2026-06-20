@@ -92,11 +92,8 @@ export function isProfessionalTier(authTier?: string | null): boolean {
   return getEffectiveTier(authTier) === "professional";
 }
 
-/** Limits aligned with backend `TIER_LIMITS`, preferring `/auth/me` when tier matches. */
+/** Limits aligned with backend `TIER_LIMITS` for the resolved effective tier. */
 export function getEffectiveLimits(auth?: AuthMe | null): TierLimits {
   const tier = getEffectiveTier(auth?.tier);
-  if (auth?.tier === tier && auth.limits) {
-    return auth.limits as TierLimits;
-  }
   return TIER_LIMITS[tier];
 }

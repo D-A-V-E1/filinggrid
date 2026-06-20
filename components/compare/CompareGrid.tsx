@@ -106,6 +106,11 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     if (isPro && paywall.open) {
       setPaywall((p) => ({ ...p, open: false }));
     }
+    if (isPro) {
+      setSectionsParseError((msg) =>
+        msg.includes("Free tier supports") || msg.includes("Upgrade to Professional") ? "" : msg
+      );
+    }
   }, [isPro, paywall.open]);
 
   useEffect(() => {
@@ -114,9 +119,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     setError("");
   }, [slugError]);
 
+  const tierResolved = !authLoading;
   const maxColumnsResolved = maxColumns;
-
-  const overColumnLimit = tickers.length > maxColumnsResolved;
+  const columnLimitExceeded = tierResolved && tickers.length > maxColumnsResolved;
 
   const isBootstrapMode = useMemo(() => {
     if (!data) return false;
@@ -400,7 +405,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
 
   useEffect(() => {
     if (slugError || authLoading) return;
-    if (overColumnLimit) {
+    if (columnLimitExceeded) {
       const message = compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length);
       if (!isPro) {
         setPaywall({ open: true, reason: "column_limit", message });
@@ -413,7 +418,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       return;
     }
     loadFilings();
-  }, [loadFilings, slugError, authLoading, overColumnLimit, tier, maxColumnsResolved, tickers.length, isPro]);
+  }, [loadFilings, slugError, authLoading, columnLimitExceeded, tier, maxColumnsResolved, tickers.length, isPro]);
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
@@ -510,7 +515,13 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {overColumnLimit && (
+        {authLoading && tickers.length > 3 && !data && (
+          <div className="flex flex-1 items-center justify-center p-8">
+            <p className="text-sm text-slate-500">Loading subscription…</p>
+          </div>
+        )}
+
+        {columnLimitExceeded && (
           <div className="flex flex-1 items-center justify-center p-8">
             <div className="max-w-md text-center">
               <p className="text-sm font-medium text-slate-800">Too many tickers for your plan</p>
@@ -521,7 +532,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           </div>
         )}
 
-        {error && !data && !overColumnLimit && (
+        {error && !data && !columnLimitExceeded && !authLoading && (
           <div className="flex flex-1 items-center justify-center p-6">
             <div className="max-w-md text-center">
               <p className="text-sm font-medium text-red-700">Could not load filings</p>
@@ -549,7 +560,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           </div>
         )}
 
-        {canShowCompare && data && availableSectionIds.size > 0 && !overColumnLimit && (
+        {canShowCompare && data && availableSectionIds.size > 0 && !columnLimitExceeded && (
           <div className="flex h-full min-h-0 w-full overflow-hidden">
             <SectionNav
               availableSectionIds={availableSectionIds}

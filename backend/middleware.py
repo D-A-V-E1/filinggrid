@@ -69,6 +69,11 @@ class AuthContext:
 def resolve_effective_tier(request: Request, org_tier: str) -> str:
     """Apply dev/test tier overrides when ALLOW_DEV_TIER_TOGGLE is enabled."""
     tier = org_tier if org_tier in TIER_LIMITS else "free"
+
+    # Real Stripe Professional subscriptions cannot be downgraded by dev headers.
+    if tier == "professional":
+        return tier
+
     if not settings.allow_dev_tier_toggle:
         return tier
 

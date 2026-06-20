@@ -126,7 +126,7 @@ def test_resolve_effective_tier_env_override(monkeypatch):
     assert resolve_effective_tier(request, "free") == "professional"
 
 
-def test_resolve_effective_tier_header_beats_env(monkeypatch):
+def test_resolve_effective_tier_header_cannot_downgrade_professional(monkeypatch):
     mock_settings = MagicMock()
     mock_settings.allow_dev_tier_toggle = True
     mock_settings.dev_pro_tier = True
@@ -134,7 +134,7 @@ def test_resolve_effective_tier_header_beats_env(monkeypatch):
 
     request = MagicMock()
     request.headers.get.return_value = "free"
-    assert resolve_effective_tier(request, "professional") == "free"
+    assert resolve_effective_tier(request, "professional") == "professional"
 
 
 def test_dev_tier_endpoint_hidden_without_toggle(monkeypatch):

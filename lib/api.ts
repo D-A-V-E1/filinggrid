@@ -234,7 +234,10 @@ async function getAuthToken(): Promise<string | null> {
   return _authTokenInflight;
 }
 
-async function buildAuthHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
+async function buildAuthHeaders(
+  extra: Record<string, string> = {},
+  options: { skipDevTier?: boolean } = {}
+): Promise<Record<string, string>> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -242,9 +245,11 @@ async function buildAuthHeaders(extra: Record<string, string> = {}): Promise<Rec
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const devTier = getDevTierForApiHeader();
-  if (devTier) {
-    headers["X-Dev-Tier"] = devTier;
+  if (!options.skipDevTier) {
+    const devTier = getDevTierForApiHeader();
+    if (devTier) {
+      headers["X-Dev-Tier"] = devTier;
+    }
   }
 
   return headers;
@@ -549,7 +554,19 @@ export async function parseFilings(
 }
 
 export async function getAuthMe(): Promise<AuthMe> {
-  return apiFetch<AuthMe>("/auth/me");
+  const headers = await buildAuthHeaders({}, { skipDevTier: true });
+  const res = await fetch(`${API_URL}/auth/me`, { headers, cache: "no-store" });
+  if (!res.ok) {
+    let detail: PaywallError | string | Record<string, unknown> = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? body;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return res.json();
 }
 
 export async function checkApiHealth(): Promise<boolean> {
