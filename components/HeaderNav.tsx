@@ -73,7 +73,7 @@ export default function HeaderNav() {
             <div className="flex items-center gap-3">
               {isPro ? (
                 <span className="hidden rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 sm:inline">
-                  Pro
+                  Professional
                 </span>
               ) : (
                 <span className="hidden rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 sm:inline">

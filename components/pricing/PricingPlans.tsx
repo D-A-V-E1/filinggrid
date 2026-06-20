@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import PaywallModal from "@/components/billing/PaywallModal";
+import { createPortal } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 
@@ -46,8 +47,22 @@ const PLANS = [
 
 export default function PricingPlans() {
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState("");
   const { auth } = useAuth();
   const { isPro } = useEffectiveTier(auth);
+
+  async function handleManageBilling() {
+    setPortalLoading(true);
+    setPortalError("");
+    try {
+      const { portal_url } = await createPortal("/pricing");
+      window.location.href = portal_url;
+    } catch (err) {
+      setPortalError(err instanceof Error ? err.message : "Billing portal unavailable");
+      setPortalLoading(false);
+    }
+  }
 
   return (
     <>
@@ -77,12 +92,14 @@ export default function PricingPlans() {
             </ul>
             {plan.isPro ? (
               isPro ? (
-                <Link
-                  href="/account"
-                  className="mt-8 block w-full rounded-lg border border-brand-200 bg-brand-50 py-2.5 text-center text-sm font-medium text-brand-800 transition hover:bg-brand-100"
+                <button
+                  type="button"
+                  onClick={handleManageBilling}
+                  disabled={portalLoading}
+                  className="mt-8 block w-full rounded-lg border border-brand-200 bg-brand-50 py-2.5 text-center text-sm font-medium text-brand-800 transition hover:bg-brand-100 disabled:opacity-50"
                 >
-                  Current plan — manage billing
-                </Link>
+                  {portalLoading ? "Opening portal…" : "Current plan — manage billing"}
+                </button>
               ) : (
                 <button
                   type="button"
@@ -103,6 +120,12 @@ export default function PricingPlans() {
           </div>
         ))}
       </div>
+
+      {portalError && (
+        <p className="mt-4 text-center text-sm text-red-600" role="alert">
+          {portalError}
+        </p>
+      )}
 
       <PaywallModal
         open={paywallOpen}

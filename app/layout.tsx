@@ -90,7 +90,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Not for financial or investment decisions. You&apos;re responsible for how you use what
               you find here.
             </p>
-            <nav className="mt-2 flex items-center justify-center gap-3 text-slate-500">
+            <nav className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-slate-500">
+              <a href="mailto:support@filinggrid.com" className="hover:text-slate-700">
+                support@filinggrid.com
+              </a>
+              <span aria-hidden="true">·</span>
               <Link href="/privacy" className="hover:text-slate-700">
                 Privacy Policy
               </Link>
