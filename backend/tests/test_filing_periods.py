@@ -134,6 +134,45 @@ def test_find_filing_interim_slot_matches_fp_derived_from_period_end():
     assert filing["report_date"] == "2024-09-30"
 
 
+def test_fiscal_quarter_end_calendar_quarters():
+    from sec.filing_periods import fiscal_quarter_end
+
+    assert fiscal_quarter_end(2026, "Q1") == "2026-03-31"
+    assert fiscal_quarter_end(2026, "Q2") == "2026-06-30"
+    assert fiscal_quarter_end(2026, "Q3") == "2026-09-30"
+    assert fiscal_quarter_end(2026, "Q4") == "2026-12-31"
+
+
+def test_find_filing_interim_slot_6k_when_sec_report_date_differs_from_period_end():
+    """6-K EDGAR report_date may be the filing date, not the fiscal period end (e.g. UMC)."""
+    subs = _submissions(
+        [
+            {
+                "form": "6-K",
+                "accession": "0001140361-26-012345",
+                "filing_date": "2026-04-28",
+                "report_date": "2026-04-28",
+            },
+        ]
+    )
+    xbrl = [
+        {
+            "kind": "interim",
+            "fiscal_year": 2026,
+            "fp": "Q1",
+            "end": "2026-03-31",
+            "form": "6-K",
+            "filed": "2026-04-28",
+            "accn": "0001140361-26-012345",
+        },
+    ]
+    filing = find_filing(subs, period="interim-2026-Q1", xbrl_periods=xbrl)
+    assert filing is not None
+    assert filing["form"] == "6-K"
+    assert filing["accession_no_dash"] == "000114036126012345"
+    assert filing["period_end"] == "2026-03-31"
+
+
 def test_find_filing_cross_ticker_via_interim_slot():
     """Legacy date id from one issuer must resolve via fiscal slot on another."""
     aapl = _submissions(

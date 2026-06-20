@@ -42,7 +42,7 @@ from sec.client import (
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 _companyfacts_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
-FOREIGN_FILING_FALLBACK_VERSION = 1
+FOREIGN_FILING_FALLBACK_VERSION = 2
 
 # Metric key -> candidate us-gaap concept names (first match wins)
 METRIC_CONCEPTS: dict[str, list[str]] = {
@@ -1668,18 +1668,158 @@ def _load_cached_filing_html(cik: str, fiscal_year: int | None) -> bytes | None:
     return load_filing_html(cik, filing["accession_no_dash"])
 
 
+def _effective_fiscal_year(
+    fiscal_year: int | None,
+    pf: Any | None,
+) -> int | None:
+    if fiscal_year is not None:
+        return fiscal_year
+    if pf is not None and getattr(pf, "fiscal_year", None) is not None:
+        return int(pf.fiscal_year)
+    return None
+
+
+def _interim_period_end(
+    filing_meta: dict[str, Any] | None,
+    pf: Any | None,
+) -> str | None:
+    if pf is not None and getattr(pf, "report_date", None):
+        return pf.report_date
+    if pf is not None and getattr(pf, "fiscal_year", None) and getattr(pf, "fp", None):
+        from sec.filing_periods import fiscal_quarter_end
+
+        derived = fiscal_quarter_end(int(pf.fiscal_year), pf.fp)
+        if derived:
+            return derived
+    if filing_meta:
+        return filing_meta.get("period_end") or filing_meta.get("report_date")
+    return None
+
+
+_FINANCIAL_EXHIBIT_MARKERS: tuple[bytes, ...] = (
+    b"revenue",
+    b"total assets",
+    b"net income",
+    b"consolidated",
+)
+
+
+def _iso_date_plus_days(iso: str, days: int) -> str:
+    from datetime import datetime, timedelta
+
+    return (datetime.strptime(iso, "%Y-%m-%d") + timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+async def _6k_filing_has_financial_exhibit(cik: str, filing: dict[str, Any]) -> bool:
+    from sec.client import _fetch_filing_index, fetch_filing_document
+
+    try:
+        index_items = await _fetch_filing_index(cik, filing)
+    except Exception:
+        return False
+
+    for item in index_items:
+        name = str(item.get("name") or "")
+        lower = name.lower()
+        if not lower.endswith((".htm", ".html")):
+            continue
+        if not any(token in lower for token in ("ex99", "quarterly", "financial", "report")):
+            continue
+        try:
+            doc = await fetch_filing_document(cik, filing["accession_no_dash"], name)
+        except Exception:
+            continue
+        dl = doc.lower()
+        if sum(marker in dl for marker in _FINANCIAL_EXHIBIT_MARKERS) >= 2:
+            return True
+    return False
+
+
+async def _find_6k_earnings_filing_for_slot(
+    cik: str,
+    submissions: dict[str, Any],
+    fiscal_year: int,
+    fp: str,
+) -> dict[str, Any] | None:
+    """Locate the 6-K earnings release filed after a fiscal quarter end."""
+    from sec.client import _filing_date_ord
+    from sec.filing_periods import _iter_submission_filings, fiscal_quarter_end
+
+    quarter_end = fiscal_quarter_end(fiscal_year, fp)
+    if not quarter_end:
+        return None
+
+    window_end = _iso_date_plus_days(quarter_end, 120)
+    candidates = [
+        row
+        for row in _iter_submission_filings(submissions)
+        if (row.get("form") or "").replace("/A", "").upper() == "6-K"
+        and (row.get("filing_date") or "") > quarter_end
+        and (row.get("filing_date") or "") <= window_end
+    ]
+    candidates.sort(key=lambda row: _filing_date_ord(row.get("filing_date")))
+
+    for row in candidates:
+        if await _6k_filing_has_financial_exhibit(cik, row):
+            return {**row, "period_end": quarter_end}
+    return None
+
+
 async def _resolve_filing_for_period(
     cik: str,
     fiscal_year: int | None,
     period: str | None = None,
+    *,
+    facts: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Resolve the filing metadata for an annual or interim compare period."""
     from filing_store import load_submissions
+    from sec.filing_periods import resolve_period_filter
 
     submissions = load_submissions(cik)
     if not submissions:
         submissions = await fetch_submissions(cik, merge_archives=False)
-    return find_filing(submissions, fiscal_year=fiscal_year, period=period)
+
+    xbrl_periods: list[dict[str, Any]] | None = None
+    if period:
+        try:
+            if facts is None:
+                facts, _ = await fetch_company_facts(cik)
+            xbrl_periods = list_reporting_periods(facts)
+        except Exception:
+            xbrl_periods = None
+
+    pf = resolve_period_filter(fiscal_year, period)
+    filing = find_filing(
+        submissions,
+        fiscal_year=fiscal_year,
+        period=period,
+        xbrl_periods=xbrl_periods,
+    )
+    if (
+        filing
+        and pf
+        and pf.kind == "interim"
+        and pf.fiscal_year is not None
+        and pf.fp
+        and (filing.get("form") or "").replace("/A", "").upper() == "6-K"
+    ):
+        from sec.filing_periods import fiscal_quarter_end
+
+        quarter_end = fiscal_quarter_end(pf.fiscal_year, pf.fp)
+        current_end = filing.get("period_end") or filing.get("report_date")
+        if quarter_end and current_end != quarter_end:
+            earnings = await _find_6k_earnings_filing_for_slot(
+                cik,
+                submissions,
+                pf.fiscal_year,
+                pf.fp,
+            )
+            if earnings:
+                filing = earnings
+            else:
+                filing = {**filing, "period_end": quarter_end}
+    return filing
 
 
 async def _load_filing_html_for_period(
@@ -2422,32 +2562,38 @@ async def _apply_filing_level_financial_fallback(
     if not needs_fallback:
         return extracted, source, filing_html, filing_meta
 
-    can_fallback = bool(report_date or (period_kind == "annual" and fiscal_year is not None))
+    effective_fy = _effective_fiscal_year(fiscal_year, pf)
+    can_fallback = bool(
+        report_date
+        or (period_kind == "annual" and effective_fy is not None)
+        or (period_kind == "interim" and pf and effective_fy is not None and pf.fp)
+    )
     if not can_fallback:
         return extracted, source, filing_html, filing_meta
 
     filing_html, filing_meta = await _load_filing_html_for_period(
         cik,
-        fiscal_year,
+        effective_fy,
         period,
         prefer_ixbrl=True,
     )
     if not filing_html:
         return extracted, source, filing_html, filing_meta
 
-    effective_report_date = report_date or (filing_meta or {}).get("report_date")
+    effective_report_date = report_date or _interim_period_end(filing_meta, pf) or (filing_meta or {}).get("report_date")
     html_text = filing_html.decode("utf-8", errors="replace")
     from sec.client import _html_has_ixbrl_facts
 
     form_normalized = (filing_meta or {}).get("form", "").replace("/A", "").upper()
+    interim_fp = pf.fp if pf else None
 
     if _html_has_ixbrl_facts(filing_html):
         ixbrl = extract_financial_metrics_from_ixbrl(
             html_text,
-            fiscal_year=fiscal_year,
+            fiscal_year=effective_fy,
             report_date=effective_report_date,
             form=(filing_meta or {}).get("form"),
-            fp=pf.fp if pf else None,
+            fp=interim_fp,
             period_kind=period_kind,
         )
         if ixbrl.get("annual_summary"):
@@ -2456,17 +2602,17 @@ async def _apply_filing_level_financial_fallback(
     if form_normalized == "6-K":
         report_html, report_meta = await _load_filing_html_for_period(
             cik,
-            fiscal_year,
+            effective_fy,
             period,
             prefer_report=True,
         )
         if report_html:
             html_result = extract_financial_metrics_from_html_tables(
                 report_html.decode("utf-8", errors="replace"),
-                fiscal_year=fiscal_year,
+                fiscal_year=effective_fy,
                 report_date=effective_report_date,
                 form=(report_meta or filing_meta or {}).get("form"),
-                fp=pf.fp if pf else None,
+                fp=interim_fp,
                 period_kind=period_kind,
             )
             if html_result.get("annual_summary"):
@@ -2490,25 +2636,28 @@ async def fetch_ticker_financial_statements(
     facts, from_cache = await fetch_company_facts(resolved["cik"])
     pf = parse_period_param(period)
     period_kind = pf.kind if pf else "annual"
+    effective_fy = _effective_fiscal_year(fiscal_year, pf)
     report_date = pf.report_date if pf and pf.kind == "interim" else None
     period_filter = resolve_period_filter(fiscal_year, period)
 
-    extracted = extract_statement_tables(facts, fiscal_year=fiscal_year, period=period)
+    extracted = extract_statement_tables(facts, fiscal_year=effective_fy, period=period)
     source = "sec_companyfacts"
 
     if not _statements_have_rows(extracted):
         metrics_seed = extract_financial_metrics(
             facts,
-            fiscal_year=fiscal_year,
+            fiscal_year=effective_fy,
             report_date=report_date,
         )
         if pf and pf.kind == "interim" and not report_date:
-            filing_meta = await _resolve_filing_for_period(resolved["cik"], fiscal_year, period)
+            filing_meta = await _resolve_filing_for_period(
+                resolved["cik"], fiscal_year, period, facts=facts
+            )
             if filing_meta:
-                report_date = filing_meta.get("report_date")
+                report_date = _interim_period_end(filing_meta, pf)
         fallback_metrics, source, _, filing_meta = await _apply_filing_level_financial_fallback(
             resolved["cik"],
-            fiscal_year,
+            effective_fy,
             period,
             pf=pf,
             period_kind=period_kind,
@@ -2554,22 +2703,25 @@ async def fetch_ticker_financials(
         facts, from_cache = await fetch_company_facts(resolved["cik"])
     pf = parse_period_param(period)
     period_kind = pf.kind if pf else "annual"
+    effective_fy = _effective_fiscal_year(fiscal_year, pf)
     report_date = pf.report_date if pf and pf.kind == "interim" else None
     filing_meta: dict[str, Any] | None = None
 
     if pf and pf.kind == "interim" and not report_date:
-        filing_meta = await _resolve_filing_for_period(resolved["cik"], fiscal_year, period)
+        filing_meta = await _resolve_filing_for_period(
+            resolved["cik"], fiscal_year, period, facts=facts
+        )
         if filing_meta:
-            report_date = filing_meta.get("report_date")
+            report_date = _interim_period_end(filing_meta, pf)
 
     extracted = extract_financial_metrics(
         facts,
-        fiscal_year=fiscal_year,
+        fiscal_year=effective_fy,
         report_date=report_date,
     )
     extracted, source, filing_html, filing_meta = await _apply_filing_level_financial_fallback(
         resolved["cik"],
-        fiscal_year,
+        effective_fy,
         period,
         pf=pf,
         period_kind=period_kind,
@@ -2582,13 +2734,13 @@ async def fetch_ticker_financials(
         if filing_html is None:
             filing_html = await _load_filing_html_for_notes(
                 resolved["cik"],
-                fiscal_year,
+                effective_fy,
                 period,
             )
         notes_xbrl = extract_note_disclosures(
             facts,
             filing_html,
-            fiscal_year=fiscal_year,
+            fiscal_year=effective_fy,
             report_date=report_date,
         )
     elapsed_ms = round((time.perf_counter() - started) * 1000, 1)

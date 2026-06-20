@@ -204,6 +204,20 @@ def _fp_to_quarter(fp: str | None) -> int | None:
     return None
 
 
+def fiscal_quarter_end(fiscal_year: int, fp: str) -> str | None:
+    """Calendar fiscal quarter end for compare slot ids (interim-2026-Q1, etc.)."""
+    quarter = _fp_to_quarter(fp)
+    if quarter == 1:
+        return f"{fiscal_year}-03-31"
+    if quarter == 2:
+        return f"{fiscal_year}-06-30"
+    if quarter == 3:
+        return f"{fiscal_year}-09-30"
+    if quarter == 4:
+        return f"{fiscal_year}-12-31"
+    return None
+
+
 def _iter_submission_filings(submissions: dict[str, Any]) -> list[dict[str, Any]]:
     recent = submissions.get("filings", {}).get("recent", {})
     forms = recent.get("form", [])
@@ -786,15 +800,48 @@ def _find_filing_for_interim_slot(
     end = best.get("period_end") or best.get("report_date")
     if not end:
         return None
+    submission_rows = list(_iter_submission_filings(submissions))
+
+    # 6-K SEC report_date often differs from XBRL period end; match by accession when available.
+    if xbrl_periods:
+        for xp in xbrl_periods:
+            if xp.get("kind") != "interim" or xp.get("fiscal_year") != fy:
+                continue
+            xp_fp = xp.get("fp")
+            if xp_fp not in ("Q1", "Q2", "Q3", "Q4"):
+                quarter = _quarter_from_report_date(xp.get("end"))
+                xp_fp = f"Q{quarter}" if quarter else None
+            if xp_fp != fp:
+                continue
+            if form and _compact_form_label(xp.get("form") or "") != form:
+                continue
+            matched = _match_submission_filing(
+                submission_rows,
+                accn=xp.get("accn"),
+                end=xp.get("end") or end,
+                form=xp.get("form"),
+            )
+            if matched:
+                return {**matched, "period_end": end}
+
+    matched = _match_submission_filing(
+        submission_rows,
+        accn=None,
+        end=end,
+        form=best.get("form"),
+    )
+    if matched:
+        return {**matched, "period_end": end}
+
     candidates = [
         row
-        for row in _iter_submission_filings(submissions)
+        for row in submission_rows
         if row["form"] in INTERIM_COMPARABLE_FORMS and row.get("report_date") == end
     ]
     if not candidates:
         return None
     candidates.sort(key=lambda x: (_form_tier(x["form"]), -_filing_date_ord(x.get("filing_date"))))
-    return candidates[0]
+    return {**candidates[0], "period_end": end}
 
 
 async def resolve_interim_slot_for_tickers(

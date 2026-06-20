@@ -450,6 +450,20 @@ async def fetch_filing_ixbrl_html(cik: str, filing: dict[str, Any]) -> bytes:
         _filing_ixbrl_inflight.pop(key, None)
 
 
+_FINANCIAL_HTML_MARKERS: tuple[bytes, ...] = (
+    b"consolidated",
+    b"financial",
+    b"revenue",
+    b"net income",
+    b"total assets",
+)
+
+
+def _html_financial_score(html: bytes) -> int:
+    lower = html.lower()
+    return sum(marker in lower for marker in _FINANCIAL_HTML_MARKERS)
+
+
 async def fetch_filing_report_html(cik: str, filing: dict[str, Any]) -> bytes:
     """Load the best financial report HTML for a filing (6-K exhibits are often separate)."""
     primary_html = await fetch_filing_html(cik, filing)
@@ -463,6 +477,7 @@ async def fetch_filing_report_html(cik: str, filing: dict[str, Any]) -> bytes:
         return primary_html
 
     best = primary_html
+    best_score = _html_financial_score(primary_html)
     for doc_name in _rank_ixbrl_document_candidates(
         index_items,
         filing.get("primary_document"),
@@ -473,9 +488,8 @@ async def fetch_filing_report_html(cik: str, filing: dict[str, Any]) -> bytes:
             html = await fetch_filing_document(cik, filing["accession_no_dash"], doc_name)
         except httpx.HTTPError:
             continue
-        lower = html.lower()
-        if len(html) > len(best) and (
-            b"consolidated" in lower or b"financial" in lower or b"revenue" in lower
-        ):
+        score = _html_financial_score(html)
+        if score > best_score or (score == best_score and len(html) > len(best)):
             best = html
+            best_score = score
     return best
