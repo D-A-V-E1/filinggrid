@@ -159,6 +159,9 @@
     max-width: 100%;
     -webkit-overflow-scrolling: touch;
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-y: auto;
+    touch-action: pan-x pan-y;
   }
 
   /* Full GAAP statement tables: size to content so value column is not clipped in narrow compare columns */

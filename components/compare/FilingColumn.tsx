@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   fetchFinancialStatements,
   fetchSectionHtml,
@@ -16,6 +16,7 @@ import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from 
 import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { displayFormLabel, formFromPeriodId } from "@/lib/filing-period";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
+import { forwardVerticalWheelFromHorizontalScrollContainer } from "@/lib/forward-vertical-wheel";
 import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
@@ -129,6 +130,23 @@ function pickAnnualRows(
   return sorted.slice(0, maxFyColumns);
 }
 
+function XbrlMetricsScroll({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={className}
+      onWheel={forwardVerticalWheelFromHorizontalScrollContainer}
+    >
+      {children}
+    </div>
+  );
+}
+
 function XbrlMetricsPanel({
   rows,
   annualSummary,
@@ -166,7 +184,7 @@ function XbrlMetricsPanel({
           </span>
         )}
       </div>
-      <div className={scrollClass}>
+      <XbrlMetricsScroll className={scrollClass}>
         <table className={tableClass}>
           <thead>
             <tr className="border-b border-brand-200/80">
@@ -200,7 +218,7 @@ function XbrlMetricsPanel({
             ))}
           </tbody>
         </table>
-      </div>
+      </XbrlMetricsScroll>
       {subtitle && (
         <p className="mt-2 text-[10px] leading-relaxed text-slate-500">{subtitle}</p>
       )}
@@ -244,7 +262,7 @@ function StatementRowsTable({
     : "xbrl-metrics-table w-max min-w-full border-collapse text-left text-xs";
 
   return (
-    <div className={scrollClass}>
+    <XbrlMetricsScroll className={scrollClass}>
       <table className={tableClass}>
         <thead>
           <tr className="border-b border-brand-200/80">
@@ -269,7 +287,7 @@ function StatementRowsTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </XbrlMetricsScroll>
   );
 }
 
