@@ -8,6 +8,7 @@ import { AUTH_SIGN_IN_REQUEST_EVENT } from "@/lib/auth-errors";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import SignInModal from "@/components/auth/SignInModal";
+import SavedPeerGroupsNav from "@/components/landing/SavedPeerGroupsNav";
 
 export default function HeaderNav() {
   const pathname = usePathname();
@@ -21,6 +22,7 @@ export default function HeaderNav() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const hasRealSubscription = auth?.tier === "professional";
+  const isLandingPage = pathname === "/";
 
   useEffect(() => {
     function openSignIn() {
@@ -59,6 +61,8 @@ export default function HeaderNav() {
     <>
       <div className="flex flex-col items-end gap-1">
         <nav className="flex items-center gap-4 text-sm">
+          {hasRealSubscription && isLandingPage && <SavedPeerGroupsNav />}
+
           <Link href="/pricing" className="text-slate-600 hover:text-slate-900">
             Pricing
           </Link>

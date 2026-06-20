@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SavedPeerGroupsCallout from "@/components/landing/SavedPeerGroupsCallout";
 import { useAuth } from "@/hooks/useAuth";
 import { hasRealProfessionalSubscription } from "@/lib/dev-tier";
 
@@ -15,8 +16,12 @@ const PRO_HIGHLIGHTS = [
 export default function ProCallout() {
   const { auth, loading } = useAuth();
 
-  if (!loading && hasRealProfessionalSubscription(auth?.tier)) {
+  if (loading) {
     return null;
+  }
+
+  if (hasRealProfessionalSubscription(auth?.tier)) {
+    return <SavedPeerGroupsCallout />;
   }
 
   return (
