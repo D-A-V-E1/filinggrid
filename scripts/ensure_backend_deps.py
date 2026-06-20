@@ -11,11 +11,14 @@ ROOT = Path(__file__).resolve().parent.parent
 REQ = ROOT / "backend" / "requirements.txt"
 STAMP = ROOT / "backend" / ".venv" / ".requirements-sha256"
 VENV_PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
-VENV_PIP = ROOT / "backend" / ".venv" / "Scripts" / "pip.exe"
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).digest().hex()
+
+
+def run_pip(args: list[str]) -> int:
+    return subprocess.call([str(VENV_PY), "-m", "pip", *args])
 
 
 def main() -> int:
@@ -32,13 +35,13 @@ def main() -> int:
         return 0
 
     print("[INFO] Installing Python packages...")
-    steps = [
-        [str(VENV_PIP), "install", "--upgrade", "pip", "setuptools", "wheel", "-q"],
-        [str(VENV_PIP), "install", "greenlet==3.1.1", "--only-binary=:all:", "-q"],
-        [str(VENV_PIP), "install", "-r", str(REQ)],
+    steps: list[list[str]] = [
+        ["install", "--upgrade", "pip", "setuptools", "wheel", "-q"],
+        ["install", "greenlet==3.1.1", "--only-binary=:all:", "-q"],
+        ["install", "-r", str(REQ)],
     ]
-    for cmd in steps:
-        rc = subprocess.call(cmd)
+    for args in steps:
+        rc = run_pip(args)
         if rc != 0:
             print("[ERROR] pip install failed.")
             return rc

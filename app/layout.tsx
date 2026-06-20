@@ -68,13 +68,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
         <footer className="shrink-0 border-t border-slate-200 bg-white py-3">
           <div className="mx-auto max-w-screen-2xl px-4 text-center text-xs leading-snug text-slate-400">
-            <p>
+            <p role="note">
+              <span className="mr-1" aria-hidden="true">
+                🔒
+              </span>
+              <strong className="font-medium text-slate-500">Public SEC data</strong>
+              {" — "}
               FilingGrid is not affiliated with the U.S. Securities and Exchange Commission.
-              <span className="hidden sm:inline"> · </span>
+              <span className="hidden sm:inline"> </span>
               <span className="mt-0.5 block sm:mt-0 sm:inline">
                 SEC filings are public domain. Cached locally for performance — never stored in your
                 account database.
               </span>
+            </p>
+            <p className="mt-1.5" role="note">
+              <span className="mr-1" aria-hidden="true">
+                ⚠️
+              </span>
+              <strong className="font-medium text-slate-500">Research use only</strong>
+              {" — "}
+              Not for financial or investment decisions. You&apos;re responsible for how you use what
+              you find here.
             </p>
             <nav className="mt-2 flex items-center justify-center gap-3 text-slate-500">
               <Link href="/privacy" className="hover:text-slate-700">
