@@ -403,8 +403,11 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     })();
   }, [buildPlaceholderColumn, cacheKey, tickers, resolvedFiscalYear, period, isPro]);
 
+  // Free tier allows 3 columns — start SEC fetch before /auth/me returns to avoid a serial waterfall.
+  const canLoadBeforeAuth = tickers.length <= 3;
+
   useEffect(() => {
-    if (slugError || authLoading) return;
+    if (slugError || (authLoading && !canLoadBeforeAuth)) return;
     if (columnLimitExceeded) {
       const message = compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length);
       if (!isPro) {
@@ -418,7 +421,17 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       return;
     }
     loadFilings();
-  }, [loadFilings, slugError, authLoading, columnLimitExceeded, tier, maxColumnsResolved, tickers.length, isPro]);
+  }, [
+    loadFilings,
+    slugError,
+    authLoading,
+    canLoadBeforeAuth,
+    columnLimitExceeded,
+    tier,
+    maxColumnsResolved,
+    tickers.length,
+    isPro,
+  ]);
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);

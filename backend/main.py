@@ -182,13 +182,30 @@ async def auth_me(auth: Annotated[AuthContext, Depends(get_auth_context)]):
 async def search_tickers(q: str = "", limit: int = 10):
     ticker_map = await fetch_ticker_map()
     q = q.upper().strip()
-    results = []
+    limit = max(1, min(limit, 25))
+
+    if not q:
+        popular = ("AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "JPM", "GS")
+        return [
+            TickerSearchResult(ticker=t, company_name=ticker_map[t]["title"])
+            for t in popular
+            if t in ticker_map
+        ][:limit]
+
+    results: list[TickerSearchResult] = []
+    if q in ticker_map:
+        results.append(TickerSearchResult(ticker=q, company_name=ticker_map[q]["title"]))
+
     for ticker, info in ticker_map.items():
-        if q and q not in ticker and q not in info["title"].upper():
+        if ticker == q:
+            continue
+        title_upper = info["title"].upper()
+        if q not in ticker and q not in title_upper:
             continue
         results.append(TickerSearchResult(ticker=ticker, company_name=info["title"]))
-        if len(results) >= limit:
+        if len(results) >= limit * 3:
             break
+
     results.sort(key=lambda r: (not r.ticker.startswith(q), r.ticker))
     return results[:limit]
 

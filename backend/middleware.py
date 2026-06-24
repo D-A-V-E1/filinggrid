@@ -311,6 +311,10 @@ async def check_free_period_access(
     if auth.tier == "professional" or auth.limits.get("historical"):
         return
 
+    # Default compare (latest filing) is always in the free window — skip XBRL period fan-out.
+    if fiscal_year is None and not period:
+        return
+
     from filing_parser import list_periods_for_tickers
     from sec.filing_periods import filter_free_tier_periods, period_in_free_allowlist
 
