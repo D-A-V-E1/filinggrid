@@ -1,0 +1,14 @@
+# Copy into Vercel -> Project -> Settings -> Environment Variables (Production)
+
+NEXT_PUBLIC_APP_URL=https://peerdisclosures.com
+NEXT_PUBLIC_API_URL=https://api.peerdisclosures.com
+
+NEXT_PUBLIC_SUPABASE_URL=https://cbqiqbcqzvfozewqzqnl.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=CHANGE_ME_sb_publishable_or_anon_key
+
+# Optional
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+
+# DO NOT SET IN PRODUCTION:
+# NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE
+# NEXT_PUBLIC_DEV_TIER

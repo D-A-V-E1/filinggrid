@@ -107,11 +107,11 @@ def main() -> int:
         fail("GET /tickers/search", str(exc))
 
     print("\n=== Manual steps (browser) ===")
-    print("  1. Open compare with 4 tickers → paywall")
-    print("  2. Sign in (magic link) → checkout with corporate email")
+    print("  1. Open compare with 4 tickers -> paywall")
+    print("  2. Sign in (magic link) -> checkout with corporate email")
     print("  3. Stripe Dashboard → Webhooks → confirm checkout.session.completed delivered")
-    print("  4. GET /auth/me → tier: professional")
-    print("  5. /account → Manage billing → cancel → tier returns to free")
+    print("  4. GET /auth/me -> tier: professional")
+    print("  5. /account -> Manage billing -> cancel -> tier returns to free")
     print("  See docs/PRODUCTION_SMOKE_TEST.md for full checklist.")
 
     if failures:
