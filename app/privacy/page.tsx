@@ -3,10 +3,10 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "How FilingGrid collects, uses, and stores your information.",
+  description: "How PeerDisclosures collects, uses, and stores your information.",
 };
 
-const LAST_UPDATED = "June 15, 2026";
+const LAST_UPDATED = "June 20, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -19,7 +19,7 @@ export default function PrivacyPage() {
 
       <div className="prose prose-slate max-w-none prose-headings:font-sans prose-p:text-sm prose-p:leading-relaxed prose-li:text-sm">
         <p>
-          FilingGrid (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) provides a web application for comparing
+          PeerDisclosures (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) provides a web application for comparing
           U.S. SEC filings. This Privacy Policy explains what information we collect, how we use it,
           and what choices you have.
         </p>
@@ -43,7 +43,7 @@ export default function PrivacyPage() {
 
         <h3>SEC filing content</h3>
         <p>
-          FilingGrid retrieves public SEC filings from EDGAR. To improve performance, we cache
+          PeerDisclosures retrieves public SEC filings from EDGAR. To improve performance, we cache
           filing HTML and parsed sections on our servers after the first request so they do not need
           to be re-downloaded from EDGAR every time. This cached content is derived from publicly
           available SEC data.
@@ -115,7 +115,7 @@ export default function PrivacyPage() {
 
         <h2>8. Children</h2>
         <p>
-          FilingGrid is intended for business and professional use. We do not knowingly collect
+          PeerDisclosures is intended for business and professional use. We do not knowingly collect
           information from children under 16.
         </p>
 
@@ -128,7 +128,7 @@ export default function PrivacyPage() {
         <h2>10. Contact</h2>
         <p>
           Questions about this Privacy Policy may be directed to{" "}
-          <a href="mailto:privacy@filinggrid.com">privacy@filinggrid.com</a>.
+          <a href="mailto:privacy@peerdisclosures.com">privacy@peerdisclosures.com</a>.
         </p>
       </div>
 

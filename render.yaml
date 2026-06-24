@@ -1,0 +1,45 @@
+# Render Blueprint — PeerDisclosures API
+# Deploy: dashboard.render.com → New → Blueprint → connect repo → apply
+# Custom domain: api.peerdisclosures.com (Settings → Custom Domains)
+
+services:
+  - type: web
+    name: peerdisclosures-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    region: virginia
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        value: https://cbqiqbcqzvfozewqzqnl.supabase.co
+      - key: APP_URL
+        value: https://peerdisclosures.com
+      - key: CORS_ORIGINS
+        value: https://peerdisclosures.com
+      - key: SEC_USER_AGENT
+        value: PeerDisclosures/1.0 (support@peerdisclosures.com)
+      - key: FILING_CACHE_ENABLED
+        value: "true"
+      - key: FILING_CACHE_DIR
+        value: .cache/filings
+      - key: ALLOW_DEV_TIER_TOGGLE
+        value: "false"
+      - key: DEV_PRO_TIER
+        value: "false"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PROFESSIONAL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+    disk:
+      name: filing-cache
+      mountPath: /app/.cache
+      sizeGB: 1

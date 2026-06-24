@@ -1,0 +1,15 @@
+# Railway — PeerDisclosures API
+# Deploy: railway.app/new → GitHub repo → set root directory to backend (Dockerfile)
+# Custom domain: api.peerdisclosures.com
+# Volume: mount /app/.cache for filing cache
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend/Dockerfile"
+watchPatterns = ["backend/**"]
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

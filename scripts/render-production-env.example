@@ -1,0 +1,22 @@
+# Copy into Render → peerdisclosures-api → Environment
+# Replace CHANGE_ME values from Stripe Dashboard (Live mode) and Neon/Supabase.
+# Never commit this file with real secrets.
+
+DATABASE_URL=CHANGE_ME_neon_connection_string_with_sslmode_require
+
+SUPABASE_URL=https://cbqiqbcqzvfozewqzqnl.supabase.co
+SUPABASE_JWT_SECRET=CHANGE_ME_from_supabase_dashboard
+
+STRIPE_SECRET_KEY=CHANGE_ME_sk_live
+STRIPE_WEBHOOK_SECRET=CHANGE_ME_whsec_from_live_webhook
+STRIPE_PRICE_PROFESSIONAL=price_1TjA9OJX5g98nb1eafRUKoZM
+
+APP_URL=https://peerdisclosures.com
+CORS_ORIGINS=https://peerdisclosures.com
+SEC_USER_AGENT=PeerDisclosures/1.0 (support@peerdisclosures.com)
+
+FILING_CACHE_ENABLED=true
+FILING_CACHE_DIR=.cache/filings
+
+ALLOW_DEV_TIER_TOGGLE=false
+DEV_PRO_TIER=false

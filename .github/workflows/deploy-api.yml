@@ -1,0 +1,35 @@
+# Deploy PeerDisclosures API to Render (manual trigger)
+# Required GitHub secrets (Settings → Secrets → Actions):
+#   RENDER_DEPLOY_HOOK_URL — from Render service → Settings → Deploy Hook
+#
+# After first Blueprint deploy from render.yaml, paste the hook URL as a secret.
+
+name: Deploy API
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "render.yaml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy
+        if: env.RENDER_DEPLOY_HOOK_URL != ''
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo "Render deploy triggered."
+
+      - name: Skip (no deploy hook)
+        if: env.RENDER_DEPLOY_HOOK_URL == ''
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          echo "::notice::Set RENDER_DEPLOY_HOOK_URL secret after creating Render service from render.yaml"

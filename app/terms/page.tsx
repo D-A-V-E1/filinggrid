@@ -3,10 +3,10 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "Terms and conditions for using FilingGrid.",
+  description: "Terms and conditions for using PeerDisclosures.",
 };
 
-const LAST_UPDATED = "June 15, 2026";
+const LAST_UPDATED = "June 20, 2026";
 
 export default function TermsPage() {
   return (
@@ -19,15 +19,15 @@ export default function TermsPage() {
 
       <div className="prose prose-slate max-w-none prose-headings:font-sans prose-p:text-sm prose-p:leading-relaxed prose-li:text-sm">
         <p>
-          These Terms of Service (&quot;Terms&quot;) govern your access to and use of the FilingGrid
+          These Terms of Service (&quot;Terms&quot;) govern your access to and use of the PeerDisclosures
           website and application (the &quot;Service&quot;). By using the Service, you agree to these
           Terms.
         </p>
 
         <h2>1. The Service</h2>
         <p>
-          FilingGrid provides tools to retrieve, parse, and display publicly available U.S. Securities
-          and Exchange Commission (SEC) filings for side-by-side comparison. FilingGrid is not
+          PeerDisclosures provides tools to retrieve, parse, and display publicly available U.S. Securities
+          and Exchange Commission (SEC) filings for side-by-side comparison. PeerDisclosures is not
           affiliated with, endorsed by, or sponsored by the SEC or any listed company.
         </p>
 
@@ -73,13 +73,13 @@ export default function TermsPage() {
 
         <h2>7. No investment advice</h2>
         <p>
-          FilingGrid does not provide investment, legal, accounting, or tax advice. Nothing in the
+          PeerDisclosures does not provide investment, legal, accounting, or tax advice. Nothing in the
           Service constitutes a recommendation to buy, sell, or hold any security.
         </p>
 
         <h2>8. Intellectual property</h2>
         <p>
-          SEC filings are public records. FilingGrid&apos;s software, branding, design, and
+          SEC filings are public records. PeerDisclosures&apos; software, branding, design, and
           documentation are owned by us or our licensors. You receive a limited, non-exclusive,
           non-transferable license to use the Service for your internal business purposes during your
           subscription or free-tier access.
@@ -101,7 +101,7 @@ export default function TermsPage() {
 
         <h2>11. Limitation of liability</h2>
         <p>
-          TO THE MAXIMUM EXTENT PERMITTED BY LAW, FILINGGRID AND ITS AFFILIATES WILL NOT BE LIABLE
+          TO THE MAXIMUM EXTENT PERMITTED BY LAW, PEERDISCLOSURES AND ITS AFFILIATES WILL NOT BE LIABLE
           FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF
           PROFITS, DATA, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR
           ANY CLAIM RELATING TO THE SERVICE WILL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12)
@@ -133,7 +133,7 @@ export default function TermsPage() {
         <h2>15. Contact</h2>
         <p>
           Questions about these Terms may be directed to{" "}
-          <a href="mailto:legal@filinggrid.com">legal@filinggrid.com</a>.
+          <a href="mailto:legal@peerdisclosures.com">legal@peerdisclosures.com</a>.
         </p>
       </div>
 
