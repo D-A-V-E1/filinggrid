@@ -28,7 +28,7 @@ services:
       DATABASE_URL: postgresql://filinggrid:filinggrid@postgres:5432/filinggrid
       CORS_ORIGINS: http://localhost:3000
       APP_URL: http://localhost:3000
-      SEC_USER_AGENT: FilingGrid/1.0 (dev@filinggrid.com)
+      SEC_USER_AGENT: PeerDisclosures/1.0 (dev@peerdisclosures.com)
     volumes:
       - filinggrid_cache:/app/.cache
     depends_on:

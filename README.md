@@ -1,8 +1,8 @@
-# FilingGrid
+# PeerDisclosures
 
 **Multi-column SEC filing and disclosure comparison workspace.**
 
-FilingGrid streams 10-K and 10-Q filings from SEC EDGAR, parses them into standard disclosure sections, and renders a synchronized side-by-side comparison workspace. Public filings are cached on the server for faster repeat access. Account, billing, and preference metadata are stored in PostgreSQL — filing content is not stored in your account database.
+PeerDisclosures streams 10-K and 10-Q filings from SEC EDGAR, parses them into standard disclosure sections, and renders a synchronized side-by-side comparison workspace. Public filings are cached on the server for faster repeat access. Account, billing, and preference metadata are stored in PostgreSQL — filing content is not stored in your account database.
 
 ---
 
@@ -132,7 +132,7 @@ Use GitHub as the single source of truth so both machines always have the same p
 #### Step 1: Create a GitHub repository
 
 1. Go to [github.com/new](https://github.com/new)
-2. Name it `filinggrid` (or your preferred name)
+2. Name it `peerdisclosures` (or your preferred name)
 3. Leave it **empty** — do not add a README, `.gitignore`, or license (this project already has them)
 4. Click **Create repository**
 
@@ -145,7 +145,7 @@ cd "C:\Users\davel\TECH\Reporting - Comparative Viewer"   # adjust path
 
 git init
 git add .
-git commit -m "Initial FilingGrid implementation"
+git commit -m "Initial PeerDisclosures implementation"
 git branch -M main
 git remote add origin https://github.com/YOUR_USERNAME/filinggrid.git
 git push -u origin main
@@ -309,7 +309,7 @@ See **[docs/STRIPE_SETUP.md](docs/STRIPE_SETUP.md)** for full Dashboard steps (p
 
 In [Stripe Dashboard → Products](https://dashboard.stripe.com/products):
 
-1. Create product: **FilingGrid Professional**
+1. Create product: **PeerDisclosures Professional**
 2. Add recurring price: **$29/month**
 3. Copy the **Price ID** (`price_...`) → `STRIPE_PRICE_PROFESSIONAL`
 
@@ -399,7 +399,7 @@ Section navigation in the left sidebar broadcasts a synchronized scroll event to
 ## Project structure
 
 ```
-filinggrid/
+peerdisclosures/
 ├── app/                          # Next.js App Router
 │   ├── compare/[peer_slug]/      # Multi-pane compare workspace
 │   ├── auth/callback/            # Supabase magic link handler
@@ -466,7 +466,7 @@ alembic upgrade head
 
 ### Checklist
 
-See **[docs/GO_LIVE_CHECKLIST.md](docs/GO_LIVE_CHECKLIST.md)** for the full week-by-week launch plan.
+See **[docs/GO_LIVE_CHECKLIST.md](docs/GO_LIVE_CHECKLIST.md)** for the week-by-week launch plan and **[docs/PRODUCTION_DEPLOY.md](docs/PRODUCTION_DEPLOY.md)** for concrete Vercel + API + Postgres steps. Copy **[.env.production.example](.env.production.example)** into your host secret managers.
 
 - Set `NEXT_PUBLIC_APP_URL` and `APP_URL` to your production domain
 - Use a managed PostgreSQL instance (Supabase DB, RDS, etc.)

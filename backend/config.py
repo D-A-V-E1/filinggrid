@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://filinggrid:filinggrid@localhost:5432/filinggrid"
 
     # SEC EDGAR
-    sec_user_agent: str = "FilingGrid/1.0 (contact@filinggrid.com)"
+    sec_user_agent: str = "PeerDisclosures/1.0 (contact@peerdisclosures.com)"
     filing_cache_enabled: bool = True
     filing_cache_dir: str = ".cache/filings"
 

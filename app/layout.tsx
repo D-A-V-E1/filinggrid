@@ -28,8 +28,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "FilingGrid — SEC Filing Comparison Workspace",
-    template: "%s | FilingGrid",
+    default: "PeerDisclosures — SEC Filing Comparison Workspace",
+    template: "%s | PeerDisclosures",
   },
   description:
     "Compare SEC 10-K, 10-Q, 20-F, and 6-K filings side by side with synchronized sections and XBRL financials. Free for current-year peer review; Professional adds history, full GAAP statements, and saved peer groups.",
@@ -54,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between px-4">
             <Link href="/" className="flex items-center gap-2">
               <span className="font-mono text-lg font-bold tracking-tight text-slate-900">
-                Filing<span className="text-brand-600">Grid</span>
+                Peer<span className="text-brand-600">Disclosures</span>
               </span>
             </Link>
             <Suspense fallback={<div className="h-8 w-32" />}>
@@ -74,7 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </span>
               <strong className="font-medium text-slate-500">Public SEC data</strong>
               {" — "}
-              FilingGrid is not affiliated with the U.S. Securities and Exchange Commission.
+              PeerDisclosures is not affiliated with the U.S. Securities and Exchange Commission.
               <span className="hidden sm:inline"> </span>
               <span className="mt-0.5 block sm:mt-0 sm:inline">
                 SEC filings are public domain. Cached locally for performance — never stored in your
@@ -87,12 +87,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </span>
               <strong className="font-medium text-slate-500">Research use only</strong>
               {" — "}
-              Not for financial or investment decisions. You&apos;re responsible for how you use what
-              you find here.
+              Not for financial or investment decisions. We pull from public SEC filings, but parsed
+              sections and numbers can be wrong or out of date — check the original filing before you
+              rely on anything. You&apos;re responsible for how you use what you find here.
             </p>
             <nav className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-slate-500">
-              <a href="mailto:support@filinggrid.com" className="hover:text-slate-700">
-                support@filinggrid.com
+              <a href="mailto:support@peerdisclosures.com" className="hover:text-slate-700">
+                support@peerdisclosures.com
               </a>
               <span aria-hidden="true">·</span>
               <Link href="/privacy" className="hover:text-slate-700">

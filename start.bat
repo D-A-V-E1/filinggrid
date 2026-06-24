@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-:: FilingGrid launcher - works with paths that contain spaces
+:: PeerDisclosures launcher - works with paths that contain spaces
 set "ROOT=%~dp0"
 cd /d "%ROOT%"
 
-title FilingGrid Launcher
+title PeerDisclosures Launcher
 echo.
 echo  ========================================
-echo   FilingGrid - Starting application
+echo   PeerDisclosures - Starting application
 echo  ========================================
 echo.
 
@@ -125,7 +125,7 @@ echo.
 :: ---- Launch (use /D for paths with spaces) ---------------------------------
 echo [INFO] Opening API window  - http://localhost:8000
 call "%ROOT%scripts\kill-api-port.bat"
-start "FilingGrid API" /D "%ROOT%" cmd /k run-api.bat
+start "PeerDisclosures API" /D "%ROOT%" cmd /k run-api.bat
 
 timeout /t 2 /nobreak >nul
 
@@ -141,27 +141,27 @@ timeout /t 1 /nobreak >nul
 
 echo [INFO] Opening Web window - http://localhost:3000
 call "%ROOT%scripts\kill-web-ports.bat"
-start "FilingGrid Web" /D "%ROOT%" cmd /k run-web.bat
+start "PeerDisclosures Web" /D "%ROOT%" cmd /k run-web.bat
 
 echo [INFO] Waiting for web server (HTTP ready on port 3000)...
 "%VENV_PY%" "%ROOT%scripts\wait_web_ready.py"
 if errorlevel 1 (
-    echo [WARN] Homepage not ready yet. Check the FilingGrid Web window for errors.
+    echo [WARN] Homepage not ready yet. Check the PeerDisclosures Web window for errors.
 ) else (
     echo [OK]   Web server is ready.
 )
 
 echo.
 echo  ========================================
-echo   FilingGrid is running
+echo   PeerDisclosures is running
 echo  ========================================
 echo   Web:  http://localhost:3000
 echo   API:  http://localhost:8000
 echo   Docs: http://localhost:8000/docs
 echo.
 echo   Two new windows should have opened:
-echo     - FilingGrid API
-echo     - FilingGrid Web
+echo     - PeerDisclosures API
+echo     - PeerDisclosures Web
 echo.
 echo   Close those windows to stop the app.
 echo  ========================================
@@ -170,7 +170,7 @@ echo.
 start "" "http://localhost:3000"
 echo.
 echo Press any key to close this launcher window...
-echo (Keep the FilingGrid API and FilingGrid Web windows open.)
+echo (Keep the PeerDisclosures API and PeerDisclosures Web windows open.)
 pause >nul
 exit /b 0
 

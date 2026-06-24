@@ -1,6 +1,6 @@
-# FilingGrid — Stripe + Supabase local setup runbook
+# PeerDisclosures — Stripe + Supabase local setup runbook
 
-**Repo:** [github.com/D-A-V-E1/filinggrid](https://github.com/D-A-V-E1/filinggrid)  
+**Repo:** [github.com/D-A-V-E1/peerdisclosures](https://github.com/D-A-V-E1/peerdisclosures)  
 **Purpose:** Wire test-mode Stripe billing and Supabase magic-link auth so checkout and tier upgrades work on `localhost`.
 
 Use this runbook when CLIs are not logged in or dashboard credentials are not yet in `.env`. For Stripe Dashboard detail, see [STRIPE_SETUP.md](./STRIPE_SETUP.md). For production launch, see [GO_LIVE_CHECKLIST.md](./GO_LIVE_CHECKLIST.md).
@@ -159,14 +159,14 @@ Dashboard must be in **Test mode** (toggle top-right).
 
 1. Open [Stripe Dashboard → Products (test)](https://dashboard.stripe.com/test/products).
 2. Click **+ Add product**.
-3. Name: `FilingGrid Professional`
+3. Name: `PeerDisclosures Professional`
 4. Pricing: **Recurring** → **Monthly** → **$29.00 USD**
 5. Save → copy **Price ID** (`price_...`).
 
 Optional via CLI after login:
 
 ```powershell
-stripe products create --name="FilingGrid Professional"
+stripe products create --name="PeerDisclosures Professional"
 # Use returned prod_... id:
 stripe prices create --product=prod_XXXX --unit-amount=2900 --currency=usd -d "recurring[interval]=month"
 ```
@@ -202,7 +202,7 @@ Restart the API after changing webhook secret.
 ### 2a. Create project
 
 1. [supabase.com/dashboard](https://supabase.com/dashboard) → **New project**
-2. Choose org, name (e.g. `filinggrid-dev`), strong DB password, region
+2. Choose org, name (e.g. `peerdisclosures-dev`), strong DB password, region
 3. Wait for project to finish provisioning (~2 min)
 
 ### 2b. Authentication settings
@@ -233,34 +233,34 @@ Restart the API after changing webhook secret.
 
 Frontend uses URL + publishable/anon key for `@supabase/ssr` sign-in.
 
-> **Note:** FilingGrid uses a **local PostgreSQL** (`DATABASE_URL`) for users/orgs/tiers, not Supabase Postgres, unless you point `DATABASE_URL` at Supabase's connection string intentionally.
+> **Note:** PeerDisclosures uses a **local PostgreSQL** (`DATABASE_URL`) for users/orgs/tiers, not Supabase Postgres, unless you point `DATABASE_URL` at Supabase's connection string intentionally.
 
 ### 2d. Magic Link email template (go-live branding)
 
-Supabase sends the only sign-in email today — there is no FilingGrid-owned welcome email in code.
+Supabase sends the only sign-in email today — there is no PeerDisclosures-owned welcome email in code.
 
 1. **Authentication → Email Templates → Magic Link**
-2. Suggested **subject:** `Sign in to FilingGrid`
+2. Suggested **subject:** `Sign in to PeerDisclosures`
 3. Suggested **body** (HTML):
 
 ```html
-<h2>Sign in to FilingGrid</h2>
+<h2>Sign in to PeerDisclosures</h2>
 <p>Click the link below to sign in. This link expires in one hour and works once.</p>
-<p><a href="{{ .ConfirmationURL }}">Sign in to FilingGrid</a></p>
+<p><a href="{{ .ConfirmationURL }}">Sign in to PeerDisclosures</a></p>
 <p>If you did not request this email, you can ignore it.</p>
-<p>— FilingGrid · support@filinggrid.com</p>
+<p>— PeerDisclosures · support@peerdisclosures.com</p>
 ```
 
 4. **Authentication → Settings → Email** — confirm rate limits and link expiry suit your QA
 5. Test: sign in from `/account` → confirm branded email arrives (check spam)
 
-### 2e. Custom SMTP (optional — send from @filinggrid.com)
+### 2e. Custom SMTP (optional — send from @peerdisclosures.com)
 
 Default Supabase SMTP works for dev; production should use your domain.
 
 1. **Project Settings → Authentication → SMTP Settings** → enable custom SMTP
 2. Provider examples: [Resend](https://resend.com), SendGrid, Postmark, Amazon SES
-3. Set **Sender email** e.g. `noreply@filinggrid.com`, **Sender name** `FilingGrid`
+3. Set **Sender email** e.g. `noreply@peerdisclosures.com`, **Sender name** `PeerDisclosures`
 4. Add DNS records (SPF, DKIM) per provider docs
 5. Re-send magic link and verify `From:` header shows your domain
 
@@ -293,7 +293,7 @@ APP_URL=http://localhost:3000
 DATABASE_URL=postgresql://filinggrid:filinggrid@localhost:5432/filinggrid
 CORS_ORIGINS=http://localhost:3000
 ALLOW_DEV_TIER_TOGGLE=true
-SEC_USER_AGENT=FilingGrid/1.0 (you@yourcompany.com)
+SEC_USER_AGENT=PeerDisclosures/1.0 (you@yourcompany.com)
 ```
 
 **`backend/.env`** — same Stripe/Supabase/DB values; backend does not need `NEXT_PUBLIC_*` except you may keep a full copy for convenience.

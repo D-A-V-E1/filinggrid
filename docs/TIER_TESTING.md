@@ -162,7 +162,7 @@ cd backend
 
 Use **test keys only** (`sk_test_...`, `pk_test_...`) in `.env`. Never use live keys locally.
 
-1. Create product **FilingGrid Professional** at $29/mo in [Stripe Dashboard](https://dashboard.stripe.com/test/products).
+1. Create product **PeerDisclosures Professional** at $29/mo in [Stripe Dashboard](https://dashboard.stripe.com/test/products).
 2. Set `STRIPE_PRICE_PROFESSIONAL=price_...`.
 3. Forward webhooks locally:
    ```powershell

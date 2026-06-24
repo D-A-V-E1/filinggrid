@@ -56,10 +56,62 @@ def _post_checkout(token: str) -> dict:
         return json.loads(resp.read().decode())
 
 
-def _simulate_webhook(org_id: str, customer_id: str, subscription_id: str) -> int:
-    """POST a signed checkout.session.completed event to the webhook endpoint."""
+def _sign_webhook_payload(payload: str) -> str:
+    """Build a Stripe-Signature header for local webhook testing."""
+    timestamp = int(time.time())
+    signed = f"{timestamp}.{payload}"
+    sig = stripe.WebhookSignature._compute_signature(signed, settings.stripe_webhook_secret)
+    return f"t={timestamp},v1={sig}"
+
+
+def _simulate_webhook_event(event: dict) -> int:
+    """POST a signed Stripe event to the webhook endpoint."""
+    payload = json.dumps(event)
+    sig = _sign_webhook_payload(payload)
+    req = urllib.request.Request(
+        "http://127.0.0.1:8000/webhooks/stripe",
+        data=payload.encode(),
+        headers={"stripe-signature": sig, "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        return resp.status
+
+
+def _active_subscription_payload(subscription_id: str, customer_id: str, price_id: str) -> dict:
+    period_end = int(time.time()) + 30 * 24 * 3600
+    return {
+        "id": subscription_id,
+        "customer": customer_id,
+        "status": "active",
+        "current_period_end": period_end,
+        "cancel_at_period_end": False,
+        "items": {"data": [{"price": {"id": price_id}}]},
+    }
+
+
+def _ensure_active_test_subscription(customer_id: str) -> str:
+    """Attach a test card and create an active subscription for webhook retrieval."""
+    pm = stripe.PaymentMethod.create(
+        type="card",
+        card={"token": "tok_visa"},
+    )
+    stripe.PaymentMethod.attach(pm.id, customer=customer_id)
+    stripe.Customer.modify(
+        customer_id,
+        invoice_settings={"default_payment_method": pm.id},
+    )
+    sub = stripe.Subscription.create(
+        customer=customer_id,
+        items=[{"price": settings.stripe_price_professional}],
+        default_payment_method=pm.id,
+    )
+    return sub.id
+
+
+def _simulate_checkout_completed(org_id: str, customer_id: str, subscription_id: str) -> int:
     event = {
-        "id": f"evt_e2e_{int(time.time())}",
+        "id": f"evt_e2e_cs_{int(time.time())}",
         "type": "checkout.session.completed",
         "data": {
             "object": {
@@ -70,19 +122,16 @@ def _simulate_webhook(org_id: str, customer_id: str, subscription_id: str) -> in
             }
         },
     }
-    payload = json.dumps(event).encode()
-    sig = stripe.Webhook.generate_test_header(
-        payload=payload.decode(),
-        secret=settings.stripe_webhook_secret,
-    )
-    req = urllib.request.Request(
-        "http://127.0.0.1:8000/webhooks/stripe",
-        data=payload,
-        headers={"stripe-signature": sig, "Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req) as resp:
-        return resp.status
+    return _simulate_webhook_event(event)
+
+
+def _simulate_subscription_updated(customer_id: str, subscription: dict) -> int:
+    event = {
+        "id": f"evt_e2e_sub_{int(time.time())}",
+        "type": "customer.subscription.updated",
+        "data": {"object": subscription},
+    }
+    return _simulate_webhook_event(event)
 
 
 def main() -> int:
@@ -112,15 +161,9 @@ def main() -> int:
         return 1
     print(f"OK org_id={org.id} stripe_customer_id={org.stripe_customer_id}")
 
-    print("\n=== Step 5: Webhook tier upgrade (simulated checkout.session.completed) ===")
-    # Create a real test subscription in Stripe for webhook retrieval
-    sub = stripe.Subscription.create(
-        customer=org.stripe_customer_id,
-        items=[{"price": settings.stripe_price_professional}],
-        payment_behavior="default_incomplete",
-        expand=["latest_invoice.payment_intent"],
-    )
-    status = _simulate_webhook(org.id, org.stripe_customer_id, sub.id)
+    print("\n=== Step 5a: Webhook tier upgrade (checkout.session.completed) ===")
+    sub_id = _ensure_active_test_subscription(org.stripe_customer_id)
+    status = _simulate_checkout_completed(org.id, org.stripe_customer_id, sub_id)
     print(f"OK webhook status={status}")
 
     db.refresh(org)
@@ -128,9 +171,22 @@ def main() -> int:
     print(f"OK org.subscription_tier={org.subscription_tier}")
     print(f"OK subscription.status={sub_row.status if sub_row else None}")
 
+    if org.subscription_tier != "professional":
+        print("\n=== Step 5b: Webhook tier upgrade (customer.subscription.updated) ===")
+        sub = stripe.Subscription.retrieve(sub_id)
+        status = _simulate_subscription_updated(
+            org.stripe_customer_id,
+            _active_subscription_payload(sub.id, org.stripe_customer_id, settings.stripe_price_professional),
+        )
+        print(f"OK webhook status={status}")
+        db.refresh(org)
+        sub_row = db.query(Subscription).filter(Subscription.organization_id == org.id).first()
+        print(f"OK org.subscription_tier={org.subscription_tier}")
+        print(f"OK subscription.status={sub_row.status if sub_row else None}")
+
     # Cleanup test subscription
     try:
-        stripe.Subscription.cancel(sub.id)
+        stripe.Subscription.cancel(sub_id)
     except Exception:
         pass
 

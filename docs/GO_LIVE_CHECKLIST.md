@@ -1,8 +1,10 @@
-# FilingGrid MVP go-live checklist
+# PeerDisclosures MVP go-live checklist
 
 Week-by-week plan for launching **self-serve Stripe Professional** subscriptions (~1 week). Check items off as you complete them.
 
-**Repo:** [github.com/D-A-V-E1/filinggrid](https://github.com/D-A-V-E1/filinggrid)
+**Repo:** [github.com/D-A-V-E1/peerdisclosures](https://github.com/D-A-V-E1/peerdisclosures)
+
+**Production runbook:** [PRODUCTION_DEPLOY.md](./PRODUCTION_DEPLOY.md) — Vercel + API host + Neon/Supabase Postgres, env vars, DNS, Stripe live webhook, smoke tests. Template: [.env.production.example](../.env.production.example).
 
 ---
 
@@ -22,7 +24,7 @@ Week-by-week plan for launching **self-serve Stripe Professional** subscriptions
 ### Stripe (test)
 
 - [ ] Create [Stripe account](https://dashboard.stripe.com/register) (if needed)
-- [ ] Create product **FilingGrid Professional** at **$29/mo** (test mode)
+- [ ] Create product **PeerDisclosures Professional** at **$29/mo** (test mode)
 - [ ] Copy test `STRIPE_PRICE_PROFESSIONAL` (`price_...`)
 - [ ] Copy test `STRIPE_SECRET_KEY` (`sk_test_...`)
 - [ ] Run `stripe listen --forward-to localhost:8000/webhooks/stripe` → set `STRIPE_WEBHOOK_SECRET`
@@ -60,8 +62,8 @@ cd backend
 
 ### Domain & HTTPS
 
-- [ ] Register production domain (e.g. `filinggrid.com`)
-- [ ] DNS for frontend (Vercel) and API subdomain (e.g. `api.filinggrid.com`)
+- [ ] Register production domain (e.g. `peerdisclosures.com`)
+- [ ] DNS for frontend (Vercel) and API subdomain (e.g. `api.peerdisclosures.com`)
 - [ ] Confirm HTTPS on both (required for Supabase redirects and Stripe)
 
 ### Frontend (Vercel recommended)
@@ -72,8 +74,8 @@ cd backend
 
 | Variable | Example |
 |---|---|
-| `NEXT_PUBLIC_APP_URL` | `https://filinggrid.com` |
-| `NEXT_PUBLIC_API_URL` | `https://api.filinggrid.com` |
+| `NEXT_PUBLIC_APP_URL` | `https://peerdisclosures.com` |
+| `NEXT_PUBLIC_API_URL` | `https://api.peerdisclosures.com` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_live_...` (optional for MVP) |
@@ -100,9 +102,9 @@ Production env (minimum):
 | `STRIPE_SECRET_KEY` | `sk_live_...` when live |
 | `STRIPE_WEBHOOK_SECRET` | From live webhook endpoint |
 | `STRIPE_PRICE_PROFESSIONAL` | Live `price_...` |
-| `APP_URL` | `https://filinggrid.com` (frontend origin) |
-| `CORS_ORIGINS` | `https://filinggrid.com` (comma-separate if multiple) |
-| `SEC_USER_AGENT` | `FilingGrid/1.0 (you@yourcompany.com)` — **SEC requirement** |
+| `APP_URL` | `https://peerdisclosures.com` (frontend origin) |
+| `CORS_ORIGINS` | `https://peerdisclosures.com` (comma-separate if multiple) |
+| `SEC_USER_AGENT` | `PeerDisclosures/1.0 (ops@peerdisclosures.com)` — **SEC requirement** |
 | `ALLOW_DEV_TIER_TOGGLE` | **`false` or unset** |
 | `DEV_PRO_TIER` | **`false` or unset** |
 
@@ -135,21 +137,32 @@ alembic upgrade head
 - [ ] Create **live** product + $29/mo price (new `price_...` ID)
 - [ ] Update production `STRIPE_SECRET_KEY` → `sk_live_...`
 - [ ] Update production `STRIPE_PRICE_PROFESSIONAL` → live price ID
-- [ ] Add live webhook: `https://api.yourdomain.com/webhooks/stripe` with required events (see [STRIPE_SETUP.md](./STRIPE_SETUP.md))
+- [ ] Add live webhook: `https://api.peerdisclosures.com/webhooks/stripe` with required events (see [STRIPE_SETUP.md](./STRIPE_SETUP.md))
 - [ ] Update production `STRIPE_WEBHOOK_SECRET` from live endpoint
 - [ ] Enable **Customer Portal** in live mode
 
 ### Supabase production URLs
 
-- [ ] Site URL → `https://filinggrid.com`
-- [ ] Redirect URLs → `https://filinggrid.com/auth/callback`, `https://filinggrid.com/**`
+- [ ] Site URL → `https://peerdisclosures.com`
+- [ ] Redirect URLs → `https://peerdisclosures.com/auth/callback`, `https://peerdisclosures.com/**`
 
 ### Smoke test (production)
 
-- [ ] `GET https://api.yourdomain.com/health` → `{"status":"ok"}`
+Automated:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts/prod_smoke_check.py --api https://api.peerdisclosures.com --app https://peerdisclosures.com
+```
+
+Manual checklist: [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md)
+
+- [ ] `GET https://api.peerdisclosures.com/health` → `{"status":"ok"}`
+- [ ] `GET https://peerdisclosures.com/api/backend/health` → proxied OK
+- [ ] `POST /dev/tier` → **404** (dev toggle off)
 - [ ] Free compare: 3 tickers, recent filing window — no login
 - [ ] 4th ticker → paywall
-- [ ] Sign in (corporate email) → checkout → real or live test payment
+- [ ] Sign in (corporate email) → checkout → real payment
 - [ ] Webhook delivered (Stripe Dashboard → Events)
 - [ ] Professional features unlock (8 columns, full archive, GAAP statements, peer groups)
 - [ ] Customer Portal opens from `/account`
@@ -182,8 +195,18 @@ alembic upgrade head
 
 ### Error monitoring (optional but recommended)
 
-- [ ] Sentry, Datadog, or similar on frontend + API
+- [ ] Sentry — env vars in `.env.production.example`; SDK integration not yet in code (see [PRODUCTION_DEPLOY.md § Sentry](./PRODUCTION_DEPLOY.md#error-monitoring-optional--sentry))
 - [ ] Alert on 5xx spike and failed Stripe webhooks (Stripe Dashboard also emails failures)
+
+### Email mailboxes
+
+- [ ] `support@peerdisclosures.com`, `legal@peerdisclosures.com`, `privacy@peerdisclosures.com` receive inbound mail (MX or forwarding)
+- [ ] Optional: custom Supabase SMTP from `noreply@peerdisclosures.com` — [SETUP_RUNBOOK.md § 2e](./SETUP_RUNBOOK.md#2e-custom-smtp-optional--send-from-peerdisclosurescom)
+
+### Database backups
+
+- [ ] Automated daily backups enabled on Postgres provider (Neon Pro, Supabase Pro, Railway, RDS)
+- [ ] Document restore procedure — see [PRODUCTION_DEPLOY.md § Database backups](./PRODUCTION_DEPLOY.md#database-backups)
 
 ### Launch
 
@@ -247,6 +270,8 @@ stripe events list --limit 3
 
 ## Related documentation
 
+- [PRODUCTION_DEPLOY.md](./PRODUCTION_DEPLOY.md) — full production deployment runbook
+- [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md) — post-deploy billing E2E
 - [STRIPE_SETUP.md](./STRIPE_SETUP.md) — Dashboard configuration detail
 - [TIER_TESTING.md](./TIER_TESTING.md) — Free vs Pro QA without charges
 - [README.md](../README.md) — Architecture and local development

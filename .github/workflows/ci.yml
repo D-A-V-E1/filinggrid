@@ -50,4 +50,4 @@ jobs:
       - run: pytest backend/tests -q
         env:
           DATABASE_URL: postgresql://filinggrid:filinggrid@localhost:5432/filinggrid
-          SEC_USER_AGENT: FilingGrid-CI/1.0 (ci@filinggrid.com)
+          SEC_USER_AGENT: PeerDisclosures-CI/1.0 (ci@peerdisclosures.com)

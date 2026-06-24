@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="FilingGrid API",
+    title="PeerDisclosures API",
     description="Stateless SEC filing comparison backend",
     version="1.0.0",
     lifespan=lifespan,

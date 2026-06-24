@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "FilingGrid",
-    short_name: "FilingGrid",
+    name: "PeerDisclosures",
+    short_name: "PeerDisclosures",
     description: "Fast SEC filing comparison workspace",
     start_url: "/",
     display: "standalone",

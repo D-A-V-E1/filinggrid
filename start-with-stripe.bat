@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-:: FilingGrid launcher with Stripe webhook forwarding (does not replace start.bat)
+:: PeerDisclosures launcher with Stripe webhook forwarding (does not replace start.bat)
 set "ROOT=%~dp0"
 cd /d "%ROOT%"
 
-title FilingGrid Launcher (with Stripe)
+title PeerDisclosures Launcher (with Stripe)
 echo.
 echo  ========================================
-echo   FilingGrid - Starting with Stripe
+echo   PeerDisclosures - Starting with Stripe
 echo  ========================================
 echo.
 
@@ -130,10 +130,10 @@ if exist "%ROOT%.stripe-listen.log" del /F /Q "%ROOT%.stripe-listen.log" 2>nul
 
 echo [INFO] Opening Stripe window - webhook forwarder
 echo        (uses STRIPE_SECRET_KEY from backend\.env if set; else stripe login)
-start "FilingGrid Stripe" /D "%ROOT%" cmd /k run-stripe.bat
+start "PeerDisclosures Stripe" /D "%ROOT%" cmd /k run-stripe.bat
 
 echo [INFO] Waiting for webhook signing secret (up to 120s)...
-echo        Watch the FilingGrid Stripe window for progress.
+echo        Watch the PeerDisclosures Stripe window for progress.
 "%VENV_PY%" "%ROOT%scripts\wait_stripe_webhook_secret.py"
 if errorlevel 1 (
     echo.
@@ -141,7 +141,7 @@ if errorlevel 1 (
     echo.
     echo   Fix one of:
     echo     1. Set STRIPE_SECRET_KEY=sk_test_... in backend\.env and re-run
-    echo     2. Complete "stripe login" in the FilingGrid Stripe window, then re-run
+    echo     2. Complete "stripe login" in the PeerDisclosures Stripe window, then re-run
     echo     3. Copy whsec_... from Stripe window into backend\.env manually
     echo.
     set /p "CONTINUE=Start API/Web anyway without webhook secret? [y/N]: "
@@ -152,7 +152,7 @@ echo.
 :: ---- Launch API + Web (API starts AFTER secret is in .env) -------------------
 echo [INFO] Opening API window  - http://localhost:8000
 call "%ROOT%scripts\kill-api-port.bat"
-start "FilingGrid API" /D "%ROOT%" cmd /k run-api.bat
+start "PeerDisclosures API" /D "%ROOT%" cmd /k run-api.bat
 
 timeout /t 2 /nobreak >nul
 
@@ -168,28 +168,28 @@ timeout /t 1 /nobreak >nul
 
 echo [INFO] Opening Web window - http://localhost:3000
 call "%ROOT%scripts\kill-web-ports.bat"
-start "FilingGrid Web" /D "%ROOT%" cmd /k run-web.bat
+start "PeerDisclosures Web" /D "%ROOT%" cmd /k run-web.bat
 
 echo [INFO] Waiting for web server (HTTP ready on port 3000)...
 "%VENV_PY%" "%ROOT%scripts\wait_web_ready.py"
 if errorlevel 1 (
-    echo [WARN] Homepage not ready yet. Check the FilingGrid Web window for errors.
+    echo [WARN] Homepage not ready yet. Check the PeerDisclosures Web window for errors.
 ) else (
     echo [OK]   Web server is ready.
 )
 
 echo.
 echo  ========================================
-echo   FilingGrid is running (billing ready)
+echo   PeerDisclosures is running (billing ready)
 echo  ========================================
 echo   Web:     http://localhost:3000
 echo   API:     http://localhost:8000
 echo   Stripe:  forwarding to /webhooks/stripe
 echo.
 echo   Three windows should be open:
-echo     - FilingGrid Stripe  (keep open for checkout)
-echo     - FilingGrid API
-echo     - FilingGrid Web
+echo     - PeerDisclosures Stripe  (keep open for checkout)
+echo     - PeerDisclosures API
+echo     - PeerDisclosures Web
 echo.
 echo   STRIPE_WEBHOOK_SECRET was written to .env and backend\.env
 echo   Close all three windows to stop (or run stop.bat for API/Web).

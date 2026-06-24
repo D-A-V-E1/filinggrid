@@ -52,7 +52,7 @@ async def overnight(
         print(msg)
         lines.append(msg)
 
-    log(f"=== FilingGrid overnight run {stamp} ===")
+    log(f"=== PeerDisclosures overnight run {stamp} ===")
     log(f"API={api} tickers={tickers} prewarm={prewarm_first} cold={cold}")
 
     if prewarm_first:

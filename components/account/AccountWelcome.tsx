@@ -13,7 +13,7 @@ export default function AccountWelcome({ isPro, onDismiss }: AccountWelcomeProps
       <section className="rounded-xl border border-brand-200 bg-brand-50 p-6">
         <h2 className="text-lg font-semibold text-brand-900">Professional is active</h2>
         <p className="mt-2 text-sm text-brand-800">
-          Your subscription is live. Here is how to get the most out of FilingGrid:
+          Your subscription is live. Here is how to get the most out of PeerDisclosures:
         </p>
         <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm text-brand-900">
           <li>
@@ -48,7 +48,7 @@ export default function AccountWelcome({ isPro, onDismiss }: AccountWelcomeProps
 
   return (
     <section className="rounded-xl border border-brand-200 bg-brand-50 p-6">
-      <h2 className="text-lg font-semibold text-brand-900">Welcome to FilingGrid</h2>
+      <h2 className="text-lg font-semibold text-brand-900">Welcome to PeerDisclosures</h2>
       <p className="mt-2 text-sm text-brand-800">
         You are signed in on the free plan. Here are three quick steps to get started:
       </p>

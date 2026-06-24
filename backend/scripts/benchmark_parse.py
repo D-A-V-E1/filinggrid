@@ -1,5 +1,5 @@
 """
-FilingGrid parse performance benchmark suite.
+PeerDisclosures parse performance benchmark suite.
 
 OVERNIGHT PROCESS (Windows)
 ---------------------------
@@ -282,7 +282,7 @@ def _evaluate(summary: dict[str, Any], thresholds: dict[str, float], runs: list[
 
 def format_text_report(report: BenchmarkReport) -> str:
     lines = [
-        f"FilingGrid benchmark — {report.finished_at}",
+        f"PeerDisclosures benchmark — {report.finished_at}",
         f"API: {report.api_base}  tickers: {', '.join(report.tickers)}  cache v{report.parse_cache_version}",
         f"PASS: {'YES' if report.passed else 'NO'}",
         "",
@@ -403,7 +403,7 @@ async def _main_async(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Benchmark FilingGrid /parse performance")
+    parser = argparse.ArgumentParser(description="Benchmark PeerDisclosures /parse performance")
     parser.add_argument("--api", default=DEFAULT_API, help="FastAPI base URL")
     parser.add_argument("--tickers", nargs="+", default=DEFAULT_TICKERS[:3], help="Tickers to benchmark")
     parser.add_argument("--cold", action="store_true", help="Clear parsed cache and re-run (HTML retained)")

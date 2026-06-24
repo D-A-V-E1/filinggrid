@@ -22,8 +22,9 @@ export default function PrivacyStrip({ className = "" }: { className?: string })
         </span>
         <strong className="font-medium text-slate-600">Research use only</strong>
         {" — "}
-        Not for financial or investment decisions. You&apos;re responsible for how you use what you
-        find here.
+        Not for financial or investment decisions. We pull from public SEC filings, but parsed
+        sections and numbers can be wrong or out of date — check the original filing before you
+        rely on anything. You&apos;re responsible for how you use what you find here.
       </span>
     </p>
   );

@@ -46,7 +46,7 @@ export default function HomePage() {
             <span className="block text-slate-400">in one synchronized view</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-slate-600">
-            FilingGrid pulls 10-K, 10-Q, 20-F, and 6-K filings from EDGAR, maps them to
+            PeerDisclosures pulls 10-K, 10-Q, 20-F, and 6-K filings from EDGAR, maps them to
             comparable sections, and lines up XBRL financials — so you can review MD&amp;A,
             risk factors, and footnotes side by side without juggling browser tabs.
           </p>

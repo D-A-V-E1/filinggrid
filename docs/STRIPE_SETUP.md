@@ -1,4 +1,4 @@
-# Stripe setup — FilingGrid Professional ($29/mo)
+# Stripe setup — PeerDisclosures Professional ($29/mo)
 
 Step-by-step guide for **test mode** (local / staging) and **live mode** (production). The backend owns Checkout and webhooks; the frontend redirects users to Stripe-hosted pages.
 
@@ -6,7 +6,7 @@ Step-by-step guide for **test mode** (local / staging) and **live mode** (produc
 
 ## Cursor Stripe plugin (MCP + skills)
 
-FilingGrid uses three separate Stripe surfaces. They complement each other; only the **CLI** and **Dashboard** populate `backend/.env`.
+PeerDisclosures uses three separate Stripe surfaces. They complement each other; only the **CLI** and **Dashboard** populate `backend/.env`.
 
 | Surface | What it is | Used for |
 |---|---|---|
@@ -33,12 +33,12 @@ Optional: add that folder to your user `PATH`, or create a WinGet shim link.
 
 | Item | Value |
 |---|---|
-| Product name | **FilingGrid Professional** (any name works; price ID is what matters) |
+| Product name | **PeerDisclosures Professional** (any name works; price ID is what matters) |
 | Price | **$29.00 USD / month**, recurring |
 | Checkout mode | Subscription (`mode=subscription`) |
 | Success redirect | `{APP_URL}{return_path}?checkout=success` |
 | Cancel redirect | `{APP_URL}/pricing?checkout=cancelled` |
-| Webhook URL (production) | `https://api.yourdomain.com/webhooks/stripe` |
+| Webhook URL (production) | `https://api.peerdisclosures.com/webhooks/stripe` |
 | Tier in database | `organizations.subscription_tier` → `professional` when subscription is `active` or `trialing` |
 
 **Corporate email gate (intentional for MVP):** Checkout and the paywall magic-link form reject consumer domains (Gmail, Yahoo, Outlook personal, etc.). Sign-in for free compare still allows any email; only **Professional billing** requires a work email. See `backend/middleware.py` (`validate_corporate_email`) and `lib/utils.ts` (`isCorporateEmail`).
@@ -51,7 +51,7 @@ Optional: add that folder to your user `PATH`, or create a WinGet shim link.
 
 1. Open [Stripe Dashboard → Products](https://dashboard.stripe.com/test/products).
 2. **+ Add product**
-   - Name: `FilingGrid Professional`
+   - Name: `PeerDisclosures Professional`
    - Description (optional): `Up to 8 columns, full GAAP statements, filing archive, saved peer groups`
 3. Under **Pricing**, add:
    - **Recurring** → **Monthly** → **$29.00 USD**
@@ -150,7 +150,7 @@ Backend uses `APP_URL` (alias: `FRONTEND_URL`) for Stripe success/cancel/portal 
 | Environment | Example |
 |---|---|
 | Local | `APP_URL=http://localhost:3000` |
-| Production | `APP_URL=https://filinggrid.com` |
+| Production | `APP_URL=https://peerdisclosures.com` |
 
 Must match the browser origin users actually use (HTTPS in production). Also set `NEXT_PUBLIC_APP_URL` to the same value for SEO/metadata.
 

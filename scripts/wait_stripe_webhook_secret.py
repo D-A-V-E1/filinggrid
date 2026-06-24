@@ -65,7 +65,7 @@ def main() -> int:
             if not warned_login and login_blocked(log_text) and not extract_secret(log_text):
                 warned_login = True
                 print(
-                    "[WARN] Stripe CLI is waiting for login in the FilingGrid Stripe window."
+                    "[WARN] Stripe CLI is waiting for login in the PeerDisclosures Stripe window."
                 )
                 print("       Complete browser login there, OR set STRIPE_SECRET_KEY=sk_test_...")
                 print("       in backend/.env and restart start-with-stripe.bat")
@@ -90,7 +90,7 @@ def main() -> int:
         time.sleep(POLL_INTERVAL_SEC)
 
     print("[ERROR] Timed out waiting for Stripe webhook secret (120s).")
-    print("        Check the FilingGrid Stripe window for errors.")
+    print("        Check the PeerDisclosures Stripe window for errors.")
     if LOG.exists():
         tail = read_log_text(LOG)[-800:]
         if tail.strip():

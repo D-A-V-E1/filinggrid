@@ -4,7 +4,7 @@ import AccountPanel from "@/components/account/AccountPanel";
 
 export const metadata: Metadata = {
   title: "Account",
-  description: "Manage your FilingGrid account, plan, and billing.",
+  description: "Manage your PeerDisclosures account, plan, and billing.",
 };
 
 export default function AccountPage() {

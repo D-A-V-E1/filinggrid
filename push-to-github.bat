@@ -7,7 +7,7 @@ set "GIT=C:\Program Files\Git\bin\git.exe"
 set "GH=C:\Program Files\GitHub CLI\gh.exe"
 
 echo.
-echo  FilingGrid - Push to GitHub
+echo  PeerDisclosures - Push to GitHub
 echo  ===========================
 echo.
 
