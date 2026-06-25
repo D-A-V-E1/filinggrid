@@ -1,17 +1,20 @@
-# Render Blueprint — PeerDisclosures API
-# Deploy: dashboard.render.com → New → Blueprint → connect repo → apply
-# Custom domain: api.peerdisclosures.com (Settings → Custom Domains)
+# Render Blueprint - PeerDisclosures API
+# Deploy: dashboard.render.com -> New -> Blueprint -> connect repo -> apply
+# Custom domain: api.peerdisclosures.com (Settings -> Custom Domains)
+
+version: "1"
 
 services:
   - type: web
     name: peerdisclosures-api
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    branch: main
     plan: starter
     region: virginia
     healthCheckPath: /health
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -22,11 +25,11 @@ services:
       - key: CORS_ORIGINS
         value: https://peerdisclosures.com
       - key: SEC_USER_AGENT
-        value: PeerDisclosures/1.0 (support@peerdisclosures.com)
+        value: "PeerDisclosures/1.0 (support@peerdisclosures.com)"
       - key: FILING_CACHE_ENABLED
         value: "true"
       - key: FILING_CACHE_DIR
-        value: .cache/filings
+        value: cache/filings
       - key: ALLOW_DEV_TIER_TOGGLE
         value: "false"
       - key: DEV_PRO_TIER
@@ -41,5 +44,5 @@ services:
         sync: false
     disk:
       name: filing-cache
-      mountPath: /app/.cache
+      mountPath: /app/cache
       sizeGB: 1
