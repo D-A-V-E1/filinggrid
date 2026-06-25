@@ -11,9 +11,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN chmod +x entrypoint.sh
+# Strip Windows CRLF so the shell script runs in Linux (Render builds on Linux).
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
-CMD ["./entrypoint.sh"]
+CMD ["sh", "entrypoint.sh"]
