@@ -1,22 +1,53 @@
-# Copy into Render → peerdisclosures-api → Environment
-# Replace CHANGE_ME values from Stripe Dashboard (Live mode) and Neon/Supabase.
+# Render → peerdisclosures-api → Environment
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# CRITICAL: Paste VALUES, never file paths
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# WRONG:  DATABASE_URL=backend/.env
+# WRONG:  DATABASE_URL=./backend/.env
+# WRONG:  STRIPE_SECRET_KEY=backend/.env
+#
+# RIGHT:  DATABASE_URL=postgresql://user:pass@host.neon.tech/db?sslmode=require
+# RIGHT:  STRIPE_SECRET_KEY=sk_live_51AbCdEf...
+#
+# Each Render env var must be the literal secret or URL string — the same text
+# that appears AFTER the = on a line in backend/.env (or from Stripe/Neon dashboards).
+# Do NOT reference .env files, paths, or "copy from file" placeholders.
+#
+# DATABASE_URL validation:
+#   - MUST start with postgresql:// or postgres://
+#   - MUST include ?sslmode=require (Neon)
+#   - If it does not start with postgresql://, you pasted a path by mistake.
+#
+# STRIPE (production):
+#   - STRIPE_SECRET_KEY MUST start with sk_live_ (NOT sk_test_)
+#   - STRIPE_WEBHOOK_SECRET: whsec_... from Live webhook endpoint
+#     (can leave empty until webhook is created; billing webhooks will fail until set)
+#
+# Variables already set in render.yaml (no need to duplicate unless overriding):
+#   SUPABASE_URL, APP_URL, CORS_ORIGINS, SEC_USER_AGENT,
+#   FILING_CACHE_ENABLED, FILING_CACHE_DIR, ALLOW_DEV_TIER_TOGGLE, DEV_PRO_TIER
+#
 # Never commit this file with real secrets.
+
+# ── Required in Render dashboard (sync: false in render.yaml) ─────────────
 
 DATABASE_URL=CHANGE_ME_neon_connection_string_with_sslmode_require
 
-SUPABASE_URL=https://cbqiqbcqzvfozewqzqnl.supabase.co
 SUPABASE_JWT_SECRET=CHANGE_ME_from_supabase_dashboard
 
 STRIPE_SECRET_KEY=CHANGE_ME_sk_live
 STRIPE_WEBHOOK_SECRET=CHANGE_ME_whsec_from_live_webhook
 STRIPE_PRICE_PROFESSIONAL=price_1TjA9OJX5g98nb1eafRUKoZM
 
-APP_URL=https://peerdisclosures.com
-CORS_ORIGINS=https://peerdisclosures.com
-SEC_USER_AGENT=PeerDisclosures/1.0 (support@peerdisclosures.com)
+# ── Reference only — already in render.yaml ───────────────────────────────
 
-FILING_CACHE_ENABLED=true
-FILING_CACHE_DIR=.cache/filings
-
-ALLOW_DEV_TIER_TOGGLE=false
-DEV_PRO_TIER=false
+# SUPABASE_URL=https://cbqiqbcqzvfozewqzqnl.supabase.co
+# APP_URL=https://peerdisclosures.com
+# CORS_ORIGINS=https://peerdisclosures.com
+# SEC_USER_AGENT=PeerDisclosures/1.0 (support@peerdisclosures.com)
+# FILING_CACHE_ENABLED=true
+# FILING_CACHE_DIR=cache/filings
+# ALLOW_DEV_TIER_TOGGLE=false
+# DEV_PRO_TIER=false
