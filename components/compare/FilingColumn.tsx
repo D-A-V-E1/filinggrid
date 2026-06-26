@@ -409,7 +409,7 @@ function HtmlExcerpt({ html }: { html: string }) {
   return (
     <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
       <div
-        className="filing-content prose prose-sm max-w-none font-serif text-slate-800 prose-headings:font-sans prose-headings:text-slate-900 prose-table:text-xs prose-td:px-2 prose-th:px-2 prose-th:font-semibold"
+        className="filing-content max-w-none font-serif text-sm text-slate-800"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </article>

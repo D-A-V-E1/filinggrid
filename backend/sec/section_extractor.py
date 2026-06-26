@@ -651,6 +651,19 @@ def _extract_between(
 
 _IX_TAG = re.compile(r"^ix:", re.I)
 _EXCERPT_TEXT_TAGS = frozenset({"p", "div", "td", "th", "li", "h1", "h2", "h3", "h4", "h5", "h6"})
+_TABLE_WRAP_CLASS = "filing-table-wrap"
+_TABLE_CELL_ATTRS = ("colspan", "rowspan", "align")
+
+
+def _tag_classes(tag: Tag) -> list[str]:
+    raw = tag.get("class") or []
+    if isinstance(raw, str):
+        return raw.split()
+    return list(raw)
+
+
+def _is_table_wrap(tag: Tag) -> bool:
+    return tag.name == "div" and _TABLE_WRAP_CLASS in _tag_classes(tag)
 
 
 def _unwrap_presentation_tags(soup: BeautifulSoup) -> None:
@@ -681,7 +694,42 @@ def _collapse_inline_text(tag: Tag) -> None:
 
 def _normalize_table_cells(table: Tag) -> None:
     for cell in table.find_all(["td", "th"]):
+        for wrapper in list(cell.find_all(["div", "p"])):
+            if wrapper.find("table") is None:
+                wrapper.unwrap()
         _collapse_inline_text(cell)
+
+
+def _wrap_orphan_table_rows(soup: BeautifulSoup) -> None:
+    """Wrap consecutive <tr> siblings that are not already inside a <table>."""
+    while True:
+        orphan = next(
+            (tr for tr in soup.find_all("tr") if tr.find_parent("table") is None),
+            None,
+        )
+        if orphan is None:
+            return
+        rows: list[Tag] = [orphan]
+        sibling = orphan.find_next_sibling()
+        while isinstance(sibling, Tag) and sibling.name == "tr" and sibling.find_parent("table") is None:
+            rows.append(sibling)
+            sibling = sibling.find_next_sibling()
+        table = soup.new_tag("table")
+        orphan.insert_before(table)
+        for row in rows:
+            table.append(row.extract())
+
+
+def _wrap_tables_for_display(soup: BeautifulSoup) -> None:
+    """Wrap each table in a scroll container for wide SEC financial tables."""
+    for table in list(soup.find_all("table")):
+        parent = table.parent
+        if isinstance(parent, Tag) and _is_table_wrap(parent):
+            continue
+        wrap = soup.new_tag("div")
+        wrap["class"] = [_TABLE_WRAP_CLASS]
+        table.insert_before(wrap)
+        wrap.append(table.extract())
 
 
 def _normalize_excerpt_html(html: str) -> str:
@@ -695,6 +743,7 @@ def _normalize_excerpt_html(html: str) -> str:
 
     soup = BeautifulSoup(html, "html.parser")
     _unwrap_presentation_tags(soup)
+    _wrap_orphan_table_rows(soup)
 
     for table in soup.find_all("table"):
         _normalize_table_cells(table)
@@ -704,16 +753,22 @@ def _normalize_excerpt_html(html: str) -> str:
             continue
         if tag.find("table") is not None:
             continue
+        if tag.name == "div" and _is_table_wrap(tag):
+            continue
         if tag.name == "div" and tag.find(list(_EXCERPT_TEXT_TAGS - {"div"})):
             continue
         _collapse_inline_text(tag)
 
+    _wrap_tables_for_display(soup)
+
     for tag in soup.find_all(True):
         keep: dict[str, Any] = {}
         if tag.name in ("td", "th", "col"):
-            for attr in ("colspan", "rowspan"):
+            for attr in _TABLE_CELL_ATTRS:
                 if attr in tag.attrs:
                     keep[attr] = tag.attrs[attr]
+        if tag.name == "div" and _is_table_wrap(tag):
+            keep["class"] = tag.attrs["class"]
         tag.attrs = keep
 
     body = soup.body
