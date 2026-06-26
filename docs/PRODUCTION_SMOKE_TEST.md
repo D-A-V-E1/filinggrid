@@ -46,7 +46,7 @@ curl -s -o NUL -w "%{http_code}" -X POST https://api.peerdisclosures.com/dev/tie
 
 ## Manual browser checklist
 
-Use a **corporate email** (not Gmail/Yahoo) for Professional checkout.
+Use any email for Professional checkout (Gmail, iCloud, work email, etc.).
 
 | # | Action | Expected |
 |---|--------|----------|
@@ -54,8 +54,8 @@ Use a **corporate email** (not Gmail/Yahoo) for Professional checkout.
 | 2 | Compare 3 tickers (e.g. AAPL, MSFT, NVDA) | Filings load, no login required |
 | 3 | Add 4th ticker | **PaywallModal** — reason `column_limit` |
 | 4 | `/account` → sign in with any email → magic link | Redirect to `?auth=success`; welcome checklist |
-| 5 | Sign in with Gmail → **Upgrade to Professional** | Error: work email required (no Stripe redirect) |
-| 6 | Paywall → work email magic link → **Continue to Stripe Checkout** | Stripe Live Checkout (real card or live test per Stripe docs) |
+| 5 | Sign in with Gmail → **Upgrade to Professional** | Stripe Checkout opens |
+| 6 | Paywall → any email magic link → **Continue to Stripe Checkout** | Stripe Live Checkout (real card or live test per Stripe docs) |
 | 7 | Complete payment | Redirect `?checkout=success`; activation banner |
 | 8 | Stripe Dashboard → [Webhooks](https://dashboard.stripe.com/webhooks) → latest event | `checkout.session.completed` **200** to `api.peerdisclosures.com` |
 | 9 | Refresh compare with 4+ tickers | Up to 8 columns load; **Professional** badge |

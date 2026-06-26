@@ -47,4 +47,4 @@ cd backend
   --app https://peerdisclosures.com
 ```
 
-Manual: corporate email → Checkout → tier `professional` → Portal cancel → tier `free`.
+Manual: any email → Checkout → tier `professional` → Portal cancel → tier `free`.

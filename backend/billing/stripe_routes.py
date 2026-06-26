@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from config import get_settings
 from database import Organization, StripeEvent, Subscription, UsageEvent, get_db
-from middleware import AuthContext, get_auth_context, require_auth, validate_corporate_email
+from middleware import AuthContext, get_auth_context, require_auth
 
 settings = get_settings()
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -92,7 +92,6 @@ async def create_checkout(
     email = body.email or (auth.user.email if auth.user else None)
     if not email:
         raise HTTPException(status_code=400, detail="Email required")
-    validate_corporate_email(email)
 
     org = auth.organization
     assert org is not None

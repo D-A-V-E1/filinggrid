@@ -31,7 +31,7 @@ export default function PrivacyPage() {
           authenticate you and manage billing, such as:
         </p>
         <ul>
-          <li>Email address (corporate email required for Professional plans)</li>
+          <li>Email address</li>
           <li>Organization and subscription tier</li>
           <li>Stripe customer and subscription identifiers</li>
           <li>Saved peer group names and ticker lists you choose to store</li>

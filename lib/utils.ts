@@ -39,6 +39,7 @@ export function validateCompareTickers(tickers: string[]): string | null {
   return null;
 }
 
+// Reserved for a future enterprise tier (not enforced on Professional checkout).
 export const CONSUMER_DOMAINS = [
   "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
   "icloud.com", "aol.com", "protonmail.com", "mail.com",

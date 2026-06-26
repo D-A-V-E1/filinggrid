@@ -34,8 +34,7 @@ export default function TermsPage() {
         <h2>2. Eligibility</h2>
         <p>
           You must be at least 18 years old and able to form a binding contract to use the Service.
-          Professional plans require a valid corporate email address. You are responsible for
-          maintaining the confidentiality of your account credentials.
+          You are responsible for maintaining the confidentiality of your account credentials.
         </p>
 
         <h2>3. Subscriptions and billing</h2>

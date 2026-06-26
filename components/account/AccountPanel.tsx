@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createCheckout, createPortal } from "@/lib/api";
-import { isCorporateEmail } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import SignInModal from "@/components/auth/SignInModal";
@@ -88,12 +87,6 @@ export default function AccountPanel() {
 
   async function handleUpgrade() {
     setError("");
-    if (auth?.email && !isCorporateEmail(auth.email)) {
-      setError(
-        "Professional requires a work email. Consumer providers (Gmail, Yahoo, Outlook personal, etc.) are not accepted."
-      );
-      return;
-    }
     setActionLoading(true);
     try {
       const { checkout_url } = await createCheckout({ returnPath: "/account" });
@@ -144,10 +137,6 @@ export default function AccountPanel() {
           <p className="mt-2 text-sm text-slate-600">
             Use a magic link to access saved peer groups, billing, and Professional features. The
             compare workspace is free without an account.
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            Professional checkout requires a <strong>work email</strong> (not Gmail, Yahoo, or other
-            personal providers).
           </p>
           <button
             type="button"
@@ -209,10 +198,6 @@ export default function AccountPanel() {
             <p>
               Upgrade to Professional for 8 columns, full GAAP statements, complete filing history,
               and saved peer groups.
-            </p>
-            <p className="text-xs text-slate-500">
-              Checkout requires a <strong>work email</strong> (not Gmail, Yahoo, or other personal
-              providers). This helps keep the product positioned for institutional analysts.
             </p>
           </div>
         )}

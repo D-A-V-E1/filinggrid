@@ -158,7 +158,6 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
           <div key={formKey}>
             <MagicLinkForm
               returnPath={returnPath}
-              requireCorporateEmail
               submitLabel="Send magic link to continue"
               onComplete={() => {
                 refresh().then(() => setShowCheckout(true));

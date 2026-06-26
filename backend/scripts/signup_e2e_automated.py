@@ -47,8 +47,8 @@ Prerequisites:
 Steps:
   1. /account -> sign in (any email) -> magic link -> ?auth=success
      -> Welcome checklist on /account; GET /auth/me -> tier: free
-  2. /account with Gmail signed in -> Upgrade blocked with work-email message
-  3. Sign out -> paywall (4 tickers) -> work email magic link -> checkout 4242...
+  2. /account with Gmail signed in -> Upgrade to Professional -> Stripe Checkout
+  3. Sign out -> paywall (4 tickers) -> any email magic link -> checkout 4242...
   4. After redirect -> banner + "Open compare with 8 tickers" link
      -> 8 columns, saved groups, GAAP sections work
   5. /account -> Manage billing -> Customer Portal -> cancel subscription
@@ -73,6 +73,7 @@ def main() -> int:
             "tests/test_auth_peer_groups_integration.py",
             "tests/test_tier_gates.py",
             "tests/test_stripe_webhooks.py",
+            "tests/test_stripe_checkout.py",
             "-q",
             "--tb=line",
         ],

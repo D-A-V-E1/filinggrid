@@ -14,7 +14,7 @@ PeerDisclosures streams 10-K and 10-Q filings from SEC EDGAR, parses them into s
 | Backend | Python FastAPI | SEC parsing pipeline, auth gates, Stripe billing |
 | Filing cache | Disk + in-memory (`backend/.cache/filings`) | Speed up repeat SEC fetches |
 | Database | PostgreSQL + SQLAlchemy RLS | Users, orgs, subscriptions, peer groups |
-| Auth | Supabase (magic link) | Passwordless corporate email sign-in |
+| Auth | Supabase (magic link) | Passwordless email sign-in |
 | Billing | Stripe Checkout + Customer Portal | $29/mo Professional tier |
 
 ### Privacy model
@@ -357,7 +357,7 @@ Stripe Dashboard → Settings → Billing → Customer portal → Enable.
 | Filing periods | Latest + last completed fiscal year | Full archive |
 | Headline XBRL metrics | Yes | Yes |
 | Full GAAP statement tables | No | Yes |
-| Login required | No | Yes (corporate email) |
+| Login required | No | Yes |
 | Saved peer groups | No | Yes |
 | Billing | — | Stripe Checkout + Portal |
 

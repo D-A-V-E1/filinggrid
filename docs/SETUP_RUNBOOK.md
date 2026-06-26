@@ -43,7 +43,7 @@ cd backend; .\.venv\Scripts\activate; uvicorn main:app --reload --port 8000
 npm install; npm run dev
 ```
 
-**Manual E2E:** sign in (magic link) → add 4 tickers → paywall → corporate email checkout → card `4242 4242 4242 4242` → confirm `GET /auth/me` shows `"tier": "professional"`.
+**Manual E2E:** sign in (magic link) → add 4 tickers → paywall → checkout with any email → card `4242 4242 4242 4242` → confirm `GET /auth/me` shows `"tier": "professional"`.
 
 ---
 
@@ -105,7 +105,7 @@ flowchart LR
 1. User signs in via Supabase magic link (frontend).
 2. Frontend sends JWT to API on protected routes.
 3. Backend decodes JWT with `SUPABASE_JWT_SECRET`, loads/creates `users` + `organizations` in PostgreSQL.
-4. `POST /billing/checkout` creates Stripe Checkout (corporate email required).
+4. `POST /billing/checkout` creates Stripe Checkout (any email).
 5. After payment, Stripe sends webhooks → API updates `organizations.subscription_tier`.
 6. Frontend polls `GET /auth/me` → `tier: "professional"`.
 
@@ -362,7 +362,7 @@ Health check: [http://localhost:8000/health](http://localhost:8000/health) → `
 
 1. Open [http://localhost:3000](http://localhost:3000)
 2. Go to compare, add 4 tickers → paywall
-3. Sign in with a **corporate email** (not Gmail/Yahoo — billing gate)
+3. Sign in with any email
 4. **Continue to Stripe Checkout**
 5. Card: `4242 4242 4242 4242`, any future expiry, any CVC
 6. After redirect, confirm tier updates within a few seconds
@@ -408,7 +408,6 @@ Expected: **21 passed** (tier gates + webhook handler mocks).
 | `AUTH_NOT_CONFIGURED` | Set `SUPABASE_URL` in `backend/.env` (JWKS) or `SUPABASE_JWT_SECRET` (legacy HS256) |
 | Magic link redirect fails | Check Supabase Site URL + redirect URLs match `http://localhost:3000` |
 | Paid but still Free | Webhook not reaching API; confirm `stripe listen` running and API on :8000 |
-| `Professional tier requires a corporate email` | Use work email domain for checkout |
 
 ---
 

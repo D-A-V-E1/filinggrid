@@ -29,6 +29,7 @@ def _get_jwks_client() -> Optional[PyJWKClient]:
         _jwks_client_url = jwks_url
     return _jwks_client
 
+# Reserved for a future enterprise tier (not enforced on Professional checkout).
 CONSUMER_EMAIL_DOMAINS = {
     "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
     "icloud.com", "aol.com", "protonmail.com", "mail.com",
@@ -265,11 +266,12 @@ async def get_peer_group_auth(
 
 
 def validate_corporate_email(email: str) -> None:
+    """Reserved for a future enterprise tier; not used on Professional checkout."""
     domain = email.split("@")[-1].lower()
     if domain in CONSUMER_EMAIL_DOMAINS:
         raise HTTPException(
             status_code=400,
-            detail="Professional tier requires a corporate email address.",
+            detail="Enterprise tier requires a corporate email address.",
         )
 
 

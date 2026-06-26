@@ -36,7 +36,6 @@ const PLANS = [
       "Full GAAP statement line items",
       "Saved peer groups",
       "Stripe Customer Portal (self-serve billing)",
-      "Corporate email required",
     ],
     cta: "Upgrade to Professional",
     href: "/compare/aapl-vs-msft-vs-nvda-vs-googl",

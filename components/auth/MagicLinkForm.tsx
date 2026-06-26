@@ -37,7 +37,7 @@ export type MagicLinkStep = "email" | "sent" | "verifying" | "verify_failed" | "
 
 interface MagicLinkFormProps {
   returnPath: string;
-  /** When true, blocks consumer email domains (Gmail, etc.) — used for Professional upgrade. */
+  /** When true, blocks consumer email domains (Gmail, etc.) — reserved for future enterprise signup. */
   requireCorporateEmail?: boolean;
   submitLabel?: string;
   onComplete?: () => void;
@@ -161,7 +161,7 @@ export default function MagicLinkForm({
     }
     if (requireCorporateEmail && !isCorporateEmail(email)) {
       setError(
-        "Professional requires a work email. Consumer providers (Gmail, Yahoo, Outlook personal, etc.) are not accepted."
+        "Enterprise signup requires a work email. Consumer providers (Gmail, Yahoo, Outlook personal, etc.) are not accepted."
       );
       return;
     }
@@ -297,8 +297,8 @@ export default function MagicLinkForm({
     <div className="space-y-3">
       {requireCorporateEmail ? (
         <p className="text-xs leading-relaxed text-slate-500">
-          Professional is for institutional users. Use your <strong>work email</strong> — consumer
-          providers like Gmail and Yahoo are blocked at checkout.
+          Enterprise signup is for institutional users. Use your <strong>work email</strong> —
+          consumer providers like Gmail and Yahoo are not accepted.
         </p>
       ) : (
         <p className="text-xs leading-relaxed text-slate-500">

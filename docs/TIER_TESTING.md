@@ -88,7 +88,7 @@ The frontend sends `X-Dev-Tier` on all API calls via `lib/api.ts`.
 
 ## Method 3 — Dev API endpoint (persist to database)
 
-Requires sign-in (Supabase magic link with a **corporate** email for Stripe checkout later; any email works for tier DB field).
+Requires sign-in (Supabase magic link; any email works for sign-in and Stripe checkout).
 
 ```powershell
 # After obtaining a JWT from the browser session (or Supabase):
@@ -169,7 +169,7 @@ Use **test keys only** (`sk_test_...`, `pk_test_...`) in `.env`. Never use live 
    stripe listen --forward-to localhost:8000/webhooks/stripe
    ```
 4. Copy `whsec_...` → `STRIPE_WEBHOOK_SECRET`.
-5. Sign in with a **corporate** email (not gmail.com, etc.).
+5. Sign in with any email (e.g. Gmail or work email).
 6. Use **Upgrade to Professional** on paywall or `/pricing` → complete Checkout with test card `4242 4242 4242 4242`.
 7. Webhook sets `organizations.subscription_tier = professional` — same as Method 3/4.
 
@@ -198,8 +198,8 @@ Runs JWT auth, peer-group integration, tier gates, webhook handler tests (34+ te
 |------|--------|----------|
 | 1 | `/account` → sign in with any email → magic link | `?auth=success` banner; welcome checklist on `/account` |
 | 2 | `GET /auth/me` with JWT | `is_authenticated: true`, `tier: free` |
-| 3 | Sign in with Gmail → **Upgrade to Professional** on `/account` | Inline error: work email required (no Stripe redirect) |
-| 4 | Paywall (4 tickers) → work email magic link → checkout `4242...` | Redirect `?checkout=success`; banner polls tier |
+| 3 | Sign in with Gmail → **Upgrade to Professional** on `/account` | Stripe Checkout opens (redirect to Stripe) |
+| 4 | Paywall (4 tickers) → any email magic link → checkout `4242...` | Redirect `?checkout=success`; banner polls tier |
 | 5 | After activation | Banner link **Open compare with 8 tickers**; Pro badge; 8 columns load |
 | 6 | Saved groups + GAAP Income Statement | CRUD works; full line items |
 | 7 | `/account` → **Manage billing** → cancel in Portal | Tier returns to `free` after webhook |
@@ -207,11 +207,11 @@ Runs JWT auth, peer-group integration, tier gates, webhook handler tests (34+ te
 
 **Email rules by entry point:**
 
-| Entry | Corporate email at sign-in? |
-|-------|----------------------------|
-| Header / `/account` | No — any email |
-| Paywall magic link | Yes — blocked before send |
-| `/account` upgrade button | Yes — blocked before Stripe redirect |
+| Entry | Any email at sign-in? |
+|-------|----------------------|
+| Header / `/account` | Yes |
+| Paywall magic link | Yes |
+| `/account` upgrade button | Yes (uses signed-in email for Stripe) |
 
 **Onboarding UI (post-P1):**
 

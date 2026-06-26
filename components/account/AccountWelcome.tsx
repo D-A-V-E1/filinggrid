@@ -68,8 +68,7 @@ export default function AccountWelcome({ isPro, onDismiss }: AccountWelcomeProps
           completed fiscal year.
         </li>
         <li>
-          Upgrade to Professional with a <strong>work email</strong> for 8 columns, saved peer
-          groups, and full GAAP statements.
+          Upgrade to Professional for 8 columns, saved peer groups, and full GAAP statements.
         </li>
       </ol>
       <p className="mt-4 text-xs text-brand-700">

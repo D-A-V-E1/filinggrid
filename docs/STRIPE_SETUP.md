@@ -41,7 +41,7 @@ Optional: add that folder to your user `PATH`, or create a WinGet shim link.
 | Webhook URL (production) | `https://api.peerdisclosures.com/webhooks/stripe` |
 | Tier in database | `organizations.subscription_tier` → `professional` when subscription is `active` or `trialing` |
 
-**Corporate email gate (intentional for MVP):** Checkout and the paywall magic-link form reject consumer domains (Gmail, Yahoo, Outlook personal, etc.). Sign-in for free compare still allows any email; only **Professional billing** requires a work email. See `backend/middleware.py` (`validate_corporate_email`) and `lib/utils.ts` (`isCorporateEmail`).
+**Email for Professional checkout:** Any email address is accepted (Gmail, iCloud, work email, etc.). Helpers `validate_corporate_email` (`backend/middleware.py`) and `isCorporateEmail` (`lib/utils.ts`) are reserved for a future enterprise tier — not enforced on Professional.
 
 ---
 
@@ -160,7 +160,7 @@ Must match the browser origin users actually use (HTTPS in production). Also set
 
 1. Env: test keys, `STRIPE_PRICE_PROFESSIONAL`, `STRIPE_WEBHOOK_SECRET`, Supabase auth, PostgreSQL running.
 2. `stripe listen --forward-to localhost:8000/webhooks/stripe`
-3. Sign in with a **corporate** email (e.g. `you@yourcompany.com` — not Gmail).
+3. Sign in with any email (Gmail, work email, etc.).
 4. Open compare → trigger paywall → **Continue to Stripe Checkout**.
 5. Pay with test card `4242 4242 4242 4242`, any future expiry, any CVC.
 6. After redirect, banner shows activation; tier becomes `professional` within a few seconds (webhook).
@@ -202,7 +202,6 @@ stripe events list --limit 5
 | `503 Billing is not configured` | Missing `STRIPE_SECRET_KEY` or `STRIPE_PRICE_PROFESSIONAL` |
 | `400 Invalid signature` | Wrong `STRIPE_WEBHOOK_SECRET` or body parsed before handler |
 | Paid but still Free | Webhook not reaching API; check Stripe Dashboard → Webhooks → event log |
-| `Professional tier requires a corporate email` | Consumer domain blocked by design |
 | Checkout works locally, not prod | Live keys on test price ID, or `APP_URL` still localhost |
 | Success banner but tier slow | Normal — webhooks take 1–5s; UI polls `/auth/me` automatically |
 

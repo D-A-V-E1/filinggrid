@@ -59,7 +59,7 @@ See [DNS_PEERDISCLOSURES.md](./DNS_PEERDISCLOSURES.md) for full detail.
 - [ ] Copy test `STRIPE_SECRET_KEY` (`sk_test_...`)
 - [ ] Run `stripe listen --forward-to localhost:8000/webhooks/stripe` → set `STRIPE_WEBHOOK_SECRET`
 - [ ] Enable **Customer Portal** in test mode
-- [ ] Complete full checkout with corporate email + card `4242...`
+- [ ] Complete full checkout with any email + card `4242...`
 - [ ] Confirm `organizations.subscription_tier` = `professional` after webhook
 
 → Detailed steps: [STRIPE_SETUP.md](./STRIPE_SETUP.md)
@@ -201,7 +201,7 @@ Manual checklist: [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md)
 - [ ] `POST /dev/tier` → **404** (dev toggle off)
 - [ ] Free compare: 3 tickers, recent filing window — no login
 - [ ] 4th ticker → paywall
-- [ ] Sign in (corporate email) → checkout → real payment
+- [ ] Sign in (any email) → checkout → real payment
 - [ ] Webhook delivered (Stripe Dashboard → Events)
 - [ ] Professional features unlock (8 columns, full archive, GAAP statements, peer groups)
 - [ ] Customer Portal opens from `/account`
