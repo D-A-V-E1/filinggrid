@@ -1,6 +1,10 @@
 "use client";
 
-import { apiUnreachableHint, isLocalDevHost } from "@/lib/api-environment";
+import {
+  apiUnreachableBannerMessage,
+  apiWarmingMessage,
+  isLocalDevHost,
+} from "@/lib/api-environment";
 
 interface ApiHealthBannerProps {
   healthy: boolean | null;
@@ -16,7 +20,7 @@ export default function ApiHealthBanner({ healthy, warming }: ApiHealthBannerPro
         role="status"
         aria-live="polite"
       >
-        Waking up API… this can take up to a minute after idle time.
+        {apiWarmingMessage()}
       </div>
     );
   }
@@ -35,7 +39,7 @@ export default function ApiHealthBanner({ healthy, warming }: ApiHealthBannerPro
           ), then refresh.
         </>
       ) : (
-        <>API temporarily unreachable — {apiUnreachableHint()}</>
+        apiUnreachableBannerMessage()
       )}
     </div>
   );

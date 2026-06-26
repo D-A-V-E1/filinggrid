@@ -391,7 +391,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
             }
           } else if (reason === "column_limit") {
             setSectionsParseError(
-              "Filing sections could not load for all tickers. Restart the API via start.bat so ALLOW_DEV_TIER_TOGGLE is enabled, or sign in with a Professional subscription."
+              isLocalDevHost()
+                ? "Filing sections could not load for all tickers. Restart the API via start.bat so ALLOW_DEV_TIER_TOGGLE is enabled, or sign in with a Professional subscription."
+                : "Filing sections could not load for all tickers. Sign in with a Professional subscription to compare more tickers."
             );
           }
         } else if (!anyFinancials) {

@@ -11,6 +11,7 @@ import {
   markOtpRequested,
 } from "@/lib/otp-session";
 import { isCorporateEmail } from "@/lib/utils";
+import { isLocalDevHost } from "@/lib/api-environment";
 import { clearLocalSignOut, isLocalSignOut } from "@/lib/local-sign-out";
 import { resumeStoredSession, waitForBackendAuth } from "@/hooks/useAuth";
 
@@ -109,7 +110,9 @@ export default function MagicLinkForm({
           onComplete?.();
         } else {
           setError(
-            "Signed in, but the API could not verify your session. Is the backend and database running?"
+            isLocalDevHost()
+              ? "Signed in, but the API could not verify your session. Is the backend and database running?"
+              : "Signed in, but we couldn't verify your session. Please try again in a moment."
           );
           setStep("verify_failed");
         }
