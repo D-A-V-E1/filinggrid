@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
-  checkApiHealth,
   fetchFinancials,
   fetchFinancialsBatch,
   parseFilingsStream,
@@ -12,6 +11,7 @@ import {
   type FilingColumn,
   type ParseResponse,
 } from "@/lib/api";
+import { waitForApiReady } from "@/lib/api-warmup";
 import {
   GAAP_STATEMENT_SECTION_IDS,
   getComparableSectionIds,
@@ -72,6 +72,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const { auth, loading: authLoading, refresh: refreshAuth, isSignedIn, configured } = useAuth();
   const { tier, isPro, maxColumns } = useEffectiveTier(auth);
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
+  const [apiWarmupDone, setApiWarmupDone] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [sectionsParseError, setSectionsParseError] = useState("");
   const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>({});
@@ -100,7 +101,14 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
 
   useEffect(() => {
     prefetchAuthToken();
-    checkApiHealth().then(setApiHealthy);
+    const ac = new AbortController();
+    void (async () => {
+      const ok = await waitForApiReady({ signal: ac.signal });
+      if (ac.signal.aborted) return;
+      setApiHealthy(ok);
+      setApiWarmupDone(true);
+    })();
+    return () => ac.abort();
   }, []);
 
   useEffect(() => {
@@ -408,6 +416,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const canLoadBeforeAuth = tickers.length <= 3;
 
   useEffect(() => {
+    if (!apiWarmupDone) return;
     if (slugError || (authLoading && !canLoadBeforeAuth)) return;
     if (columnLimitExceeded) {
       const message = compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length);
@@ -424,6 +433,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     loadFilings();
   }, [
     loadFilings,
+    apiWarmupDone,
     slugError,
     authLoading,
     canLoadBeforeAuth,
@@ -464,7 +474,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden">
-      <ApiHealthBanner healthy={apiHealthy} />
+      <ApiHealthBanner healthy={apiHealthy} warming={!apiWarmupDone} />
       <div className="relative z-30 flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
         <TickerSearchBar
           initialTickers={tickers}

@@ -1,6 +1,6 @@
 import ProCallout from "@/components/landing/ProCallout";
+import PopularCompareLinks from "@/components/landing/PopularCompareLinks";
 import TickerSearchBar from "@/components/TickerSearchBar";
-import Link from "next/link";
 
 const FEATURES = [
   {
@@ -23,13 +23,6 @@ const FEATURES = [
     description:
       "Filings parse into standard sections as columns load. Repeat views hit the server cache instead of re-fetching from EDGAR.",
   },
-];
-
-const POPULAR = [
-  { slug: "aapl-vs-msft", label: "Apple vs Microsoft" },
-  { slug: "nvda-vs-amd-vs-intc", label: "NVDA vs AMD vs Intel" },
-  { slug: "jpm-vs-gs-vs-ms", label: "JPM vs Goldman vs Morgan Stanley" },
-  { slug: "aapl-vs-nvda-vs-tsm", label: "Apple vs NVDA vs TSMC" },
 ];
 
 export default function HomePage() {
@@ -82,17 +75,7 @@ export default function HomePage() {
           <p className="mt-1 text-sm text-slate-600">
             Jump in with a preset peer set, or search any tickers above.
           </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {POPULAR.map((p) => (
-              <Link
-                key={p.slug}
-                href={`/compare/${p.slug}`}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:border-brand-500 hover:text-brand-700"
-              >
-                {p.label}
-              </Link>
-            ))}
-          </div>
+          <PopularCompareLinks />
         </div>
       </section>
     </div>

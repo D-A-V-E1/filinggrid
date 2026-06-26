@@ -4,9 +4,23 @@ import { apiUnreachableHint, isLocalDevHost } from "@/lib/api-environment";
 
 interface ApiHealthBannerProps {
   healthy: boolean | null;
+  /** True while cold-start retries are still in progress. */
+  warming?: boolean;
 }
 
-export default function ApiHealthBanner({ healthy }: ApiHealthBannerProps) {
+export default function ApiHealthBanner({ healthy, warming }: ApiHealthBannerProps) {
+  if (warming) {
+    return (
+      <div
+        className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-center text-xs text-slate-600"
+        role="status"
+        aria-live="polite"
+      >
+        Waking up API… this can take up to a minute after idle time.
+      </div>
+    );
+  }
+
   if (healthy !== false) return null;
 
   return (
