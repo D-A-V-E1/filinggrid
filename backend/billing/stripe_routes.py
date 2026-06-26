@@ -70,6 +70,18 @@ def _ensure_stripe_configured() -> None:
         raise HTTPException(status_code=503, detail="Billing is not configured")
 
 
+def _stripe_call(action: str, fn):
+    """Run a Stripe SDK call and map failures to HTTP errors."""
+    try:
+        return fn()
+    except stripe.error.StripeError as exc:
+        message = getattr(exc, "user_message", None) or str(exc) or "Please try again later."
+        raise HTTPException(
+            status_code=503,
+            detail=f"Payment provider error ({action}): {message}",
+        ) from exc
+
+
 @router.post("/checkout", response_model=CheckoutResponse)
 async def create_checkout(
     body: CheckoutRequest,
@@ -86,9 +98,12 @@ async def create_checkout(
     assert org is not None
 
     if not org.stripe_customer_id:
-        customer = stripe.Customer.create(
-            email=email,
-            metadata={"organization_id": org.id},
+        customer = _stripe_call(
+            "create customer",
+            lambda: stripe.Customer.create(
+                email=email,
+                metadata={"organization_id": org.id},
+            ),
         )
         org.stripe_customer_id = customer.id
         db.commit()
@@ -96,14 +111,17 @@ async def create_checkout(
     return_path = _sanitize_return_path(body.return_path)
     success_path = _append_query(return_path, "checkout", "success")
 
-    session = stripe.checkout.Session.create(
-        customer=org.stripe_customer_id,
-        mode="subscription",
-        line_items=[{"price": settings.stripe_price_professional, "quantity": 1}],
-        success_url=f"{settings.app_url}{success_path}",
-        cancel_url=f"{settings.app_url}/pricing?checkout=cancelled",
-        metadata={"organization_id": org.id},
-        allow_promotion_codes=True,
+    session = _stripe_call(
+        "create checkout session",
+        lambda: stripe.checkout.Session.create(
+            customer=org.stripe_customer_id,
+            mode="subscription",
+            line_items=[{"price": settings.stripe_price_professional, "quantity": 1}],
+            success_url=f"{settings.app_url}{success_path}",
+            cancel_url=f"{settings.app_url}/pricing?checkout=cancelled",
+            metadata={"organization_id": org.id},
+            allow_promotion_codes=True,
+        ),
     )
 
     usage = UsageEvent(
@@ -131,9 +149,12 @@ async def create_portal(
         raise HTTPException(status_code=400, detail="No billing account found")
 
     return_path = _sanitize_return_path(body.return_path if body else None)
-    session = stripe.billing_portal.Session.create(
-        customer=org.stripe_customer_id,
-        return_url=f"{settings.app_url}{return_path}",
+    session = _stripe_call(
+        "create portal session",
+        lambda: stripe.billing_portal.Session.create(
+            customer=org.stripe_customer_id,
+            return_url=f"{settings.app_url}{return_path}",
+        ),
     )
     return PortalResponse(portal_url=session.url)
 

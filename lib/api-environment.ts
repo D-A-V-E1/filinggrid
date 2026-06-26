@@ -24,6 +24,22 @@ export function apiUnreachableBannerMessage(): string {
   return "Unable to load filings right now. Please wait a moment and try again.";
 }
 
+/** User-facing copy when the API proxy returns a gateway error (502/503/504). */
+export function apiGatewayErrorMessage(status?: number): string | null {
+  if (status !== 502 && status !== 503 && status !== 504) return null;
+  if (isLocalDevHost()) {
+    return "The API is temporarily unavailable. Start the backend on port 8000, then try again.";
+  }
+  return "Our servers are waking up after a brief pause. Wait a few seconds and try again.";
+}
+
+export function checkoutUnavailableMessage(): string {
+  if (isLocalDevHost()) {
+    return "Checkout is unavailable while the API is offline. Start the backend on port 8000.";
+  }
+  return "Checkout is temporarily unavailable. Wait a moment and try again.";
+}
+
 export function tickerSearchUnavailableMessage(): string {
   if (isLocalDevHost()) {
     return "Ticker search unavailable — is the API running on port 8000?";

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import PaywallModal from "@/components/billing/PaywallModal";
-import { createPortal } from "@/lib/api";
+import { createPortal, formatApiError } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 
@@ -59,7 +59,7 @@ export default function PricingPlans() {
       const { portal_url } = await createPortal("/pricing");
       window.location.href = portal_url;
     } catch (err) {
-      setPortalError(err instanceof Error ? err.message : "Billing portal unavailable");
+      setPortalError(formatApiError(err, "Billing portal unavailable. Please try again."));
       setPortalLoading(false);
     }
   }

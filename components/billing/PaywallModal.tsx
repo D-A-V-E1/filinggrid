@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import MagicLinkForm from "@/components/auth/MagicLinkForm";
-import { createCheckout, createPortal } from "@/lib/api";
+import { createCheckout, createPortal, formatApiError } from "@/lib/api";
+import { waitForApiReady } from "@/lib/api-warmup";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 
@@ -55,24 +56,47 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
     setLoading(true);
     setError("");
     try {
+      const ready = await waitForApiReady();
+      if (!ready) {
+        setError(
+          formatApiError(
+            new Error("API unavailable"),
+            "Our servers are waking up. Wait a few seconds and try again."
+          )
+        );
+        setLoading(false);
+        return;
+      }
       const { checkout_url } = await createCheckout({
         email: auth?.email || undefined,
         returnPath,
       });
       window.location.href = checkout_url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
+      setError(formatApiError(err, "Checkout failed. Please try again."));
       setLoading(false);
     }
   }
 
   async function handlePortal() {
     setLoading(true);
+    setError("");
     try {
+      const ready = await waitForApiReady();
+      if (!ready) {
+        setError(
+          formatApiError(
+            new Error("API unavailable"),
+            "Our servers are waking up. Wait a few seconds and try again."
+          )
+        );
+        setLoading(false);
+        return;
+      }
       const { portal_url } = await createPortal(returnPath);
       window.location.href = portal_url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Portal unavailable");
+      setError(formatApiError(err, "Billing portal unavailable. Please try again."));
       setLoading(false);
     }
   }

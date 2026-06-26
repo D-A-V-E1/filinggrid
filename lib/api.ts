@@ -5,7 +5,7 @@ import {
   apiUnreachableBannerMessage,
   checkoutUnavailableMessage,
 } from "@/lib/api-environment";
-import { retryWithBackoff } from "@/lib/api-warmup";
+import { WARMUP_BACKOFF_MS } from "@/lib/api-warmup";
 
 const API_URL =
   typeof window !== "undefined"
@@ -222,21 +222,21 @@ function isRetryableGatewayError(err: unknown): boolean {
 }
 
 async function billingFetchWithRetry<T>(fn: () => Promise<T>): Promise<T> {
-  const result = await retryWithBackoff(
-    async () => {
-      try {
-        return await fn();
-      } catch (err) {
-        if (isRetryableGatewayError(err)) throw err;
-        throw Object.assign(new Error("non-retryable"), { cause: err, nonRetryable: true });
-      }
-    },
-    { location: "lib/api.ts:billingFetchWithRetry" }
-  );
+  let lastGatewayError: ApiError | null = null;
 
-  if (result != null) return result;
+  for (let attempt = 0; attempt < WARMUP_BACKOFF_MS.length; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, WARMUP_BACKOFF_MS[attempt] ?? 30000));
+    }
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isRetryableGatewayError(err)) throw err;
+      lastGatewayError = err;
+    }
+  }
 
-  throw new ApiError(502, checkoutUnavailableMessage());
+  throw lastGatewayError ?? new ApiError(502, checkoutUnavailableMessage());
 }
 
 let _authTokenCache: { token: string | null; expiresAt: number } | null = null;
