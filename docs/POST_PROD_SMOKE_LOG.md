@@ -1,0 +1,107 @@
+# Post-production smoke log
+
+Browser and HTTP smoke results for **peerdisclosures.com** after custom domains went live.
+
+**Date:** 2026-06-26  
+**Environment:** Production (`https://peerdisclosures.com`, `https://api.peerdisclosures.com`)  
+**Method:** curl + cursor-ide-browser MCP  
+**Stripe / auth:** No live payment or magic-link sign-in completed (manual follow-up)
+
+Checklist reference: [POST_PROD_CHECKLIST.md](./POST_PROD_CHECKLIST.md) · Full E2E: [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md)
+
+---
+
+## Summary
+
+| Step | Result | Notes |
+|------|--------|-------|
+| API health `GET api.peerdisclosures.com/health` | **PASS** | 200 — `{"status":"ok","service":"peer-disclosures-api","features":{"foreign_filing_fallback":2}}` |
+| Frontend proxy `GET peerdisclosures.com/api/backend/health` | **PASS** | 200 — proxied API health OK |
+| Home — Peer Disclosures branding, no FilingGrid | **PASS** | Title/nav “Peer Disclosures”; no FilingGrid strings in snapshot |
+| Compare 3 tickers (`aapl-vs-msft-vs-googl`) without login | **PASS** | Filings loaded (FY26·Q1); sections + XBRL headline metrics |
+| 4th ticker paywall | **PASS** | NVDA → PaywallModal “Compare more tickers”; alert: Free tier up to 3 tickers; `you@email.com` placeholder |
+| `/account` sign-in UI — no work email gate | **PASS** | “Sign in with email”; placeholder `you@email.com`; no corporate copy |
+| `/pricing` — no Corporate email required | **PASS** | Free + Professional plans; upgrade CTA present |
+| `/terms` — correct copy | **PASS** | Peer Disclosures Terms; `legal@peerdisclosures.com`; last updated June 20, 2026 |
+| `/privacy` — correct copy | **PASS** | Peer Disclosures Privacy; `privacy@peerdisclosures.com`; last updated June 20, 2026 |
+| Segment section (`nvda-vs-amd-vs-intc` → Segment Information) | **PASS** | “Viewing: note segments”; NVDA shows **XBRL DISCLOSURE TEXT** inline (`SegmentReportingDisclosureTextBlock`); “View SEC filing excerpt” available per column |
+| `POST /dev/tier` → 404 | **SKIP** | Not executed autonomously against live API — verify manually (expect **404**) |
+| Stripe live checkout E2E | **SKIP** | Manual — requires magic link + real/live test payment |
+| Magic link sign-in E2E | **SKIP** | Manual — would send email to real inbox |
+| Compare header — no Free/Pro dev toggle | **PASS** | Observed on 3-ticker compare; no dev tier toggle in UI |
+
+**Overall:** 11 PASS · 3 SKIP (manual) · 0 FAIL
+
+---
+
+## Step detail
+
+### 1. API health
+
+```text
+GET https://api.peerdisclosures.com/health
+→ 200 {"status":"ok","service":"peer-disclosures-api",...}
+```
+
+Render fallback also healthy: `https://peerdisclosures-api.onrender.com/health` → 200 (same payload).
+
+### 2. Home
+
+- URL: `https://peerdisclosures.com/`
+- Title: *Peer Disclosures — SEC Filing Comparison Workspace*
+- Branding: nav link “Peer Disclosures”; hero copy uses Peer Disclosures throughout
+- FilingGrid: not present in accessibility snapshot
+
+### 3. Free compare (3 tickers)
+
+- URL: `https://peerdisclosures.com/compare/aapl-vs-msft-vs-googl`
+- AAPL, MSFT, GOOGL columns loaded without sign-in
+- Filing period picker populated (FY26·Q1, FY25, etc.)
+- Financial Statements section with SEC XBRL fast path
+
+### 4. Fourth ticker paywall
+
+- Action: add NVDA on 3-ticker compare
+- Modal: “Compare more tickers” / Professional $29/mo
+- Email field: `you@email.com` — no corporate requirement
+- Alert: “Free tier supports up to 3 tickers…”
+
+### 5. Account sign-in
+
+- URL: `https://peerdisclosures.com/account`
+- “Sign in with email” → magic link form
+- Placeholder `you@email.com`; button “Send magic link”
+- No work-email or corporate gate copy
+
+### 6. Pricing
+
+- URL: `https://peerdisclosures.com/pricing`
+- Free and Professional tiers listed
+- No “Corporate email required” text
+
+### 7. Terms & Privacy
+
+- `/terms` — Peer Disclosures entity, Stripe billing section, Delaware governing law
+- `/privacy` — Supabase auth + Stripe billing; no filing content in account DB
+
+### 8. Segment Information (optional)
+
+- URL: `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc?section=segment_information`
+- Initial load showed Financial Statements; clicking **Segment Information** nav → “Viewing: note segments”
+- NVDA column: inline XBRL segment disclosure text (Compute & Networking / Graphics tables)
+- “View SEC filing excerpt” buttons present — EDGAR fallback path available per column
+
+---
+
+## Manual follow-ups
+
+1. **`POST /dev/tier`** — confirm **404** on production API ([POST_PROD_CHECKLIST.md](./POST_PROD_CHECKLIST.md))
+2. **Stripe live E2E** — checkout, webhook, Portal cancel ([PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md))
+3. **Magic link sign-in** — any email → `?auth=success` on production Supabase URLs
+4. **Stripe Dashboard** — rename/archive legacy FilingGrid products if Checkout still shows old name ([STRIPE_SETUP.md § 10](./STRIPE_SETUP.md#10-rename-legacy-filinggrid-products-dashboard))
+
+---
+
+## Issues found
+
+None in this smoke pass — no code changes required.
