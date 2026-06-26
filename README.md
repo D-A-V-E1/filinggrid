@@ -65,8 +65,8 @@ For **Stripe checkout testing** (Pro upgrade E2E), use **`start-with-stripe.bat`
 If this is a fresh setup and you haven't pushed to GitHub yet, skip to **Working across two computers** below.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/filinggrid.git
-cd filinggrid
+git clone https://github.com/YOUR_USERNAME/peerdisclosures.git
+cd peerdisclosures
 ```
 
 ### 2. Configure environment
@@ -147,7 +147,7 @@ git init
 git add .
 git commit -m "Initial PeerDisclosures implementation"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/filinggrid.git
+git remote add origin https://github.com/YOUR_USERNAME/peerdisclosures.git
 git push -u origin main
 ```
 
@@ -164,7 +164,7 @@ When prompted for credentials:
   ```bash
   ssh-keygen -t ed25519 -C "your-email@company.com"
   # Add the public key (~/.ssh/id_ed25519.pub) at github.com/settings/keys
-  git remote set-url origin git@github.com:YOUR_USERNAME/filinggrid.git
+  git remote set-url origin git@github.com:YOUR_USERNAME/peerdisclosures.git
   ```
 
 ---
@@ -178,15 +178,15 @@ Install Node.js, Python, Docker, and Git (same versions as Computer A).
 #### Step 2: Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/filinggrid.git
-cd filinggrid
+git clone https://github.com/YOUR_USERNAME/peerdisclosures.git
+cd peerdisclosures
 ```
 
 Or with SSH:
 
 ```bash
-git clone git@github.com:YOUR_USERNAME/filinggrid.git
-cd filinggrid
+git clone git@github.com:YOUR_USERNAME/peerdisclosures.git
+cd peerdisclosures
 ```
 
 #### Step 3: Create local environment files
@@ -309,7 +309,7 @@ See **[docs/STRIPE_SETUP.md](docs/STRIPE_SETUP.md)** for full Dashboard steps (p
 
 In [Stripe Dashboard → Products](https://dashboard.stripe.com/products):
 
-1. Create product: **PeerDisclosures Professional**
+1. Create product: **Peer Disclosures Professional**
 2. Add recurring price: **$29/month**
 3. Copy the **Price ID** (`price_...`) → `STRIPE_PRICE_PROFESSIONAL`
 

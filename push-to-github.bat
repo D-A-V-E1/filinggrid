@@ -34,14 +34,14 @@ echo.
 
 "%GIT%" branch -M main 2>nul
 
-"%GH%" repo view D-A-V-E-1/filinggrid >nul 2>&1
+"%GH%" repo view D-A-V-E-1/peerdisclosures >nul 2>&1
 if errorlevel 1 (
-    echo [STEP 2] Creating GitHub repo D-A-V-E-1/filinggrid ...
-    "%GH%" repo create filinggrid --public --source=. --remote=origin --description "Stateless SEC filing comparison workspace" --push
+    echo [STEP 2] Creating GitHub repo D-A-V-E-1/peerdisclosures ...
+    "%GH%" repo create peerdisclosures --public --source=. --remote=origin --description "Stateless SEC filing comparison workspace" --push
 ) else (
     echo [STEP 2] Repo exists - pushing to origin/main ...
     "%GIT%" remote get-url origin >nul 2>&1
-    if errorlevel 1 "%GIT%" remote add origin https://github.com/D-A-V-E-1/filinggrid.git
+    if errorlevel 1 "%GIT%" remote add origin https://github.com/D-A-V-E-1/peerdisclosures.git
     "%GIT%" push -u origin main
 )
 
@@ -54,7 +54,7 @@ if errorlevel 1 (
 echo.
 echo  ========================================
 echo   Success! Your repo is on GitHub:
-echo   https://github.com/D-A-V-E-1/filinggrid
+echo   https://github.com/D-A-V-E-1/peerdisclosures
 echo  ========================================
 echo.
 pause

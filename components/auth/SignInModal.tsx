@@ -42,7 +42,7 @@ export default function SignInModal({ open, returnPath, onClose, onSignedIn }: S
         </button>
 
         <h2 id="signin-title" className="text-xl font-semibold text-slate-900">
-          Sign in to PeerDisclosures
+          Sign in to Peer Disclosures
         </h2>
 
         {loading ? (

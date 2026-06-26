@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "Terms and conditions for using PeerDisclosures.",
+  description: "Terms and conditions for using Peer Disclosures.",
 };
 
 const LAST_UPDATED = "June 20, 2026";
@@ -19,15 +19,15 @@ export default function TermsPage() {
 
       <div className="prose prose-slate max-w-none prose-headings:font-sans prose-p:text-sm prose-p:leading-relaxed prose-li:text-sm">
         <p>
-          These Terms of Service (&quot;Terms&quot;) govern your access to and use of the PeerDisclosures
+          These Terms of Service (&quot;Terms&quot;) govern your access to and use of the Peer Disclosures
           website and application (the &quot;Service&quot;). By using the Service, you agree to these
           Terms.
         </p>
 
         <h2>1. The Service</h2>
         <p>
-          PeerDisclosures provides tools to retrieve, parse, and display publicly available U.S. Securities
-          and Exchange Commission (SEC) filings for side-by-side comparison. PeerDisclosures is not
+          Peer Disclosures provides tools to retrieve, parse, and display publicly available U.S. Securities
+          and Exchange Commission (SEC) filings for side-by-side comparison. Peer Disclosures is not
           affiliated with, endorsed by, or sponsored by the SEC or any listed company.
         </p>
 
@@ -72,13 +72,13 @@ export default function TermsPage() {
 
         <h2>7. No investment advice</h2>
         <p>
-          PeerDisclosures does not provide investment, legal, accounting, or tax advice. Nothing in the
+          Peer Disclosures does not provide investment, legal, accounting, or tax advice. Nothing in the
           Service constitutes a recommendation to buy, sell, or hold any security.
         </p>
 
         <h2>8. Intellectual property</h2>
         <p>
-          SEC filings are public records. PeerDisclosures&apos; software, branding, design, and
+          SEC filings are public records. Peer Disclosures&apos; software, branding, design, and
           documentation are owned by us or our licensors. You receive a limited, non-exclusive,
           non-transferable license to use the Service for your internal business purposes during your
           subscription or free-tier access.
@@ -100,7 +100,7 @@ export default function TermsPage() {
 
         <h2>11. Limitation of liability</h2>
         <p>
-          TO THE MAXIMUM EXTENT PERMITTED BY LAW, PEERDISCLOSURES AND ITS AFFILIATES WILL NOT BE LIABLE
+          TO THE MAXIMUM EXTENT PERMITTED BY LAW, PEER DISCLOSURES AND ITS AFFILIATES WILL NOT BE LIABLE
           FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF
           PROFITS, DATA, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR
           ANY CLAIM RELATING TO THE SERVICE WILL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12)

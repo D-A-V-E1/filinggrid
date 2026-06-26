@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "PeerDisclosures",
-    short_name: "PeerDisclosures",
+    name: "Peer Disclosures",
+    short_name: "Peer Disclosures",
     description: "Fast SEC filing comparison workspace",
     start_url: "/",
     display: "standalone",

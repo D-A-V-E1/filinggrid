@@ -9,7 +9,7 @@
 ## 1. Create live product and price
 
 1. [dashboard.stripe.com/products](https://dashboard.stripe.com/products) (Live mode)
-2. **+ Add product** → **PeerDisclosures Professional**
+2. **+ Add product** → **Peer Disclosures Professional**
 3. Recurring **$29.00 USD / month**
 4. Copy live **Price ID** (`price_...`)
 
@@ -48,3 +48,7 @@ cd backend
 ```
 
 Manual: any email → Checkout → tier `professional` → Portal cancel → tier `free`.
+
+## 6. Rename legacy products (if needed)
+
+If Checkout shows **FilingGrid Professional (Test)** or an old name, rename the product in Dashboard → Products to **Peer Disclosures Professional** and set business name to **Peer Disclosures** under Settings → Business details. See [STRIPE_SETUP.md § 10](./STRIPE_SETUP.md#10-rename-legacy-filinggrid-products-dashboard).

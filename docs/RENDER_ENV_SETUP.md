@@ -61,7 +61,7 @@ Set these **five secrets** in the dashboard. Everything else is already defined 
 
 ### `STRIPE_PRICE_PROFESSIONAL`
 
-1. Stripe Dashboard (Live mode) → **Products** → PeerDisclosures Professional → copy Price ID.
+1. Stripe Dashboard (Live mode) → **Products** → Peer Disclosures Professional → copy Price ID.
 2. Must start with `price_` and be from **Live** mode (example in `scripts/render-production-env.example`).
 
 ### `STRIPE_WEBHOOK_SECRET`

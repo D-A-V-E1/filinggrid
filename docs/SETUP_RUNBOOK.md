@@ -159,14 +159,14 @@ Dashboard must be in **Test mode** (toggle top-right).
 
 1. Open [Stripe Dashboard → Products (test)](https://dashboard.stripe.com/test/products).
 2. Click **+ Add product**.
-3. Name: `PeerDisclosures Professional`
+3. Name: `Peer Disclosures Professional`
 4. Pricing: **Recurring** → **Monthly** → **$29.00 USD**
 5. Save → copy **Price ID** (`price_...`).
 
 Optional via CLI after login:
 
 ```powershell
-stripe products create --name="PeerDisclosures Professional"
+stripe products create --name="Peer Disclosures Professional"
 # Use returned prod_... id:
 stripe prices create --product=prod_XXXX --unit-amount=2900 --currency=usd -d "recurring[interval]=month"
 ```
@@ -240,15 +240,15 @@ Frontend uses URL + publishable/anon key for `@supabase/ssr` sign-in.
 Supabase sends the only sign-in email today — there is no PeerDisclosures-owned welcome email in code.
 
 1. **Authentication → Email Templates → Magic Link**
-2. Suggested **subject:** `Sign in to PeerDisclosures`
+2. Suggested **subject:** `Sign in to Peer Disclosures`
 3. Suggested **body** (HTML):
 
 ```html
-<h2>Sign in to PeerDisclosures</h2>
+<h2>Sign in to Peer Disclosures</h2>
 <p>Click the link below to sign in. This link expires in one hour and works once.</p>
-<p><a href="{{ .ConfirmationURL }}">Sign in to PeerDisclosures</a></p>
+<p><a href="{{ .ConfirmationURL }}">Sign in to Peer Disclosures</a></p>
 <p>If you did not request this email, you can ignore it.</p>
-<p>— PeerDisclosures · support@peerdisclosures.com</p>
+<p>— Peer Disclosures · support@peerdisclosures.com</p>
 ```
 
 4. **Authentication → Settings → Email** — confirm rate limits and link expiry suit your QA
@@ -260,7 +260,7 @@ Default Supabase SMTP works for dev; production should use your domain.
 
 1. **Project Settings → Authentication → SMTP Settings** → enable custom SMTP
 2. Provider examples: [Resend](https://resend.com), SendGrid, Postmark, Amazon SES
-3. Set **Sender email** e.g. `noreply@peerdisclosures.com`, **Sender name** `PeerDisclosures`
+3. Set **Sender email** e.g. `noreply@peerdisclosures.com`, **Sender name** `Peer Disclosures`
 4. Add DNS records (SPF, DKIM) per provider docs
 5. Re-send magic link and verify `From:` header shows your domain
 

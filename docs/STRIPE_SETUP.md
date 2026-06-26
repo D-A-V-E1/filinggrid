@@ -1,4 +1,4 @@
-# Stripe setup — PeerDisclosures Professional ($29/mo)
+# Stripe setup — Peer Disclosures Professional ($29/mo)
 
 Step-by-step guide for **test mode** (local / staging) and **live mode** (production). The backend owns Checkout and webhooks; the frontend redirects users to Stripe-hosted pages.
 
@@ -33,7 +33,7 @@ Optional: add that folder to your user `PATH`, or create a WinGet shim link.
 
 | Item | Value |
 |---|---|
-| Product name | **PeerDisclosures Professional** (any name works; price ID is what matters) |
+| Product name | **Peer Disclosures Professional** (any name works; price ID is what matters) |
 | Price | **$29.00 USD / month**, recurring |
 | Checkout mode | Subscription (`mode=subscription`) |
 | Success redirect | `{APP_URL}{return_path}?checkout=success` |
@@ -51,7 +51,7 @@ Optional: add that folder to your user `PATH`, or create a WinGet shim link.
 
 1. Open [Stripe Dashboard → Products](https://dashboard.stripe.com/test/products).
 2. **+ Add product**
-   - Name: `PeerDisclosures Professional`
+   - Name: `Peer Disclosures Professional`
    - Description (optional): `Up to 8 columns, full GAAP statements, filing archive, saved peer groups`
 3. Under **Pricing**, add:
    - **Recurring** → **Monthly** → **$29.00 USD**
@@ -227,6 +227,22 @@ Repeat the same toggles under [live Customer emails](https://dashboard.stripe.co
 ### Branding (optional)
 
 [Settings → Branding](https://dashboard.stripe.com/settings/branding) — logo and colors appear on Checkout, Portal, and customer emails.
+
+---
+
+## 10. Rename legacy FilingGrid products (Dashboard)
+
+Checkout and receipts show the **Stripe product name**, not anything from this codebase. If Checkout still displays **FilingGrid Professional (Test)** or similar:
+
+1. Open [Stripe Dashboard → Products](https://dashboard.stripe.com/products) in the mode you use (Test or Live).
+2. Find the product tied to your `STRIPE_PRICE_PROFESSIONAL` price ID (Products → click product → Prices).
+3. Edit the product:
+   - **Name:** `Peer Disclosures Professional` (no `(Test)` suffix — Stripe adds test-mode indicators separately in Checkout when using test keys).
+   - **Description (optional):** `Up to 8 columns, full GAAP statements, filing archive, saved peer groups`
+4. Under [Settings → Business details](https://dashboard.stripe.com/settings/business-details), set **Public business name** to `Peer Disclosures` so Checkout shows the correct merchant name.
+5. If you created a duplicate product with the correct name, update `STRIPE_PRICE_PROFESSIONAL` in production env to the new live **Price ID** — price IDs are immutable; renaming the product is usually enough.
+
+> **Note:** Test-mode Checkout may still show a “Test mode” banner — that is expected with `sk_test_...` keys and is not controlled by app copy.
 
 ---
 

@@ -194,7 +194,7 @@ Complete in order:
 
 1. **Business verification** — [dashboard.stripe.com/account/onboarding](https://dashboard.stripe.com/account/onboarding)
 2. Switch to **Live mode** (toggle top-right).
-3. **Product** — [dashboard.stripe.com/products](https://dashboard.stripe.com/products) → **PeerDisclosures Professional** → **$29/mo** → copy live `price_...`.
+3. **Product** — [dashboard.stripe.com/products](https://dashboard.stripe.com/products) → **Peer Disclosures Professional** → **$29/mo** → copy live `price_...`.
 4. **API keys** — [dashboard.stripe.com/apikeys](https://dashboard.stripe.com/apikeys) → `sk_live_...` → API host secret `STRIPE_SECRET_KEY`.
 5. **Webhook** — [dashboard.stripe.com/webhooks](https://dashboard.stripe.com/webhooks) → **Add endpoint**:
    - **URL:** `https://api.peerdisclosures.com/webhooks/stripe`

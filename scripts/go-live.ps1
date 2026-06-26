@@ -67,7 +67,7 @@ switch ($Phase) {
 
 Write-Host "`n=== Manual phases (dashboard) ===" -ForegroundColor Cyan
 Write-Host "  API deploy:     render.yaml or railway.toml -> connect GitHub repo"
-Write-Host "  Vercel:         vercel.com -> import D-A-V-E1/filinggrid -> env from .env.production.example"
+Write-Host "  Vercel:         vercel.com -> import D-A-V-E1/peerdisclosures -> env from .env.production.example"
 Write-Host "  DNS verify:     .\scripts\dns-go-live-checklist.ps1"
 Write-Host "  DNS steps:      docs/DNS_PEERDISCLOSURES.md"
 Write-Host "  Supabase URLs:  docs/SUPABASE_PROD_URLS.md"

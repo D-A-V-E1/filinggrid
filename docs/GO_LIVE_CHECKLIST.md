@@ -54,7 +54,7 @@ See [DNS_PEERDISCLOSURES.md](./DNS_PEERDISCLOSURES.md) for full detail.
 ### Stripe (test)
 
 - [ ] Create [Stripe account](https://dashboard.stripe.com/register) (if needed)
-- [ ] Create product **PeerDisclosures Professional** at **$29/mo** (test mode)
+- [ ] Create product **Peer Disclosures Professional** at **$29/mo** (test mode)
 - [ ] Copy test `STRIPE_PRICE_PROFESSIONAL` (`price_...`)
 - [ ] Copy test `STRIPE_SECRET_KEY` (`sk_test_...`)
 - [ ] Run `stripe listen --forward-to localhost:8000/webhooks/stripe` → set `STRIPE_WEBHOOK_SECRET`

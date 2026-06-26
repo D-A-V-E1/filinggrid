@@ -28,8 +28,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "PeerDisclosures — SEC Filing Comparison Workspace",
-    template: "%s | PeerDisclosures",
+    default: "Peer Disclosures — SEC Filing Comparison Workspace",
+    template: "%s | Peer Disclosures",
   },
   description:
     "Compare SEC 10-K, 10-Q, 20-F, and 6-K filings side by side with synchronized sections and XBRL financials. Free for current-year peer review; Professional adds history, full GAAP statements, and saved peer groups.",
@@ -74,7 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </span>
               <strong className="font-medium text-slate-500">Public SEC data</strong>
               {" — "}
-              PeerDisclosures is not affiliated with the U.S. Securities and Exchange Commission.
+              Peer Disclosures is not affiliated with the U.S. Securities and Exchange Commission.
               <span className="hidden sm:inline"> </span>
               <span className="mt-0.5 block sm:mt-0 sm:inline">
                 SEC filings are public domain. Cached locally for performance — never stored in your
