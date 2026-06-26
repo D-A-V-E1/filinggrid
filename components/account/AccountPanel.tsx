@@ -19,7 +19,7 @@ export default function AccountPanel() {
     useAuth();
   const hasSession = isSignedIn || Boolean(supabaseEmail);
   const displayEmail = auth?.email ?? supabaseEmail;
-  const { isPro } = useEffectiveTier(auth);
+  const { isPro, limits } = useEffectiveTier(auth);
   const [signInOpen, setSignInOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
@@ -178,7 +178,7 @@ export default function AccountPanel() {
         <dl className="mt-4 space-y-3 text-sm">
           <div>
             <dt className="text-slate-500">Email</dt>
-            <dd className="font-medium text-slate-900">{auth.email}</dd>
+            <dd className="font-medium text-slate-900">{displayEmail}</dd>
           </div>
           <div>
             <dt className="text-slate-500">Plan</dt>
@@ -189,8 +189,8 @@ export default function AccountPanel() {
           <div>
             <dt className="text-slate-500">Compare limits</dt>
             <dd className="text-slate-700">
-              {auth.limits.max_columns} columns
-              {auth.limits.historical
+              {limits.max_columns} columns
+              {limits.historical
                 ? ", full filing archive & GAAP statements"
                 : ", latest filing + last completed fiscal year"}
             </dd>

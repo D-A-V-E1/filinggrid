@@ -2,7 +2,22 @@
 
 Run after deploying frontend (Vercel), API (`api.peerdisclosures.com`), Supabase prod URLs, and Stripe **Live** mode. Adapted from [TIER_TESTING.md](./TIER_TESTING.md) § Sign-up & onboarding E2E.
 
+**Status (verified 2026-06-26):** Full smoke test **blocked** — Vercel not connected, `api.peerdisclosures.com` NXDOMAIN, Stripe live webhook not created. API-only check available on Render hostname below.
+
 **Prerequisites:** Live Stripe account verified, live webhook at `https://api.peerdisclosures.com/webhooks/stripe`, `ALLOW_DEV_TIER_TOGGLE=false` on API.
+
+---
+
+## Interim API checks (Render hostname)
+
+Use while custom domain is pending:
+
+```powershell
+curl.exe -s https://peerdisclosures-api.onrender.com/health
+curl.exe -s -o NUL -w "%{http_code}" -X POST https://peerdisclosures-api.onrender.com/dev/tier `
+  -H "Content-Type: application/json" -d "{\"tier\":\"professional\"}"
+# Expect HTTP 404 (dev toggle off)
+```
 
 ---
 

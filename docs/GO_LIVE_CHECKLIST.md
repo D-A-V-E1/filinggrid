@@ -8,6 +8,30 @@ Week-by-week plan for launching **self-serve Stripe Professional** subscriptions
 
 ---
 
+## Launch status (verified 2026-06-26)
+
+| Area | Status | Notes |
+|---|---|---|
+| Render API (`peerdisclosures-api`) | ✅ Live | `https://peerdisclosures-api.onrender.com/health` → 200 |
+| `DATABASE_URL` on Render | ✅ Fixed | `f71070b` — `postgres://` URLs accepted |
+| Render env + `render.yaml` | ✅ Applied | `ALLOW_DEV_TIER_TOGGLE=false`, `APP_URL`/`CORS_ORIGINS` set |
+| Custom domain `api.peerdisclosures.com` | ⏸ Pending | NXDOMAIN — Render custom domain + Cloudflare CNAME not added |
+| Frontend (Vercel) | ⏸ Not started | Repo not connected; apex still GoDaddy placeholder |
+| Stripe live webhook | ⏸ Not created | `STRIPE_WEBHOOK_SECRET` empty until endpoint exists |
+| Supabase prod URLs | ⏸ Pending | Blocked until `https://peerdisclosures.com` serves the app |
+| Production smoke test | ⏸ Blocked | Needs Vercel + DNS + webhook |
+
+### Next steps (in order)
+
+1. **Vercel** — Connect repo, set production env vars ([§ Frontend](#frontend-vercel-recommended)), deploy.
+2. **DNS apex/www** — Point `@` and `www` to Vercel ([DNS_PEERDISCLOSURES.md](./DNS_PEERDISCLOSURES.md)).
+3. **DNS + Render custom domain** — CNAME `api` → `peerdisclosures-api.onrender.com`; add `api.peerdisclosures.com` in Render → Settings → Custom Domains.
+4. **Supabase** — Site URL + redirect URLs ([SUPABASE_PROD_URLS.md](./SUPABASE_PROD_URLS.md)).
+5. **Stripe live webhook** — `https://api.peerdisclosures.com/webhooks/stripe` → set `STRIPE_WEBHOOK_SECRET` on Render ([STRIPE_LIVE_CHECKLIST.md](./STRIPE_LIVE_CHECKLIST.md)).
+6. **Smoke test** — [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md).
+
+---
+
 ## Week overview
 
 | Phase | Focus |
@@ -62,34 +86,40 @@ cd backend
 
 ### Domain & HTTPS
 
-- [ ] Register production domain (e.g. `peerdisclosures.com`)
-- [ ] DNS for frontend (Vercel) and API subdomain (e.g. `api.peerdisclosures.com`)
+- [x] Register production domain (`peerdisclosures.com`)
+- [ ] DNS for frontend (Vercel) and API subdomain (`api.peerdisclosures.com`) — apex still placeholder; `api` NXDOMAIN
 - [ ] Confirm HTTPS on both (required for Supabase redirects and Stripe)
 
 ### Frontend (Vercel recommended)
 
-- [ ] Connect GitHub repo to [Vercel](https://vercel.com)
+- [ ] Connect GitHub repo to [Vercel](https://vercel.com) — **not connected yet**
 - [ ] `vercel.json` included — framework: Next.js
-- [ ] Set production env vars:
+- [ ] Set production env vars (copy-paste into **Project → Settings → Environment Variables → Production**):
 
-| Variable | Example |
-|---|---|
-| `NEXT_PUBLIC_APP_URL` | `https://peerdisclosures.com` |
-| `NEXT_PUBLIC_API_URL` | `https://api.peerdisclosures.com` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_live_...` (optional for MVP) |
+| Key | Value | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_APP_URL` | `https://peerdisclosures.com` | Browser origin; Stripe redirects |
+| `NEXT_PUBLIC_API_URL` | `https://peerdisclosures-api.onrender.com` | **Interim** — `next.config.mjs` rewrites `/api/backend/*` here. Switch to `https://api.peerdisclosures.com` after Render custom domain + DNS |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://cbqiqbcqzvfozewqzqnl.supabase.co` | Same project as Render `SUPABASE_URL` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_Tv4FMFQ6lGMaSCPo59UFHQ_rCwqo0LC` | Publishable/anon key (public by design) — **never** put `SUPABASE_JWT_SECRET` on Vercel |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_live_...` | Stripe Dashboard → API keys (**Live** mode). Optional for MVP (Checkout is server-side) |
+
+Template with comments: [`scripts/vercel-production-env.example`](../scripts/vercel-production-env.example).
 
 - [ ] **Do not** set `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` or `NEXT_PUBLIC_DEV_TIER` in production
+- [ ] Redeploy after env changes (NEXT_PUBLIC_* are build-time)
 - [ ] Deploy and verify `/api/backend/health` proxies to API
 
 ### Backend API
+
+- [x] Deploy to **Render** (`peerdisclosures-api`) — live at `https://peerdisclosures-api.onrender.com`
+- [ ] Add custom domain `api.peerdisclosures.com` in Render + Cloudflare CNAME
 
 Choose one (Dockerfile included in `backend/`):
 
 | Option | Notes |
 |---|---|
-| **Railway / Render / Fly.io** | Deploy `backend/Dockerfile`, attach managed Postgres or external DB |
+| **Railway / Render / Fly.io** | Deploy `backend/Dockerfile`, attach managed Postgres or external DB — **Render in use** |
 | **Docker on VPS** | `docker compose --profile full up -d --build` |
 | **Same host as DB** | Expose port 8000 behind reverse proxy |
 
@@ -110,8 +140,8 @@ Production env (minimum):
 
 ### Database
 
-- [ ] Provision PostgreSQL (Supabase DB, Neon, RDS, or compose volume for small deploys)
-- [ ] Run migrations before first traffic:
+- [x] Provision PostgreSQL (Neon) — `DATABASE_URL` on Render
+- [x] Run migrations before first traffic (health OK post-`f71070b`):
 
 ```powershell
 cd backend
@@ -137,7 +167,7 @@ alembic upgrade head
 - [ ] Create **live** product + $29/mo price (new `price_...` ID)
 - [ ] Update production `STRIPE_SECRET_KEY` → `sk_live_...`
 - [ ] Update production `STRIPE_PRICE_PROFESSIONAL` → live price ID
-- [ ] Add live webhook: `https://api.peerdisclosures.com/webhooks/stripe` with required events (see [STRIPE_SETUP.md](./STRIPE_SETUP.md))
+- [ ] Add live webhook: `https://api.peerdisclosures.com/webhooks/stripe` with required events (see [STRIPE_SETUP.md](./STRIPE_SETUP.md)) — **not created yet** (blocked on API custom domain)
 - [ ] Update production `STRIPE_WEBHOOK_SECRET` from live endpoint
 - [ ] Enable **Customer Portal** in live mode
 
@@ -174,11 +204,11 @@ Manual checklist: [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md)
 
 ### Disable dev overrides
 
-- [ ] `ALLOW_DEV_TIER_TOGGLE` unset/false on API
-- [ ] `DEV_PRO_TIER` unset/false
-- [ ] No `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` on Vercel
-- [ ] Confirm `POST /dev/tier` returns **404** in production
-- [ ] Confirm compare header has **no** Free/Pro dev toggle
+- [x] `ALLOW_DEV_TIER_TOGGLE` unset/false on API (`render.yaml`)
+- [x] `DEV_PRO_TIER` unset/false (`render.yaml`)
+- [ ] No `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` on Vercel (Vercel not connected)
+- [ ] Confirm `POST /dev/tier` returns **404** in production (verify on Render URL after deploy; then `api.peerdisclosures.com`)
+- [ ] Confirm compare header has **no** Free/Pro dev toggle (after Vercel deploy)
 
 ### Security & reliability
 
@@ -238,15 +268,17 @@ ALLOW_DEV_TIER_TOGGLE=false   # or omit
 DEV_PRO_TIER=false            # or omit
 ```
 
-### Frontend
+### Frontend (Vercel Production)
 
 ```
-NEXT_PUBLIC_APP_URL
-NEXT_PUBLIC_API_URL
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY   # optional
+NEXT_PUBLIC_APP_URL=https://peerdisclosures.com
+NEXT_PUBLIC_API_URL=https://peerdisclosures-api.onrender.com   # interim; then api.peerdisclosures.com
+NEXT_PUBLIC_SUPABASE_URL=https://cbqiqbcqzvfozewqzqnl.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_Tv4FMFQ6lGMaSCPo59UFHQ_rCwqo0LC
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...               # optional; from Stripe Live dashboard
 ```
+
+**Do not set:** `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE`, `NEXT_PUBLIC_DEV_TIER`
 
 ---
 

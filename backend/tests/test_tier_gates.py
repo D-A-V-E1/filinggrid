@@ -149,6 +149,25 @@ def test_dev_tier_endpoint_hidden_without_toggle(monkeypatch):
     assert exc.value.status_code == 404
 
 
+def test_post_dev_tier_returns_404_before_auth_when_toggle_off(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import dev_routes
+    import middleware
+    from main import app
+
+    mock_settings = MagicMock()
+    mock_settings.allow_dev_tier_toggle = False
+    mock_settings.dev_pro_tier = False
+    mock_settings.auth_configured = True
+    monkeypatch.setattr(dev_routes, "settings", mock_settings)
+    monkeypatch.setattr(middleware, "settings", mock_settings)
+
+    client = TestClient(app)
+    response = client.post("/dev/tier", json={"tier": "professional"})
+    assert response.status_code == 404
+
+
 @pytest.mark.anyio
 async def test_get_auth_context_applies_dev_header_for_anonymous(monkeypatch):
     mock_settings = MagicMock()

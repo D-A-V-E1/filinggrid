@@ -29,15 +29,13 @@ def _ensure_dev_toggle_allowed() -> None:
         raise HTTPException(status_code=404, detail="Not found")
 
 
-@router.post("/tier", response_model=SetTierResponse)
+@router.post("/tier", response_model=SetTierResponse, dependencies=[Depends(_ensure_dev_toggle_allowed)])
 async def set_dev_tier(
     body: SetTierRequest,
     auth: Annotated[AuthContext, Depends(require_auth)],
     db: Session = Depends(get_db),
 ):
     """Persist subscription tier on the signed-in user's organization (dev/test only)."""
-    _ensure_dev_toggle_allowed()
-
     tier = body.tier.strip().lower()
     if tier not in TIER_LIMITS:
         raise HTTPException(status_code=400, detail=f"Invalid tier. Use one of: {', '.join(TIER_LIMITS)}")
@@ -57,13 +55,11 @@ async def set_dev_tier(
     )
 
 
-@router.get("/tier")
+@router.get("/tier", dependencies=[Depends(_ensure_dev_toggle_allowed)])
 async def get_dev_tier_info(
     auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     """Show effective tier and whether dev overrides are active."""
-    _ensure_dev_toggle_allowed()
-
     stored = auth.organization.subscription_tier if auth.organization else None
     return {
         "effective_tier": auth.tier,

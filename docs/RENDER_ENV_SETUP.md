@@ -2,6 +2,8 @@
 
 Use this when configuring **Render Dashboard → peerdisclosures-api → Environment** for production go-live.
 
+**Status (verified 2026-06-26):** Service is **live** at `https://peerdisclosures-api.onrender.com/health` (200). `DATABASE_URL` fix deployed (`f71070b`). Custom domain `api.peerdisclosures.com` and live Stripe webhook still pending — see [GO_LIVE_CHECKLIST.md](./GO_LIVE_CHECKLIST.md).
+
 ## Common mistake
 
 **Do not paste file paths.** Render env vars must be literal values.
@@ -21,11 +23,11 @@ Set these **five secrets** in the dashboard. Everything else is already defined 
 
 | Key | Set in dashboard? | What to paste |
 |---|---|---|
-| `DATABASE_URL` | **Yes — required** | Neon connection string starting with `postgresql://` |
+| `DATABASE_URL` | **Yes — required** | ✅ Set (Neon `postgresql://` or `postgres://`) |
 | `SUPABASE_JWT_SECRET` | **Yes — required** | JWT secret from Supabase (see below) |
 | `STRIPE_SECRET_KEY` | **Yes — required** | Live secret key starting with `sk_live_` |
 | `STRIPE_PRICE_PROFESSIONAL` | **Yes — required** | Live price ID starting with `price_` |
-| `STRIPE_WEBHOOK_SECRET` | Optional until webhook exists | `whsec_...` from Live webhook endpoint |
+| `STRIPE_WEBHOOK_SECRET` | ⏸ Pending webhook | `whsec_...` from Live webhook endpoint — **not created yet** |
 | `SUPABASE_URL` | No — in render.yaml | — |
 | `APP_URL` | No — in render.yaml | — |
 | `CORS_ORIGINS` | No — in render.yaml | — |
@@ -91,8 +93,9 @@ DEV_PRO_TIER=false
 ## Verify after save
 
 1. Render → **Manual Deploy** (or wait for auto-deploy).
-2. Open `https://api.peerdisclosures.com/health` → expect `{"status":"ok",...}`.
-3. If health fails, check **Logs** for database connection errors (usually bad `DATABASE_URL`).
+2. **Now:** `https://peerdisclosures-api.onrender.com/health` → expect `{"status":"ok",...}`.
+3. **After custom domain:** `https://api.peerdisclosures.com/health` → same response.
+4. If health fails, check **Logs** for database connection errors (usually bad `DATABASE_URL`).
 
 ---
 

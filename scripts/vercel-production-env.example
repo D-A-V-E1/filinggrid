@@ -1,14 +1,44 @@
-# Copy into Vercel -> Project -> Settings -> Environment Variables (Production)
+# PeerDisclosures — Vercel production environment variables
+# Copy into Vercel → Project → Settings → Environment Variables → Production
+#
+# Apply each variable to: Production only (unless you use a staging Preview env).
+# After save: redeploy so NEXT_PUBLIC_* are baked into the Next.js build.
+#
+# Full checklist: docs/GO_LIVE_CHECKLIST.md § Frontend (Vercel)
+# Interim API host: Render peerdisclosures-api (switch NEXT_PUBLIC_API_URL to
+# https://api.peerdisclosures.com once Render custom domain + DNS are live).
+
+# ── Required (Production) ─────────────────────────────────
 
 NEXT_PUBLIC_APP_URL=https://peerdisclosures.com
-NEXT_PUBLIC_API_URL=https://api.peerdisclosures.com
+
+# Interim until api.peerdisclosures.com is live on Render + Cloudflare DNS
+NEXT_PUBLIC_API_URL=https://peerdisclosures-api.onrender.com
 
 NEXT_PUBLIC_SUPABASE_URL=https://cbqiqbcqzvfozewqzqnl.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=CHANGE_ME_sb_publishable_or_anon_key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_Tv4FMFQ6lGMaSCPo59UFHQ_rCwqo0LC
 
-# Optional
-# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+# Live publishable key — Stripe Dashboard → Developers → API keys (Live mode)
+# Do NOT use pk_test_... in production.
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_CHANGE_ME_from_stripe_dashboard
 
-# DO NOT SET IN PRODUCTION:
+# ── PRODUCTION: DO NOT SET ────────────────────────────────
+# Dev tier toggles must never be set on Vercel production builds.
 # NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE
 # NEXT_PUBLIC_DEV_TIER
+
+# ═══════════════════════════════════════════════════════════
+# COPY-PASTE TABLE — Vercel Dashboard → Environment Variables
+# ═══════════════════════════════════════════════════════════
+#
+# | Key                                  | Value                                              | Environments |
+# |--------------------------------------|----------------------------------------------------|--------------|
+# | NEXT_PUBLIC_APP_URL                  | https://peerdisclosures.com                        | Production   |
+# | NEXT_PUBLIC_API_URL                  | https://peerdisclosures-api.onrender.com           | Production   |
+# | NEXT_PUBLIC_SUPABASE_URL             | https://cbqiqbcqzvfozewqzqnl.supabase.co           | Production   |
+# | NEXT_PUBLIC_SUPABASE_ANON_KEY        | sb_publishable_Tv4FMFQ6lGMaSCPo59UFHQ_rCwqo0LC     | Production   |
+# | NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY   | pk_live_... (Stripe Dashboard → API keys, Live)    | Production   |
+#
+# Do NOT add: NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE, NEXT_PUBLIC_DEV_TIER
+#
+# After api.peerdisclosures.com is live, update NEXT_PUBLIC_API_URL and redeploy.

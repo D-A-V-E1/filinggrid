@@ -5,9 +5,20 @@
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.peerdisclosures.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "www.peerdisclosures.com"
+        }
+      ],
       "destination": "https://peerdisclosures.com/:path*",
       "permanent": true
     }
-  ]
+  ],
+  "experimentalServices": {
+    "web": {
+      "routePrefix": "/",
+      "framework": "nextjs"
+    }
+  }
 }

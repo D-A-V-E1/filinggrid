@@ -2,7 +2,15 @@
 
 Domain registrar: **GoDaddy** · DNS managed in **Cloudflare** · Email routing already active.
 
-**Current state:** Apex may still point to GoDaddy Website Builder (“X Files” placeholder). Update these records to launch PeerDisclosures.
+**Current state (verified 2026-06-26):**
+
+| Record | Status |
+|---|---|
+| `peerdisclosures.com` (apex) | ⏸ GoDaddy Website Builder placeholder — not Vercel yet |
+| `api.peerdisclosures.com` | ⏸ **NXDOMAIN** — no CNAME to Render |
+| Email (MX) | ✅ Cloudflare Email Routing — do not change |
+
+**Next:** Connect Vercel → update apex/`www` records below → add `api` CNAME after Render custom domain is configured.
 
 ---
 
@@ -25,7 +33,7 @@ After deploying the API, add a custom domain in your host dashboard, then:
 
 | Host | Type | Name | Content |
 |---|---|---|---|
-| **Render** | CNAME | `api` | `<service>.onrender.com` |
+| **Render** | CNAME | `api` | `peerdisclosures-api.onrender.com` |
 | **Railway** | CNAME | `api` | `<service>.up.railway.app` |
 
 Enable HTTPS on the API host (automatic on Render/Railway).
@@ -42,6 +50,15 @@ Forwarded addresses (already configured):
 ---
 
 ## Verification checklist
+
+**Interim (Render default hostname — works today):**
+
+```powershell
+curl.exe -s https://peerdisclosures-api.onrender.com/health
+# Expect {"status":"ok",...}
+```
+
+**After DNS + Vercel (full launch):**
 
 ```powershell
 # Apex should return Vercel (not GoDaddy builder)
