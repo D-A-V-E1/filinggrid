@@ -451,6 +451,11 @@ async def get_section_html(
     if want_text and not text:
         raise ValueError(f"Section '{section_id}' not found for ticker {ticker}")
 
+    if html:
+        from sec.section_extractor import _normalize_excerpt_html
+
+        html = _normalize_excerpt_html(html)
+
     return SectionHtmlResponse(
         ticker=ticker,
         section_id=section_id,

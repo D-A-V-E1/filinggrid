@@ -194,9 +194,14 @@
     word-break: break-word;
   }
 
+  .filing-content {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
   .filing-content table {
     @apply mb-4 w-full border-collapse text-xs;
-    display: block;
+    display: table;
     overflow-x: auto;
     max-width: 100%;
   }

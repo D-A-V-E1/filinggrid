@@ -7,7 +7,7 @@ import re
 import warnings
 from typing import Any
 
-from bs4 import BeautifulSoup, Tag, XMLParsedAsHTMLWarning
+from bs4 import BeautifulSoup, NavigableString, Tag, XMLParsedAsHTMLWarning
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
@@ -562,7 +562,9 @@ def _extract_table_rows(start: Tag, end: Tag | None) -> str | None:
         parts.append(str(row))
         row = row.find_next_sibling("tr")
     html = "".join(parts)
-    return html if len(re.sub(r"<[^>]+>", " ", html)) > 300 else None
+    if len(re.sub(r"<[^>]+>", " ", html)) <= 300:
+        return None
+    return _normalize_excerpt_html(f"<table>{html}</table>")
 
 
 def _item_number(text: str) -> str | None:
@@ -643,7 +645,81 @@ def _extract_between(
 
     outer = _outermost_blocks(slice_blocks)
     html = "".join(str(b) for b in outer)
-    return html if html else str(start)
+    raw = html if html else str(start)
+    return _normalize_excerpt_html(raw)
+
+
+_IX_TAG = re.compile(r"^ix:", re.I)
+_EXCERPT_TEXT_TAGS = frozenset({"p", "div", "td", "th", "li", "h1", "h2", "h3", "h4", "h5", "h6"})
+
+
+def _unwrap_presentation_tags(soup: BeautifulSoup) -> None:
+    """Remove iXBRL wrappers and styled spans that glue adjacent words together."""
+    for tag in list(soup.find_all(True)):
+        name = tag.name or ""
+        if _IX_TAG.match(name) or name in ("span", "font"):
+            tag.unwrap()
+
+
+def _collapse_inline_text(tag: Tag) -> None:
+    chunks: list[str] = []
+    for child in tag.children:
+        if isinstance(child, NavigableString):
+            chunk = str(child)
+        elif isinstance(child, Tag):
+            chunk = child.get_text(" ", strip=True)
+        else:
+            continue
+        chunk = chunk.strip()
+        if chunk:
+            chunks.append(chunk)
+    text = re.sub(r"\s+", " ", " ".join(chunks))
+    tag.clear()
+    if text:
+        tag.append(text)
+
+
+def _normalize_table_cells(table: Tag) -> None:
+    for cell in table.find_all(["td", "th"]):
+        _collapse_inline_text(cell)
+
+
+def _normalize_excerpt_html(html: str) -> str:
+    """Make extracted SEC section HTML readable without rewriting the full parser."""
+    if not html or len(html) < 5:
+        return html
+
+    stripped = html.strip()
+    if stripped.startswith("<tr") and "<table" not in stripped.lower():
+        html = f"<table>{stripped}</table>"
+
+    soup = BeautifulSoup(html, "html.parser")
+    _unwrap_presentation_tags(soup)
+
+    for table in soup.find_all("table"):
+        _normalize_table_cells(table)
+
+    for tag in soup.find_all(list(_EXCERPT_TEXT_TAGS)):
+        if tag.name in ("td", "th"):
+            continue
+        if tag.find("table") is not None:
+            continue
+        if tag.name == "div" and tag.find(list(_EXCERPT_TEXT_TAGS - {"div"})):
+            continue
+        _collapse_inline_text(tag)
+
+    for tag in soup.find_all(True):
+        keep: dict[str, Any] = {}
+        if tag.name in ("td", "th", "col"):
+            for attr in ("colspan", "rowspan"):
+                if attr in tag.attrs:
+                    keep[attr] = tag.attrs[attr]
+        tag.attrs = keep
+
+    body = soup.body
+    if body:
+        return "".join(str(child) for child in body.children).strip()
+    return str(soup).strip()
 
 
 def _text_len(html: str) -> int:
@@ -662,6 +738,7 @@ def _text_preview(html: str) -> str:
 
 def _html_to_plain_text(html: str) -> str:
     """Convert section HTML to readable plain text with paragraph breaks."""
+    html = _normalize_excerpt_html(html)
     if not html:
         return ""
     soup = BeautifulSoup(html, "lxml")
