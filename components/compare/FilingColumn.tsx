@@ -14,7 +14,8 @@ import {
   type XbrlDisclosure,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
-import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
+import { isGaapStatementSection, isXbrlBackedSection } from "@/lib/sections";
+import { resolveFilingColumnContentMode } from "@/lib/filingColumnView";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
 import { agentDebugLog } from "@/lib/debug-log";
@@ -515,13 +516,12 @@ function FilingColumn({
     );
   }, [financialsXbrl, activeSection]);
 
-  const xbrlOnly = Boolean(activeSection && isXbrlBackedSection(activeSection) && hasXbrlData);
-  const showSecViewer = Boolean(
-    activeSection &&
-      section &&
-      !isStatementSection &&
-      (isNarrativeSection(activeSection) || (isXbrlBackedSection(activeSection) && !hasXbrlData))
-  );
+  const { showSecViewer, showExcerptToggle, xbrlOnly } = resolveFilingColumnContentMode({
+    activeSection,
+    hasSectionInFiling: Boolean(section),
+    hasXbrlData,
+    isStatementSection,
+  });
 
   const xbrlPanel = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return null;
@@ -855,7 +855,7 @@ function FilingColumn({
             )
           ) : (
             <>
-              {xbrlOnly && !showHtmlExcerpt && (
+              {showExcerptToggle && !showHtmlExcerpt && (
                 <ExcerptToggleButton
                   label="View SEC filing excerpt"
                   loading={loadingHtml}

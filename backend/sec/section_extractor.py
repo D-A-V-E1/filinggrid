@@ -104,7 +104,12 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
         "patterns": [r"accumulated\s*other\s*comprehensive", r"other\s*comprehensive\s*income", r"^aoci$"],
     },
     {"id": "note-restructuring", "label": "Note — Restructuring", "patterns": [r"restructur", r"severance\s*and\s*restructur"]},
-    {"id": "note-impairment", "label": "Note — Impairment", "patterns": [r"impairment", r"asset\s*impairment"]},
+    {"id": "note-impairment", "label": "Note — Impairment", "patterns": [
+        r"\bimpairment\s+of\b",
+        r"\bgoodwill\s+impairment\b",
+        r"\basset\s+impairment\b",
+        r"^impairments?\b",
+    ]},
     {
         "id": "note-acquisitions",
         "label": "Note — Business Combinations & Acquisitions",
