@@ -99,6 +99,79 @@ DEV_PRO_TIER=false
 
 ---
 
+## Plan, limits, and usage alerts
+
+`render.yaml` sets **`plan: starter`** (~$7/mo per instance). Starter instances stay **always on** (no Free-tier spin-down after idle). Render emails you when a workspace **approaches or exceeds** a monthly included limit.
+
+### Instance type (this service)
+
+| | Free | **Starter (current)** | Standard |
+|---|---|---|---|
+| Cost | $0 | **~$7/mo** | ~$25/mo |
+| RAM / CPU | 512 MB / 0.1 | **512 MB / 0.5** | 2 GB / 1 |
+| Spin-down when idle | Yes (~15 min) | **No** | No |
+| Health check path | `/health` | `/health` | `/health` |
+
+Render’s platform also probes `healthCheckPath` during deploys and periodically; inbound probes are free.
+
+### Workspace-level limits (Hobby vs Pro workspace)
+
+Limits are **per workspace**, shared across all services. See [Render pricing](https://render.com/pricing) and [outbound bandwidth docs](https://render.com/docs/outbound-bandwidth).
+
+| Limit | Hobby workspace | Pro workspace ($25/mo) |
+|---|---|---|
+| Outbound bandwidth | 5 GB/mo included | 25 GB/mo included |
+| Overage | $0.15/GB (or services suspended if no payment method) | Same |
+| Build pipeline | Included minutes; overage billed or builds disabled | Higher included minutes |
+| Free instance hours | 750 hrs/mo (Free instances only) | N/A |
+
+**Starter compute is billed per second** — there is no monthly “instance hour cap” email for paid instances. The most common **“exceeded limit”** emails for a small API are:
+
+1. **Outbound bandwidth** — SEC filing HTML/JSON in `/parse`, `/parse/stream`, and `/filings/*` responses.
+2. **Build pipeline minutes** — `autoDeployTrigger: commit` in `render.yaml` rebuilds on every push to `main`.
+
+### Check usage in Render dashboard
+
+1. **Billing** → monthly outbound bandwidth (workspace total).
+2. **peerdisclosures-api → Metrics** → Outbound Bandwidth graph.
+3. **Billing** → build pipeline minutes (if deploy email mentioned builds).
+
+### Immediate actions if you got a limit email
+
+| If the email mentions… | Do this |
+|---|---|
+| **Bandwidth** | Review Metrics graph; reduce traffic (see mitigations below); add payment method or upgrade workspace to Pro for 25 GB; avoid re-running smoke scripts repeatedly. |
+| **Build pipeline** | Batch commits; disable auto-deploy temporarily; set a pipeline spend limit under Billing. |
+| **Free instance hours** | Confirm instance type is **Starter**, not Free (Settings → Instance type). |
+
+### App traffic that hits the API
+
+| Source | Endpoint | Notes |
+|---|---|---|
+| Compare page mount | `GET /health` | `CompareGrid` + `TickerSearchBar` share one deduped warmup (max 6 probes, ~67s backoff on cold deploy). |
+| Landing hover on popular links | `GET /health` | `prewarmApi()` — skipped if already ready; at most once per 60s. |
+| Ticker search | `GET /tickers/search` | User typing only (not used for warmup). |
+| Compare load | `/parse/stream`, `/filings/*` | **Largest bandwidth** — multi-MB SEC filing payloads per session. |
+| Vercel rewrite | Proxied to Render | Browser → `peerdisclosures.vercel.app/api/backend/*` → Render; counts as Render **outbound** on responses. |
+| `dns-go-live-checklist.ps1` | 3× `/health` | Manual; run occasionally. |
+| Render platform | `/health` | Deploy + monitoring probes (inbound to service). |
+
+**Per user session (after warmup dedup):**
+
+- Home or compare page, API warm: **1** `/health` request.
+- Cold start after deploy (worst case): **6** `/health` requests over ~67s (shared across components).
+- Compare with 3 tickers: **+** stream/financials requests (bandwidth-heavy, not health polls).
+
+### Mitigations (code + ops)
+
+- **Keep Starter** — avoids Free-tier spin-down and duplicate cold-start retry storms.
+- **Do not add a cron keep-alive** on Starter — instance is already always on; extra pings waste bandwidth.
+- **Filing cache** — `FILING_CACHE_ENABLED=true` + 1 GB disk in `render.yaml` reduces repeat SEC fetches.
+- **Batch git pushes** — each `main` commit triggers a Render build (`autoDeployTrigger: commit`).
+- **Optional:** upgrade workspace to **Pro** ($25/mo) for 25 GB bandwidth if compare traffic grows.
+
+---
+
 ## Related docs
 
 - [PRODUCTION_DEPLOY.md](./PRODUCTION_DEPLOY.md) — full deployment guide

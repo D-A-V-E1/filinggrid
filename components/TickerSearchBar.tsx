@@ -12,7 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
 import { comparePathWithPeriod, resolveComparePeriod } from "@/lib/filing-period";
 import { searchTickers } from "@/lib/api";
-import { retryWithBackoff } from "@/lib/api-warmup";
+import { waitForApiReady } from "@/lib/api-warmup";
 import { tickerSearchUnavailableMessage } from "@/lib/api-environment";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
@@ -148,11 +148,8 @@ export default function TickerSearchBar({
   }
 
   async function warmupApi(): Promise<boolean> {
-    const result = await retryWithBackoff(() => searchTickers("A"), {
-      location: "TickerSearchBar.tsx:warmupApi",
-      isSuccess: (rows) => Array.isArray(rows),
-    });
-    if (result) {
+    const ok = await waitForApiReady();
+    if (ok) {
       setSearchError("");
       return true;
     }

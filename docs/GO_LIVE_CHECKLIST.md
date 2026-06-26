@@ -12,7 +12,7 @@ Week-by-week plan for launching **self-serve Stripe Professional** subscriptions
 
 | Area | Status | Notes |
 |---|---|---|
-| Render API (`peerdisclosures-api`) | ✅ Live | `https://peerdisclosures-api.onrender.com/health` → 200 |
+| Render API (`peerdisclosures-api`) | ✅ Live | `https://peerdisclosures-api.onrender.com/health` → 200; **Starter** plan in `render.yaml` |
 | `DATABASE_URL` on Render | ✅ Fixed | `f71070b` — `postgres://` URLs accepted |
 | Render env + `render.yaml` | ✅ Applied | `ALLOW_DEV_TIER_TOGGLE=false`, `APP_URL`/`CORS_ORIGINS` set |
 | Frontend (Vercel) | ✅ Deployed | `https://peerdisclosures.vercel.app` → 200; proxy `/api/backend/health` OK; `main` @ `aa5ae0c` |
@@ -120,7 +120,8 @@ Template with comments: [`scripts/vercel-production-env.example`](../scripts/ver
 
 ### Backend API
 
-- [x] Deploy to **Render** (`peerdisclosures-api`) — live at `https://peerdisclosures-api.onrender.com`
+- [x] Deploy to **Render** (`peerdisclosures-api`) — live at `https://peerdisclosures-api.onrender.com`; **Starter** (~$7/mo, always on)
+- [ ] Monitor Render **Billing → bandwidth** and **Metrics** — see [RENDER_ENV_SETUP.md § Plan, limits](./RENDER_ENV_SETUP.md#plan-limits-and-usage-alerts)
 - [ ] Add custom domain `api.peerdisclosures.com` in Render + Cloudflare CNAME
 
 Choose one (Dockerfile included in `backend/`):
