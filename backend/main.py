@@ -160,7 +160,7 @@ async def health():
 
     return {
         "status": "ok",
-        "service": "filinggrid-api",
+        "service": "peer-disclosures-api",
         "features": {
             "foreign_filing_fallback": FOREIGN_FILING_FALLBACK_VERSION,
         },
