@@ -12,6 +12,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { buildPeerSlug } from "@/lib/utils";
 import { comparePathWithPeriod, resolveComparePeriod } from "@/lib/filing-period";
 import { searchTickers } from "@/lib/api";
+import { apiUnreachableHint, tickerSearchUnavailableMessage } from "@/lib/api-environment";
+import { agentDebugLog } from "@/lib/debug-log";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import { addTickerLimitMessage } from "@/lib/tier-limits";
@@ -32,7 +34,7 @@ const POPULAR_TICKERS = [
   { ticker: "GS", company_name: "Goldman Sachs Group Inc." },
 ];
 
-const WARMUP_BACKOFF_MS = [0, 400, 1200];
+const WARMUP_BACKOFF_MS = [0, 2000, 5000, 10000, 20000];
 const DROPDOWN_WIDTH = 288;
 const VIEWPORT_PADDING = 8;
 const DROPDOWN_GAP = 4;
@@ -148,17 +150,38 @@ export default function TickerSearchBar({
 
   async function warmupApi(attempt = 0): Promise<boolean> {
     if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, WARMUP_BACKOFF_MS[attempt] ?? 1200));
+      await new Promise((r) => setTimeout(r, WARMUP_BACKOFF_MS[attempt] ?? 20000));
     }
+    const started = Date.now();
     try {
       await searchTickers("A");
       setSearchError("");
+      // #region agent log
+      agentDebugLog(
+        "TickerSearchBar.tsx:warmupApi",
+        "warmup ok",
+        { attempt, ms: Date.now() - started },
+        "H3"
+      );
+      // #endregion
       return true;
-    } catch {
+    } catch (err) {
+      // #region agent log
+      agentDebugLog(
+        "TickerSearchBar.tsx:warmupApi",
+        "warmup failed",
+        {
+          attempt,
+          ms: Date.now() - started,
+          error: err instanceof Error ? err.name : "unknown",
+        },
+        "H1"
+      );
+      // #endregion
       if (attempt < WARMUP_BACKOFF_MS.length - 1) {
         return warmupApi(attempt + 1);
       }
-      setSearchError("Ticker search unavailable — is the API running?");
+      setSearchError(tickerSearchUnavailableMessage());
       return false;
     }
   }
@@ -225,9 +248,9 @@ export default function TickerSearchBar({
       setSearchError("");
     } catch {
       if (requestId !== queryRequestIdRef.current) return;
-      setSuggestions([]);
+      setSuggestions(localMatches(normalized));
       setShowSuggestions(true);
-      setSearchError("Ticker search unavailable — is the API running?");
+      setSearchError(tickerSearchUnavailableMessage());
     } finally {
       if (requestId === queryRequestIdRef.current) setSearching(false);
     }

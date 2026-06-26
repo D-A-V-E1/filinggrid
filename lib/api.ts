@@ -1,4 +1,5 @@
 import { getDevTierForApiHeader } from "@/lib/dev-tier";
+import { agentDebugLog } from "@/lib/debug-log";
 
 const API_URL =
   typeof window !== "undefined"
@@ -257,9 +258,37 @@ async function buildAuthHeaders(
 
 /** Public GET without waiting on Supabase session (e.g. ticker autocomplete). */
 export async function apiFetchPublic<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { Accept: "application/json" },
-  });
+  const url = `${API_URL}${path}`;
+  const started = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
+  } catch (err) {
+    // #region agent log
+    agentDebugLog(
+      "lib/api.ts:apiFetchPublic",
+      "fetch failed",
+      {
+        path,
+        apiUrl: API_URL,
+        ms: Date.now() - started,
+        error: err instanceof Error ? err.name : "unknown",
+      },
+      "H1"
+    );
+    // #endregion
+    throw err;
+  }
+  // #region agent log
+  agentDebugLog(
+    "lib/api.ts:apiFetchPublic",
+    "fetch completed",
+    { path, apiUrl: API_URL, status: res.status, ms: Date.now() - started },
+    res.ok ? "H3" : "H2"
+  );
+  // #endregion
 
   if (!res.ok) {
     let detail: PaywallError | string | Record<string, unknown> = res.statusText;
@@ -570,12 +599,42 @@ export async function getAuthMe(): Promise<AuthMe> {
 }
 
 export async function checkApiHealth(): Promise<boolean> {
+  const started = Date.now();
   try {
     const res = await fetch(`${API_URL}/health`, { cache: "no-store" });
-    if (!res.ok) return false;
-    const body = (await res.json()) as { status?: string };
-    return body.status === "ok";
-  } catch {
+    const ok = res.ok;
+    let statusOk = false;
+    if (ok) {
+      const body = (await res.json()) as { status?: string };
+      statusOk = body.status === "ok";
+    }
+    // #region agent log
+    agentDebugLog(
+      "lib/api.ts:checkApiHealth",
+      "health check",
+      {
+        apiUrl: API_URL,
+        httpStatus: res.status,
+        statusOk,
+        ms: Date.now() - started,
+      },
+      statusOk ? "H3" : "H2"
+    );
+    // #endregion
+    return statusOk;
+  } catch (err) {
+    // #region agent log
+    agentDebugLog(
+      "lib/api.ts:checkApiHealth",
+      "health fetch failed",
+      {
+        apiUrl: API_URL,
+        ms: Date.now() - started,
+        error: err instanceof Error ? err.name : "unknown",
+      },
+      "H1"
+    );
+    // #endregion
     return false;
   }
 }

@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import { compareUrlLimitMessage } from "@/lib/tier-limits";
 import { isDevTierToggleEnabled, shouldShowDevTierUI } from "@/lib/dev-tier";
+import { apiUnreachableHint, isLocalDevHost } from "@/lib/api-environment";
 import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
 import SectionNav from "./SectionNav";
@@ -552,8 +553,14 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               <p className="mt-2 text-sm text-red-600">{error}</p>
               {apiHealthy === false && (
                 <p className="mt-3 text-xs text-slate-500">
-                  The API at port 8000 is not responding. Run <code className="font-mono">start.bat</code>{" "}
-                  and try again.
+                  {isLocalDevHost() ? (
+                    <>
+                      The API at port 8000 is not responding. Run <code className="font-mono">start.bat</code> and
+                      try again.
+                    </>
+                  ) : (
+                    apiUnreachableHint()
+                  )}
                 </p>
               )}
             </div>
@@ -567,7 +574,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               <p className="mt-2 text-xs text-slate-500">
                 {data.columns.some((c) => c.error)
                   ? data.columns.map((c) => c.error).filter(Boolean).join(" · ")
-                  : "Check that the backend is running (port 8000) and try refreshing."}
+                  : isLocalDevHost()
+                    ? "Check that the backend is running (port 8000) and try refreshing."
+                    : apiUnreachableHint()}
               </p>
             </div>
           </div>
