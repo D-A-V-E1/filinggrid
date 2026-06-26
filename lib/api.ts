@@ -217,7 +217,7 @@ export function formatApiError(err: unknown, fallback = "Request failed"): strin
   return fallback;
 }
 
-function isRetryableGatewayError(err: unknown): boolean {
+function isRetryableGatewayError(err: unknown): err is ApiError {
   return err instanceof ApiError && (err.status === 502 || err.status === 503 || err.status === 504);
 }
 
