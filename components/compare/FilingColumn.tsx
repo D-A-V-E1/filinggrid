@@ -3,7 +3,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   fetchFinancialStatements,
+  ApiError,
   fetchSectionHtml,
+  formatApiError,
   type FinancialStatementsXbrl,
   type FinancialsXbrl,
   type FilingSection,
@@ -14,7 +16,8 @@ import {
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
 import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
-import { displayFormLabel, formFromPeriodId } from "@/lib/filing-period";
+import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
+import { agentDebugLog } from "@/lib/debug-log";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
 import { forwardVerticalWheelFromHorizontalScrollContainer } from "@/lib/forward-vertical-wheel";
 import FilingViewer from "./FilingViewer";
@@ -648,17 +651,60 @@ function FilingColumn({
     setLoadingHtml(true);
     setSectionError("");
 
-    fetchSectionHtml(ticker, activeSection, fiscalYear)
+    const { fiscalYear: requestFy, period: requestPeriod } = sectionHtmlRequestParams(
+      period,
+      resolvedFiscalYear,
+      fiscalYear
+    );
+    // #region agent log
+    agentDebugLog(
+      "FilingColumn.tsx:loadHtmlExcerpt",
+      "section html request",
+      {
+        ticker,
+        activeSection,
+        columnFy: fiscalYear,
+        resolvedFiscalYear,
+        comparePeriod: period ?? null,
+        requestFy,
+        requestPeriod,
+      },
+      "H1"
+    );
+    // #endregion
+
+    fetchSectionHtml(ticker, activeSection, requestFy, requestPeriod)
       .then((html) => {
         if (cacheKey && html) saveSectionHtml(cacheKey, activeSection, html);
         setSectionHtml(html);
         setShowHtmlExcerpt(true);
       })
       .catch((err) => {
+        if (err instanceof ApiError && err.isPaywall) {
+          const detail = err.detail;
+          const reason =
+            typeof detail === "object" && detail !== null && "reason" in detail
+              ? String(detail.reason)
+              : "subscription_required";
+          const message = formatApiError(err, "This feature requires a Professional subscription.");
+          onPaywall?.(reason, message);
+          setSectionError("");
+          return;
+        }
         setSectionError(err instanceof Error ? err.message : "Failed to load excerpt");
       })
       .finally(() => setLoadingHtml(false));
-  }, [activeSection, loadingHtml, sectionHtml, cacheKey, ticker, fiscalYear]);
+  }, [
+    activeSection,
+    loadingHtml,
+    sectionHtml,
+    cacheKey,
+    ticker,
+    fiscalYear,
+    period,
+    resolvedFiscalYear,
+    onPaywall,
+  ]);
 
   const showFinancialsBootstrap =
     activeSection === "financial-statements" && (hasXbrlData || financialsPending);

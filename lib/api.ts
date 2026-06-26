@@ -1,5 +1,11 @@
 import { getDevTierForApiHeader } from "@/lib/dev-tier";
 import { agentDebugLog } from "@/lib/debug-log";
+import {
+  apiGatewayErrorMessage,
+  apiUnreachableBannerMessage,
+  checkoutUnavailableMessage,
+} from "@/lib/api-environment";
+import { retryWithBackoff } from "@/lib/api-warmup";
 
 const API_URL =
   typeof window !== "undefined"
@@ -178,6 +184,21 @@ export class ApiError extends Error {
 /** User-facing message from an API error. */
 export function formatApiError(err: unknown, fallback = "Request failed"): string {
   if (err instanceof ApiError) {
+    const gateway = apiGatewayErrorMessage(err.status);
+    if (gateway) return gateway;
+
+    if (err.status === 503) {
+      const detail =
+        typeof err.detail === "string"
+          ? err.detail
+          : typeof err.detail === "object" && err.detail !== null && "detail" in err.detail
+            ? String((err.detail as { detail?: string }).detail)
+            : "";
+      if (detail.toLowerCase().includes("not configured")) {
+        return "Billing is being set up. Please try again later or contact support@peerdisclosures.com.";
+      }
+    }
+
     if (typeof err.detail === "object" && err.detail !== null && "message" in err.detail) {
       return String(err.detail.message);
     }
@@ -189,8 +210,33 @@ export function formatApiError(err: unknown, fallback = "Request failed"): strin
     }
     return err.message || fallback;
   }
+  if (err instanceof TypeError) {
+    return apiUnreachableBannerMessage();
+  }
   if (err instanceof Error && err.message) return err.message;
   return fallback;
+}
+
+function isRetryableGatewayError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 502 || err.status === 503 || err.status === 504);
+}
+
+async function billingFetchWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const result = await retryWithBackoff(
+    async () => {
+      try {
+        return await fn();
+      } catch (err) {
+        if (isRetryableGatewayError(err)) throw err;
+        throw Object.assign(new Error("non-retryable"), { cause: err, nonRetryable: true });
+      }
+    },
+    { location: "lib/api.ts:billingFetchWithRetry" }
+  );
+
+  if (result != null) return result;
+
+  throw new ApiError(502, checkoutUnavailableMessage());
 }
 
 let _authTokenCache: { token: string | null; expiresAt: number } | null = null;
@@ -543,7 +589,8 @@ export async function fetchFinancialsBatch(
 export async function fetchSectionHtml(
   ticker: string,
   sectionId: string,
-  fiscalYear?: number | null
+  fiscalYear?: number | null,
+  period?: string | null
 ): Promise<string> {
   const params = new URLSearchParams({
     ticker: ticker.toUpperCase(),
@@ -551,15 +598,49 @@ export async function fetchSectionHtml(
     format: "html",
   });
   if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+  if (period?.trim()) params.set("period", period.trim());
 
-  const result = await apiFetch<SectionHtmlResponse>(`/parse/section?${params}`);
-  return result.html;
+  const url = `/parse/section?${params}`;
+  const started = Date.now();
+  try {
+    const result = await apiFetch<SectionHtmlResponse>(url);
+    // #region agent log
+    agentDebugLog(
+      "lib/api.ts:fetchSectionHtml",
+      "section html ok",
+      { ticker, fiscalYear, period: period ?? null, ms: Date.now() - started },
+      "H3"
+    );
+    // #endregion
+    return result.html;
+  } catch (err) {
+    // #region agent log
+    agentDebugLog(
+      "lib/api.ts:fetchSectionHtml",
+      "section html failed",
+      {
+        ticker,
+        fiscalYear,
+        period: period ?? null,
+        ms: Date.now() - started,
+        status: err instanceof ApiError ? err.status : null,
+        reason:
+          err instanceof ApiError && typeof err.detail === "object" && err.detail && "reason" in err.detail
+            ? String((err.detail as { reason?: string }).reason)
+            : null,
+      },
+      err instanceof ApiError && err.status === 402 ? "H1" : "H2"
+    );
+    // #endregion
+    throw err;
+  }
 }
 
 export async function fetchSectionText(
   ticker: string,
   sectionId: string,
-  fiscalYear?: number | null
+  fiscalYear?: number | null,
+  period?: string | null
 ): Promise<string> {
   const params = new URLSearchParams({
     ticker: ticker.toUpperCase(),
@@ -567,6 +648,7 @@ export async function fetchSectionText(
     format: "text",
   });
   if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
+  if (period?.trim()) params.set("period", period.trim());
 
   const result = await apiFetch<SectionHtmlResponse>(`/parse/section?${params}`);
   return result.text ?? "";
@@ -643,20 +725,24 @@ export async function createCheckout(options?: {
   email?: string;
   returnPath?: string;
 }): Promise<{ checkout_url: string }> {
-  return apiFetch("/billing/checkout", {
-    method: "POST",
-    body: JSON.stringify({
-      email: options?.email,
-      return_path: options?.returnPath,
-    }),
-  });
+  return billingFetchWithRetry(() =>
+    apiFetch("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        email: options?.email,
+        return_path: options?.returnPath,
+      }),
+    })
+  );
 }
 
 export async function createPortal(returnPath?: string): Promise<{ portal_url: string }> {
-  return apiFetch("/billing/portal", {
-    method: "POST",
-    body: JSON.stringify({ return_path: returnPath }),
-  });
+  return billingFetchWithRetry(() =>
+    apiFetch("/billing/portal", {
+      method: "POST",
+      body: JSON.stringify({ return_path: returnPath }),
+    })
+  );
 }
 
 export interface PeerGroup {
