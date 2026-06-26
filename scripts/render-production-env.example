@@ -39,7 +39,7 @@ SUPABASE_JWT_SECRET=CHANGE_ME_from_supabase_dashboard
 
 STRIPE_SECRET_KEY=CHANGE_ME_sk_live
 STRIPE_WEBHOOK_SECRET=CHANGE_ME_whsec_from_live_webhook
-STRIPE_PRICE_PROFESSIONAL=price_1TjA9OJX5g98nb1eafRUKoZM
+STRIPE_PRICE_PROFESSIONAL=price_1Tj9pYJX5g98nb1e2eb2Mf9z
 
 # ── Reference only — already in render.yaml ───────────────────────────────
 

@@ -10,7 +10,7 @@ if (-not (Test-Path $StripeExe)) {
 
 $RenderService = "peerdisclosures-api"
 $ExpectedWebhookUrl = "https://api.peerdisclosures.com/webhooks/stripe"
-$RecommendedPriceId = "price_1TjA9OJX5g98nb1eafRUKoZM"
+$RecommendedPriceId = "price_1Tj9pYJX5g98nb1e2eb2Mf9z"
 
 function Invoke-StripeJson {
     param([string[]]$StripeArgs)
@@ -56,12 +56,15 @@ try {
     }
     $priceRows | Format-Table -AutoSize | Out-String | Write-Host
 
-    $livePriceId = $RecommendedPriceId
-    $match = $priceRows | Where-Object { $_.PriceId -eq $RecommendedPriceId }
-    if (-not $match) {
-        $pro = $priceRows | Where-Object { $_.Product -match "Professional" -and $_.Product -notmatch "Test" } | Select-Object -First 1
-        if ($pro) { $livePriceId = $pro.PriceId }
-        elseif ($priceRows.Count -gt 0) { $livePriceId = $priceRows[0].PriceId }
+    $pro = $priceRows | Where-Object { $_.Product -match "Professional" -and $_.Product -notmatch "Test" } | Select-Object -First 1
+    if ($pro) {
+        $livePriceId = $pro.PriceId
+    } elseif ($priceRows | Where-Object { $_.PriceId -eq $RecommendedPriceId }) {
+        $livePriceId = $RecommendedPriceId
+    } elseif ($priceRows.Count -gt 0) {
+        $livePriceId = $priceRows[0].PriceId
+    } else {
+        $livePriceId = $RecommendedPriceId
     }
 } catch {
     Write-Warning "Could not list live prices: $_"

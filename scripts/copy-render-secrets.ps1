@@ -30,7 +30,11 @@ if ([string]::IsNullOrWhiteSpace($databaseUrl)) {
     exit 1
 }
 
-if ($databaseUrl -eq "backend/.env" -or $databaseUrl -notmatch '^postgresql://') {
+if ($databaseUrl -eq "backend/.env" -or $databaseUrl -eq "backend\.env") {
+    Write-Warning "DATABASE_URL is a file path, not a URL. Paste the literal postgresql:// value from backend/.env into Render."
+} elseif ($databaseUrl -match '^postgres://') {
+    Write-Warning "DATABASE_URL uses postgres:// — backend/config.py rewrites to postgresql:// at startup; prefer postgresql:// in Render."
+} elseif ($databaseUrl -notmatch '^postgresql://') {
     Write-Warning "DATABASE_URL looks wrong (expected postgresql://...). Fix backend/.env before deploying to Render."
 }
 

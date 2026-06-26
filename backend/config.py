@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +18,13 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql://filinggrid:filinggrid@localhost:5432/filinggrid"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: object) -> object:
+        if isinstance(v, str) and v.startswith("postgres://"):
+            return "postgresql://" + v[len("postgres://") :]
+        return v
 
     # SEC EDGAR
     sec_user_agent: str = "PeerDisclosures/1.0 (contact@peerdisclosures.com)"
