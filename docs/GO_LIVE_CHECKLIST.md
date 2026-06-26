@@ -15,20 +15,26 @@ Week-by-week plan for launching **self-serve Stripe Professional** subscriptions
 | Render API (`peerdisclosures-api`) | ✅ Live | `https://peerdisclosures-api.onrender.com/health` → 200 |
 | `DATABASE_URL` on Render | ✅ Fixed | `f71070b` — `postgres://` URLs accepted |
 | Render env + `render.yaml` | ✅ Applied | `ALLOW_DEV_TIER_TOGGLE=false`, `APP_URL`/`CORS_ORIGINS` set |
-| Custom domain `api.peerdisclosures.com` | ⏸ Pending | NXDOMAIN — Render custom domain + Cloudflare CNAME not added |
-| Frontend (Vercel) | ⏸ Not started | Repo not connected; apex still GoDaddy placeholder |
-| Stripe live webhook | ⏸ Not created | `STRIPE_WEBHOOK_SECRET` empty until endpoint exists |
-| Supabase prod URLs | ⏸ Pending | Blocked until `https://peerdisclosures.com` serves the app |
-| Production smoke test | ⏸ Blocked | Needs Vercel + DNS + webhook |
+| Frontend (Vercel) | ✅ Deployed | `https://peerdisclosures.vercel.app` → 200; proxy `/api/backend/health` OK; `main` @ `aa5ae0c` |
+| Custom domain apex/www | ⏸ **BLOCKED** | `peerdisclosures.com` still GoDaddy placeholder via Cloudflare — no `X-Vercel` header |
+| Custom domain `api.peerdisclosures.com` | ⏸ **BLOCKED** | **NXDOMAIN** — Render custom domain + Cloudflare CNAME not added |
+| Stripe live webhook | 🔄 In progress | Blocked until `api.peerdisclosures.com` resolves; `STRIPE_WEBHOOK_SECRET` empty |
+| Supabase prod URLs | ⏸ Pending | After apex DNS points to Vercel |
+| Production smoke test | ⏸ Blocked | Needs custom DNS + Stripe webhook |
 
-### Next steps (in order)
+**Verify anytime:** `.\scripts\dns-go-live-checklist.ps1`
 
-1. **Vercel** — Connect repo, set production env vars ([§ Frontend](#frontend-vercel-recommended)), deploy.
-2. **DNS apex/www** — Point `@` and `www` to Vercel ([DNS_PEERDISCLOSURES.md](./DNS_PEERDISCLOSURES.md)).
-3. **DNS + Render custom domain** — CNAME `api` → `peerdisclosures-api.onrender.com`; add `api.peerdisclosures.com` in Render → Settings → Custom Domains.
-4. **Supabase** — Site URL + redirect URLs ([SUPABASE_PROD_URLS.md](./SUPABASE_PROD_URLS.md)).
-5. **Stripe live webhook** — `https://api.peerdisclosures.com/webhooks/stripe` → set `STRIPE_WEBHOOK_SECRET` on Render ([STRIPE_LIVE_CHECKLIST.md](./STRIPE_LIVE_CHECKLIST.md)).
-6. **Smoke test** — [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md).
+### Remaining steps (dashboard — in order)
+
+See [DNS_PEERDISCLOSURES.md](./DNS_PEERDISCLOSURES.md) for full detail.
+
+1. **Vercel → Settings → Domains** — Add `peerdisclosures.com` and `www.peerdisclosures.com`.
+2. **Cloudflare DNS** — `@` A `76.76.21.21` (grey cloud); `www` CNAME `cname.vercel-dns.com` (grey cloud). Remove GoDaddy builder apex record.
+3. **Render → Settings → Custom Domains** — Add `api.peerdisclosures.com`.
+4. **Cloudflare DNS** — `api` CNAME `peerdisclosures-api.onrender.com` (grey cloud).
+5. **Supabase** — Site URL + redirect URLs ([SUPABASE_PROD_URLS.md](./SUPABASE_PROD_URLS.md)) — after step 2.
+6. **Stripe live webhook** — `https://api.peerdisclosures.com/webhooks/stripe` → `STRIPE_WEBHOOK_SECRET` on Render ([STRIPE_LIVE_CHECKLIST.md](./STRIPE_LIVE_CHECKLIST.md)) — after step 4.
+7. **Smoke test** — [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md).
 
 ---
 
@@ -87,13 +93,13 @@ cd backend
 ### Domain & HTTPS
 
 - [x] Register production domain (`peerdisclosures.com`)
-- [ ] DNS for frontend (Vercel) and API subdomain (`api.peerdisclosures.com`) — apex still placeholder; `api` NXDOMAIN
+- [ ] DNS for frontend (Vercel) and API subdomain (`api.peerdisclosures.com`) — Vercel live on `*.vercel.app`; apex still placeholder; `api` NXDOMAIN
 - [ ] Confirm HTTPS on both (required for Supabase redirects and Stripe)
 
 ### Frontend (Vercel recommended)
 
-- [ ] Connect GitHub repo to [Vercel](https://vercel.com) — **not connected yet**
-- [ ] `vercel.json` included — framework: Next.js
+- [x] Connect GitHub repo to [Vercel](https://vercel.com) — deployed at `peerdisclosures.vercel.app`
+- [x] `vercel.json` included — framework: Next.js; `www` → apex redirect configured
 - [ ] Set production env vars (copy-paste into **Project → Settings → Environment Variables → Production**):
 
 | Key | Value | Notes |
@@ -108,7 +114,9 @@ Template with comments: [`scripts/vercel-production-env.example`](../scripts/ver
 
 - [ ] **Do not** set `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` or `NEXT_PUBLIC_DEV_TIER` in production
 - [ ] Redeploy after env changes (NEXT_PUBLIC_* are build-time)
-- [ ] Deploy and verify `/api/backend/health` proxies to API
+- [x] Deploy and verify `/api/backend/health` proxies to API (verified on `peerdisclosures.vercel.app`)
+- [ ] Add custom domains `peerdisclosures.com` + `www` in Vercel → Settings → Domains
+- [ ] Update Cloudflare apex/`www` records ([DNS_PEERDISCLOSURES.md](./DNS_PEERDISCLOSURES.md))
 
 ### Backend API
 
@@ -206,7 +214,7 @@ Manual checklist: [PRODUCTION_SMOKE_TEST.md](./PRODUCTION_SMOKE_TEST.md)
 
 - [x] `ALLOW_DEV_TIER_TOGGLE` unset/false on API (`render.yaml`)
 - [x] `DEV_PRO_TIER` unset/false (`render.yaml`)
-- [ ] No `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` on Vercel (Vercel not connected)
+- [ ] No `NEXT_PUBLIC_ALLOW_DEV_TIER_TOGGLE` on Vercel (confirm in dashboard)
 - [ ] Confirm `POST /dev/tier` returns **404** in production (verify on Render URL after deploy; then `api.peerdisclosures.com`)
 - [ ] Confirm compare header has **no** Free/Pro dev toggle (after Vercel deploy)
 

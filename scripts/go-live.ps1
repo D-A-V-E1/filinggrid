@@ -7,7 +7,7 @@
 #   .\scripts\go-live.ps1 -Phase all
 
 param(
-    [ValidateSet("db", "smoke", "all")]
+    [ValidateSet("db", "verify", "smoke", "all")]
     [string]$Phase = "all"
 )
 
@@ -38,6 +38,11 @@ function Run-DbMigrate {
     Write-Host "    Enable Neon backups: console.neon.tech -> project -> Settings -> Backups" -ForegroundColor Yellow
 }
 
+function Run-Verify {
+    Write-Host "`n=== DNS + deploy verification ===" -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot "dns-go-live-checklist.ps1")
+}
+
 function Run-Smoke {
     Write-Host "`n=== Phase 7: Production smoke check ===" -ForegroundColor Cyan
     $py = Join-Path $Root "backend\.venv\Scripts\python.exe"
@@ -54,14 +59,16 @@ Write-Host "PeerDisclosures go-live helper" -ForegroundColor White
 Write-Host "Repo: $Root"
 
 switch ($Phase) {
-    "db"    { Run-DbMigrate }
-    "smoke" { Run-Smoke }
-    "all"   { Run-DbMigrate; Run-Smoke }
+    "db"     { Run-DbMigrate }
+    "verify" { Run-Verify }
+    "smoke"  { Run-Smoke }
+    "all"    { Run-DbMigrate; Run-Verify; Run-Smoke }
 }
 
 Write-Host "`n=== Manual phases (dashboard) ===" -ForegroundColor Cyan
 Write-Host "  API deploy:     render.yaml or railway.toml -> connect GitHub repo"
 Write-Host "  Vercel:         vercel.com -> import D-A-V-E1/filinggrid -> env from .env.production.example"
-Write-Host "  DNS:            docs/DNS_PEERDISCLOSURES.md"
+Write-Host "  DNS verify:     .\scripts\dns-go-live-checklist.ps1"
+Write-Host "  DNS steps:      docs/DNS_PEERDISCLOSURES.md"
 Write-Host "  Supabase URLs:  docs/SUPABASE_PROD_URLS.md"
 Write-Host "  Stripe Live:    docs/STRIPE_LIVE_CHECKLIST.md"

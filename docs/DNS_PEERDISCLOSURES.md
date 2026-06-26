@@ -4,43 +4,117 @@ Domain registrar: **GoDaddy** · DNS managed in **Cloudflare** · Email routing 
 
 **Current state (verified 2026-06-26):**
 
-| Record | Status |
+| Item | Status |
 |---|---|
-| `peerdisclosures.com` (apex) | ⏸ GoDaddy Website Builder placeholder — not Vercel yet |
+| Render API (`peerdisclosures-api.onrender.com`) | ✅ Live — `GET /health` → 200 |
+| Vercel deploy (`peerdisclosures.vercel.app`) | ✅ Live — code `aa5ae0c` on `main` |
+| `peerdisclosures.com` (apex) | ⏸ **BLOCKED** — Cloudflare serves GoDaddy Website Builder placeholder (no `X-Vercel` header) |
+| `www.peerdisclosures.com` | ⏸ Redirects to apex (still placeholder content) |
 | `api.peerdisclosures.com` | ⏸ **NXDOMAIN** — no CNAME to Render |
-| Email (MX) | ✅ Cloudflare Email Routing — do not change |
-
-**Next:** Connect Vercel → update apex/`www` records below → add `api` CNAME after Render custom domain is configured.
+| Email (MX) | ✅ Cloudflare Email Routing — **do not change** |
 
 ---
 
-## Records to add or update
+## Remaining steps (in order)
 
-### Frontend → Vercel
+Complete these in the dashboards. DNS usually propagates within minutes on Cloudflare.
 
-After adding `peerdisclosures.com` in Vercel → Project → Settings → Domains, Vercel shows the exact values. Typical setup:
+### Step 1 — Vercel: add custom domains
 
-| Type | Name | Content | Proxy |
-|---|---|---|---|
-| A | `@` | `76.76.21.21` | DNS only (grey cloud) per Vercel docs |
-| CNAME | `www` | `cname.vercel-dns.com` | DNS only |
+1. Open [Vercel Dashboard](https://vercel.com) → your project → **Settings → Domains**.
+2. Add **`peerdisclosures.com`** and **`www.peerdisclosures.com`**.
+3. Vercel will show DNS instructions — use the values in Step 2 (they match Vercel’s defaults).
+4. Leave production env vars as-is for now (`NEXT_PUBLIC_API_URL` can stay on `https://peerdisclosures-api.onrender.com` until Step 4 completes).
 
-> Use the values Vercel displays for your project — they may differ slightly.
+`vercel.json` already redirects `www` → apex; no code change needed.
 
-### API → Render or Railway
+### Step 2 — Cloudflare: apex + www → Vercel
 
-After deploying the API, add a custom domain in your host dashboard, then:
+In [Cloudflare DNS](https://dash.cloudflare.com) for **peerdisclosures.com**:
 
-| Host | Type | Name | Content |
-|---|---|---|---|
-| **Render** | CNAME | `api` | `peerdisclosures-api.onrender.com` |
-| **Railway** | CNAME | `api` | `<service>.up.railway.app` |
+| Action | Type | Name | Content | Proxy |
+|---|---|---|---|---|
+| **Edit or add** | A | `@` | `76.76.21.21` | **DNS only** (grey cloud ☁️) |
+| **Edit or add** | CNAME | `www` | `cname.vercel-dns.com` | **DNS only** (grey cloud ☁️) |
 
-Enable HTTPS on the API host (automatic on Render/Railway).
+- Remove or replace any apex record pointing at GoDaddy Website Builder / parking IPs.
+- **Do not** orange-cloud (proxy) these records — Vercel requires DNS-only for certificate issuance.
+- **Do not** change MX or email routing records.
 
-### Email — do not change
+**Verify:**
 
-Keep existing **Cloudflare Email Routing** MX records. Do **not** re-add Mailgun or Google Workspace MX unless you migrate email.
+```powershell
+.\scripts\dns-go-live-checklist.ps1
+# Or manually:
+curl.exe -sI https://peerdisclosures.com | findstr /i "server x-vercel"
+curl.exe -s https://peerdisclosures.com/api/backend/health
+```
+
+Expect `Server: Vercel` (or `X-Vercel-Id` present) and proxied health `{"status":"ok",...}`.
+
+### Step 3 — Render: API custom domain
+
+1. [Render Dashboard](https://dashboard.render.com) → **peerdisclosures-api** → **Settings → Custom Domains**.
+2. Add **`api.peerdisclosures.com`**.
+3. Render shows the CNAME target (should be `peerdisclosures-api.onrender.com`).
+
+### Step 4 — Cloudflare: api → Render
+
+| Action | Type | Name | Content | Proxy |
+|---|---|---|---|---|
+| **Add** | CNAME | `api` | `peerdisclosures-api.onrender.com` | **DNS only** (grey cloud ☁️) |
+
+**Verify:**
+
+```powershell
+nslookup api.peerdisclosures.com
+curl.exe -s https://api.peerdisclosures.com/health
+```
+
+Expect `{"status":"ok",...}`.
+
+### Step 5 — Vercel env (optional, after Step 4)
+
+In Vercel → **Settings → Environment Variables → Production**:
+
+| Key | Value |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | `https://api.peerdisclosures.com` |
+
+Redeploy after changing `NEXT_PUBLIC_*` (build-time).
+
+### Step 6 — Stripe live webhook (after Step 4)
+
+Blocked until `https://api.peerdisclosures.com/health` returns 200.
+
+1. [Stripe Dashboard → Webhooks](https://dashboard.stripe.com/webhooks) (**Live** mode).
+2. **+ Add endpoint** → URL: `https://api.peerdisclosures.com/webhooks/stripe`
+3. Events:
+   - `checkout.session.completed`
+   - `customer.subscription.updated`
+   - `customer.subscription.created`
+   - `customer.subscription.deleted`
+   - `invoice.payment_failed`
+4. Copy **Signing secret** (`whsec_...`) → Render → **peerdisclosures-api** → `STRIPE_WEBHOOK_SECRET`.
+5. Render will redeploy automatically.
+
+Full detail: [STRIPE_LIVE_CHECKLIST.md](./STRIPE_LIVE_CHECKLIST.md).
+
+### Step 7 — Supabase production URLs (after Step 2)
+
+1. Supabase → **Authentication → URL Configuration**.
+2. Site URL: `https://peerdisclosures.com`
+3. Redirect URLs: `https://peerdisclosures.com/auth/callback`, `https://peerdisclosures.com/**`
+
+See [SUPABASE_PROD_URLS.md](./SUPABASE_PROD_URLS.md).
+
+---
+
+## Records reference (do not change email)
+
+### Email — keep as-is
+
+Existing **Cloudflare Email Routing** MX records. Do **not** re-add Mailgun or Google Workspace MX unless you migrate email.
 
 Forwarded addresses (already configured):
 
@@ -49,26 +123,16 @@ Forwarded addresses (already configured):
 
 ---
 
-## Verification checklist
-
-**Interim (Render default hostname — works today):**
+## Automated verification
 
 ```powershell
-curl.exe -s https://peerdisclosures-api.onrender.com/health
-# Expect {"status":"ok",...}
+.\scripts\dns-go-live-checklist.ps1
 ```
 
-**After DNS + Vercel (full launch):**
+Or full smoke test (after DNS + webhook):
 
 ```powershell
-# Apex should return Vercel (not GoDaddy builder)
-curl.exe -sI https://peerdisclosures.com | findstr /i "server x-vercel"
-
-# API health
-curl.exe -s https://api.peerdisclosures.com/health
-
-# Frontend proxy to API
-curl.exe -s https://peerdisclosures.com/api/backend/health
+.\scripts\go-live.ps1 -Phase smoke
 ```
 
 ---

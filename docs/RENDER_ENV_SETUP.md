@@ -2,7 +2,7 @@
 
 Use this when configuring **Render Dashboard → peerdisclosures-api → Environment** for production go-live.
 
-**Status (verified 2026-06-26):** Service is **live** at `https://peerdisclosures-api.onrender.com/health` (200). `DATABASE_URL` fix deployed (`f71070b`). Custom domain `api.peerdisclosures.com` and live Stripe webhook still pending — see [GO_LIVE_CHECKLIST.md](./GO_LIVE_CHECKLIST.md).
+**Status (verified 2026-06-26):** Service is **live** at `https://peerdisclosures-api.onrender.com/health` (200). Vercel deployed at `peerdisclosures.vercel.app`. Custom domain `api.peerdisclosures.com` and live Stripe webhook still pending — see [GO_LIVE_CHECKLIST.md](./GO_LIVE_CHECKLIST.md) and run `.\scripts\dns-go-live-checklist.ps1`.
 
 ## Common mistake
 
