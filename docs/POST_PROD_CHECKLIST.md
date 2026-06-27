@@ -18,7 +18,8 @@ Practical checklist to run **after** custom domains, API, Vercel, Supabase prod 
 
 ### Stripe live E2E (manual; real payment)
 
-Full step-by-step: [PRODUCTION_PRO_TESTING.md](./PRODUCTION_PRO_TESTING.md).
+Full step-by-step: [PRODUCTION_PRO_TESTING.md](./PRODUCTION_PRO_TESTING.md).  
+Plain-language guide for non-technical testers: [PRODUCTION_PRO_TESTING_SIMPLE.md](./PRODUCTION_PRO_TESTING_SIMPLE.md).
 
 - [ ] Live webhook at `https://api.peerdisclosures.com/webhooks/stripe` — `checkout.session.completed` returns **200** ([STRIPE_SETUP.md § 3](./STRIPE_SETUP.md#3-webhooks))
 - [ ] Sign in with any email → **Upgrade to Professional** → Stripe **Live** Checkout opens

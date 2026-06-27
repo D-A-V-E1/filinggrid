@@ -2,6 +2,10 @@
 
 Dedicated runbook for verifying **Professional** subscription behavior on **production** (`https://peerdisclosures.com`). Use this when billing must be real: Stripe **Live** mode, live webhooks, and a real payment (or Stripe live test per Dashboard docs).
 
+### Non-technical testers
+
+If you are **not** a developer and just need to confirm Professional works on the live site (sign in, pay, check features, cancel), use the plain-language guide: **[PRODUCTION_PRO_TESTING_SIMPLE.md](./PRODUCTION_PRO_TESTING_SIMPLE.md)** (~20–30 min, includes cancel step).
+
 **Not for daily development.** For local tier toggles, dev headers, and test card `4242…`, use [TIER_TESTING.md](./TIER_TESTING.md) instead.
 
 **Related runbooks:**
