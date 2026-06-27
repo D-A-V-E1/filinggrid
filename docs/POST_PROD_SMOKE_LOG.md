@@ -146,3 +146,49 @@ Production disk cache (`PARSE_CACHE_VERSION=8`) still indexes AMD `note-impairme
 2. Same compare → **Business** nav item → **View SEC filing excerpt** on each column (post `a54b3a8`).
 3. Click AMD impairment excerpt (if any) — spinner must clear; no infinite **Loading excerpt…**.
 
+---
+
+## Pro mode smoke — 2026-06-27
+
+**Date:** 2026-06-27  
+**Environment:** Production (`https://peerdisclosures.com`, `https://api.peerdisclosures.com`)  
+**Method:** curl + cursor-ide-browser MCP  
+**Stripe / auth:** No session in browser; magic link + live checkout not completed (manual follow-up per [POST_PROD_CHECKLIST.md § Stripe live E2E](./POST_PROD_CHECKLIST.md#stripe-live-e2e-manual-real-payment))
+
+### Summary
+
+| Step | Result | Notes |
+|------|--------|-------|
+| API health `GET api.peerdisclosures.com/health` | **PASS** | 200 — `{"status":"ok","service":"peer-disclosures-api","features":{"foreign_filing_fallback":2}}` |
+| Dev toggle `POST api.peerdisclosures.com/dev/tier` | **PASS** | 404 — `{"detail":"Not found"}` |
+| Sitemap `GET peerdisclosures.com/sitemap.xml` | **PASS** | 200 — valid XML urlset |
+| Compare 3 tickers (`aapl-vs-msft-vs-nvda`) without login | **PASS** | AAPL, MSFT, NVDA columns; FY26·Q2 period; Financial Statements + section nav |
+| 4th ticker paywall (GOOGL) | **PASS** | PaywallModal “Compare more tickers”; alert: Free tier up to 3 tickers; `you@email.com` |
+| `/account` sign-in UI | **PASS** | “Sign in with email”; magic link modal; placeholder `you@email.com`; no corporate gate |
+| `/pricing` — Upgrade to Professional CTA | **PASS** | Opens paywall modal (auth before checkout) |
+| Upgrade → Stripe Checkout | **SKIP** | Not signed in — modal requires magic link; cannot reach Checkout without inbox |
+| 4+ ticker compare (Pro) | **SKIP** | No Pro session |
+| Full GAAP statements unlocked (Pro) | **SKIP** | Free user sees “Upgrade to Professional” on full GAAP block |
+| Saved groups (Pro CRUD) | **SKIP** (Pro) / **PASS** (free gate) | “Saved groups” → paywall: “Saved peer groups are available on the Professional plan.” |
+| Historical period beyond free window (Pro) | **SKIP** | Pro archive not verifiable without subscription |
+| SEC filing excerpt on narrative section (Pro) | **SKIP** | Excerpt buttons gated; not tested as Pro |
+| `GET /auth/me` tier check | **SKIP** | No JWT — browser session unsigned |
+| Stripe live checkout E2E | **SKIP** | Manual — real payment + webhook ([POST_PROD_CHECKLIST.md](./POST_PROD_CHECKLIST.md)) |
+
+**Overall:** 8 PASS · 8 SKIP · 0 FAIL
+
+**Pro verification status:** **Blocked on auth/payment** — free baseline and API checks pass; full Pro behavior requires magic-link sign-in and (for new subscribers) Stripe Live Checkout.
+
+### Manual steps to complete Pro smoke
+
+1. **`/account`** → **Sign in with email** → enter any email → **Send magic link** → open link from inbox → confirm `?auth=success`.
+2. **`/pricing`** or compare paywall → **Upgrade to Professional** → Stripe **Live** Checkout opens → complete payment (or use live test card per Dashboard) → redirect `?checkout=success`.
+3. Stripe Dashboard → Events → confirm `checkout.session.completed` **200** at `https://api.peerdisclosures.com/webhooks/stripe`.
+4. **`GET /auth/me`** (browser devtools or curl with session JWT) → `tier: professional`, `limits.max_columns: 8`.
+5. Compare **`aapl-vs-msft-vs-nvda-vs-googl`** — 4 columns load; **Professional** badge.
+6. **Full GAAP financial statements** — line items visible (no upgrade lock).
+7. **Saved groups** — create/read/update/delete at `/peer-groups`.
+8. **Filing period** — periods beyond latest + last FY available.
+9. Narrative section (e.g. **MD&A**) → **View SEC filing excerpt** loads inline text.
+10. **`/account`** → **Manage billing** → Stripe Customer Portal.
+
