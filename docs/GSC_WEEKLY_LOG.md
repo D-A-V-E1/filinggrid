@@ -190,6 +190,75 @@ Not inspected — requires GSC login. After sign-in, check **Indexing → Pages*
 
 ---
 
+## 2026-06-27 indexing request pass
+
+**Date:** 2026-06-27 (third pass — recommended indexing steps)  
+**Environment:** Production (`https://peerdisclosures.com`)  
+**Method:** PowerShell `Invoke-WebRequest` (HEAD) + cursor-ide-browser MCP (GSC URL Inspection)  
+**Operator:** Cursor agent
+
+### Sitemap fetch
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `GET https://peerdisclosures.com/sitemap.xml` | **200** | 13 URLs; `lastmod` 2026-06-27T14:01:14.674Z |
+
+### HTTP status (all sitemap URLs)
+
+| URL | HTTP status | Index requested |
+|-----|-------------|-----------------|
+| `https://peerdisclosures.com/` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/pricing` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/privacy` | 200 | skip (static legal) |
+| `https://peerdisclosures.com/terms` | 200 | skip (static legal) |
+| `https://peerdisclosures.com/compare/aapl-vs-msft` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/aapl-vs-msft-vs-nvda` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/jpm-vs-gs-vs-ms` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/aapl-vs-nvda-vs-tsm` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/goog-vs-meta` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/amzn-vs-shop` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/tsla-vs-f` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/ko-vs-pep` | 200 | **blocked (login)** |
+
+**HTTP summary:** 13/13 → **200** · 0 failures
+
+### Google Search Console — URL Inspection
+
+**Result:** **BLOCKED** — browser redirected to Google sign-in (`accounts.google.com/v3/signin/identifier`). OAuth cannot be completed by the agent; **0 indexing requests submitted**.
+
+**GSC entry point used:**  
+`https://search.google.com/search-console/inspect?resource_id=sc-domain%3Apeerdisclosures.com`
+
+**Property note (Domain vs URL prefix):** The inspect link targets a **Domain property** (`sc-domain:peerdisclosures.com`). A separate URL-prefix property (`https://peerdisclosures.com/`) was not verified in this pass. Domain property creation was **not** attempted (requires DNS TXT — owner decision). After sign-in, confirm which property type is verified under **Settings → Ownership verification**.
+
+#### Priority URLs — manual indexing required
+
+| # | URL | Index requested | GSC status |
+|---|-----|-----------------|------------|
+| 1 | `https://peerdisclosures.com/` | **blocked (login)** | — |
+| 2 | `https://peerdisclosures.com/pricing` | **blocked (login)** | — |
+| 3 | `https://peerdisclosures.com/compare/aapl-vs-msft` | **blocked (login)** | — |
+| 4 | `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc` | **blocked (login)** | — |
+| 5 | `https://peerdisclosures.com/compare/jpm-vs-gs-vs-ms` | **blocked (login)** | — |
+| 6 | `https://peerdisclosures.com/compare/goog-vs-meta` | **blocked (login)** | — |
+| 7 | `https://peerdisclosures.com/compare/ko-vs-pep` | **blocked (login)** | — |
+| 8 | `https://peerdisclosures.com/compare/aapl-vs-msft-vs-nvda` | **blocked (login)** | — |
+| 9 | `https://peerdisclosures.com/compare/aapl-vs-nvda-vs-tsm` | **blocked (login)** | — |
+| 10 | `https://peerdisclosures.com/compare/amzn-vs-shop` | **blocked (login)** | — |
+| 11 | `https://peerdisclosures.com/compare/tsla-vs-f` | **blocked (login)** | — |
+
+**Indexing summary:** 0 requested · 11 blocked (login) · 2 skipped (legal pages)
+
+#### Owner action
+
+1. Sign in at [Google Search Console](https://search.google.com/search-console) (verified owner account).
+2. Open URL Inspection via the direct link above (or left nav).
+3. For each URL in the table: paste → Enter → **Request indexing** (if offered).
+4. Update the **Index requested** / **GSC status** columns in this section after completion.
+
+---
+
 ## Log template (future weeks)
 
 Copy the section above; update date, HTTP table, and GSC index status.
