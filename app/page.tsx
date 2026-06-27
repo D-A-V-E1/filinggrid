@@ -1,6 +1,7 @@
 import ProCallout from "@/components/landing/ProCallout";
 import PopularCompareLinks from "@/components/landing/PopularCompareLinks";
 import TickerSearchBar from "@/components/TickerSearchBar";
+import { homeJsonLd } from "@/lib/seo";
 
 const FEATURES = [
   {
@@ -26,8 +27,14 @@ const FEATURES = [
 ];
 
 export default function HomePage() {
+  const jsonLd = homeJsonLd();
+
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Hero */}
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-screen-xl px-4 py-20 text-center">
@@ -44,7 +51,8 @@ export default function HomePage() {
             risk factors, and footnotes side by side without juggling browser tabs.
           </p>
           <p className="mx-auto mt-3 max-w-xl text-sm text-slate-500">
-            Start free with three tickers and current-year filings. No login required.
+            Start free with three tickers and current-year filings — no login, no credit card.
+            Skip the EDGAR tab sprawl and Excel copy-paste.
           </p>
           <div className="mx-auto mt-10">
             <TickerSearchBar />
