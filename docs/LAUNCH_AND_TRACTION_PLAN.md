@@ -235,3 +235,12 @@ Track weekly in a simple spreadsheet or analytics tool.
 - Double down on the channel with best compare-session-to-signup ratio
 - Consider lightweight content: “How we parse EDGAR sections” (SEO + HN credibility)
 - Explore integrations mention only if asked: export snippets, watchlists (product roadmap, not launch blocker)
+
+---
+
+## See also
+
+- [LAUNCH_AUTOMATION.md](./LAUNCH_AUTOMATION.md) — each checklist item tagged auto / semi / manual, with scripts and Cursor vs founder tasks
+- [COMPARE_SLUGS_SEO.md](./COMPARE_SLUGS_SEO.md) — weekly compare-slug workflow (`POPULAR_COMPARISONS` → sitemap → GSC)
+- [SEO_SETUP.md](./SEO_SETUP.md) — Search Console, sitemap, and OG verification
+- [POST_PROD_CHECKLIST.md](./POST_PROD_CHECKLIST.md) — post-launch ops and smoke tests
