@@ -14,7 +14,7 @@ import {
   type XbrlDisclosure,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
-import { isGaapStatementSection, isXbrlBackedSection } from "@/lib/sections";
+import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
 import { resolveFilingColumnContentMode } from "@/lib/filingColumnView";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
@@ -414,6 +414,29 @@ function HtmlExcerpt({ html }: { html: string }) {
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </article>
+  );
+}
+
+function EdgarSectionLink({ filingUrl }: { filingUrl: string }) {
+  return (
+    <p className="mt-3">
+      <a
+        href={filingUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 font-sans text-[11px] font-medium text-slate-500 transition hover:text-brand-700"
+      >
+        Open on EDGAR
+        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+          />
+        </svg>
+      </a>
+    </p>
   );
 }
 
@@ -856,11 +879,16 @@ function FilingColumn({
           ) : (
             <>
               {showExcerptToggle && !showHtmlExcerpt && (
-                <ExcerptToggleButton
-                  label="View SEC filing excerpt"
-                  loading={loadingHtml}
-                  onClick={loadHtmlExcerpt}
-                />
+                <>
+                  <ExcerptToggleButton
+                    label="View SEC filing excerpt"
+                    loading={loadingHtml}
+                    onClick={loadHtmlExcerpt}
+                  />
+                  {isNarrativeSection(activeSection) && sectionFilingUrl && (
+                    <EdgarSectionLink filingUrl={sectionFilingUrl} />
+                  )}
+                </>
               )}
 
               {showHtmlExcerpt && sectionHtml && (
@@ -869,6 +897,9 @@ function FilingColumn({
                     SEC filing excerpt
                   </p>
                   <HtmlExcerpt html={sectionHtml} />
+                  {isNarrativeSection(activeSection) && sectionFilingUrl && (
+                    <EdgarSectionLink filingUrl={sectionFilingUrl} />
+                  )}
                 </>
               )}
 

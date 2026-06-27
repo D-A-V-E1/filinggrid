@@ -22,14 +22,15 @@ export function resolveFilingColumnContentMode(params: {
     activeSection && isXbrlBackedSection(activeSection) && hasXbrlData
   );
 
-  // Footnotes without XBRL still offer HTML excerpts when indexed in the filing.
+  // XBRL-backed sections without tagged data fall back to EDGAR (not narratives/footnotes).
   const showSecViewer = Boolean(
     activeSection &&
       hasSectionInFiling &&
       !isStatementSection &&
       !footnote &&
-      (isNarrativeSection(activeSection) ||
-        (isXbrlBackedSection(activeSection) && !hasXbrlData))
+      !isNarrativeSection(activeSection) &&
+      isXbrlBackedSection(activeSection) &&
+      !hasXbrlData
   );
 
   const showExcerptToggle = Boolean(
@@ -37,7 +38,9 @@ export function resolveFilingColumnContentMode(params: {
       hasSectionInFiling &&
       !isStatementSection &&
       !showSecViewer &&
-      (xbrlOnly || (footnote && isXbrlBackedSection(activeSection) && !hasXbrlData))
+      (xbrlOnly ||
+        (footnote && isXbrlBackedSection(activeSection) && !hasXbrlData) ||
+        isNarrativeSection(activeSection))
   );
 
   return { showSecViewer, showExcerptToggle, xbrlOnly };
