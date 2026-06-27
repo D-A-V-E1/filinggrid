@@ -105,7 +105,7 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
     reason === "column_limit"
       ? "Compare more tickers"
       : reason === "historical_data"
-        ? "Access full filing archive"
+        ? "Unlock full archive & excerpts"
         : "Upgrade to Professional";
 
   return (
@@ -142,6 +142,9 @@ function PaywallModalInner({ open, reason, message, onClose }: PaywallModalProps
           </li>
           <li className="flex items-center gap-2">
             <span className="text-brand-600">✓</span> Full filing period archive
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-brand-600">✓</span> Full SEC filing excerpts in compare view
           </li>
           <li className="flex items-center gap-2">
             <span className="text-brand-600">✓</span> Full GAAP statement line items

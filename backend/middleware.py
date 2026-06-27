@@ -330,7 +330,7 @@ async def check_free_period_access(
         detail={
             "code": "PAYWALL",
             "reason": "historical_data",
-            "message": "Historical filings require a Professional subscription.",
+            "message": "Historical filings and full SEC filing excerpts require a Professional subscription.",
             "requested_year": fiscal_year,
         },
     )

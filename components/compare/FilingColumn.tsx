@@ -715,7 +715,10 @@ function FilingColumn({
             typeof detail === "object" && detail !== null && "reason" in detail
               ? String(detail.reason)
               : "subscription_required";
-          const message = formatApiError(err, "This feature requires a Professional subscription.");
+          const message = formatApiError(
+            err,
+            "Historical filings and full SEC filing excerpts require a Professional subscription."
+          );
           onPaywall?.(reason, message);
           setSectionError("");
           return;
