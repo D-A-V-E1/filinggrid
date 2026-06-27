@@ -192,3 +192,28 @@ Production disk cache (`PARSE_CACHE_VERSION=8`) still indexes AMD `note-impairme
 9. Narrative section (e.g. **MD&A**) → **View SEC filing excerpt** loads inline text.
 10. **`/account`** → **Manage billing** → Stripe Customer Portal.
 
+---
+
+## Automated HTTP smoke — 2026-06-27 follow-up
+
+**Date:** 2026-06-27 (weekly pass)  
+**Environment:** Production (`https://peerdisclosures.com`, `https://api.peerdisclosures.com`)  
+**Method:** `backend/scripts/prod_smoke_check.py`  
+**Stripe / auth:** Not run — magic link + live checkout remain manual
+
+### Summary
+
+| Step | Result | Notes |
+|------|--------|-------|
+| API health `GET api.peerdisclosures.com/health` | **PASS** | 200 — `status: ok` |
+| Frontend proxy `GET peerdisclosures.com/api/backend/health` | **PASS** | 200 — proxied OK |
+| Dev toggle `POST api.peerdisclosures.com/dev/tier` | **PASS** | 404 — locked down |
+| Ticker search `GET /tickers/search?q=AAPL` | **PASS** | 200 — results returned |
+| 4th ticker paywall (browser) | **SKIP** | Manual — see 2026-06-27 Pro mode smoke (PASS when run) |
+| Magic link sign-in | **SKIP** | Manual — requires inbox |
+| Stripe live checkout E2E | **SKIP** | Manual — real payment + webhook |
+
+**Overall:** 4 PASS (automated) · 3 SKIP (manual) · 0 FAIL
+
+**Pro verification status:** Still **blocked on auth/payment** — automated API/proxy checks pass; full Pro behavior requires magic-link sign-in and Stripe Live Checkout per [POST_PROD_CHECKLIST.md § Stripe live E2E](./POST_PROD_CHECKLIST.md#stripe-live-e2e-manual-real-payment).
+

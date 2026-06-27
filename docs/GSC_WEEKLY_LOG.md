@@ -107,6 +107,89 @@ Not inspected — requires GSC login. After sign-in, check **Indexing → Pages*
 
 ---
 
+## 2026-06-27 follow-up pass
+
+**Date:** 2026-06-27 (second pass)  
+**Environment:** Production (`https://peerdisclosures.com`)  
+**Method:** PowerShell `Invoke-WebRequest` (HEAD) + web search `site:peerdisclosures.com` + cursor-ide-browser MCP (GSC)  
+**Operator:** Cursor agent
+
+### Sitemap fetch
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `GET https://peerdisclosures.com/sitemap.xml` | **200** | 13 URLs; `lastmod` 2026-06-27T13:44:32.862Z; all `<loc>` use `https://peerdisclosures.com` (production canonical) |
+
+### HTTP status (all sitemap URLs)
+
+| URL | HTTP status | Index requested |
+|-----|-------------|-----------------|
+| `https://peerdisclosures.com/` | 200 | **needs login** |
+| `https://peerdisclosures.com/pricing` | 200 | **needs login** |
+| `https://peerdisclosures.com/privacy` | 200 | skip (static legal) |
+| `https://peerdisclosures.com/terms` | 200 | skip (static legal) |
+| `https://peerdisclosures.com/compare/aapl-vs-msft` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/aapl-vs-msft-vs-nvda` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/jpm-vs-gs-vs-ms` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/aapl-vs-nvda-vs-tsm` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/goog-vs-meta` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/amzn-vs-shop` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/tsla-vs-f` | 200 | **needs login** |
+| `https://peerdisclosures.com/compare/ko-vs-pep` | 200 | **needs login** |
+
+**HTTP summary:** 13/13 → **200** · 0 failures (unchanged from morning pass)
+
+### Google index visibility (`site:` query)
+
+| Check | Result |
+|-------|--------|
+| `site:peerdisclosures.com` (web search, 2026-06-27) | **No results found** — zero indexed pages visible in search; expected for new domain until GSC indexing requests complete |
+
+### Google Search Console — URL Inspection
+
+**Result:** **BLOCKED** — browser redirected to Google sign-in (`accounts.google.com/v3/signin/identifier`). OAuth cannot be completed by the agent.
+
+**GSC entry point:**  
+`https://search.google.com/search-console/inspect?resource_id=sc-domain%3Apeerdisclosures.com`
+
+#### Copy-paste checklist (owner action)
+
+1. Sign in at [Google Search Console](https://search.google.com/search-console) with the verified property owner account.
+2. Open URL Inspection (direct link above) for property **peerdisclosures.com**.
+3. For each URL: paste → Enter → **Request indexing** (if offered).
+4. After completion, update the **Index requested** column in this section to `Y` and note GSC status text.
+
+| # | URL |
+|---|-----|
+| 1 | `https://peerdisclosures.com/` |
+| 2 | `https://peerdisclosures.com/pricing` |
+| 3 | `https://peerdisclosures.com/compare/aapl-vs-msft` |
+| 4 | `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc` |
+| 5 | `https://peerdisclosures.com/compare/jpm-vs-gs-vs-ms` |
+| 6 | `https://peerdisclosures.com/compare/goog-vs-meta` |
+| 7 | `https://peerdisclosures.com/compare/ko-vs-pep` |
+| 8 | `https://peerdisclosures.com/compare/aapl-vs-msft-vs-nvda` |
+| 9 | `https://peerdisclosures.com/compare/aapl-vs-nvda-vs-tsm` |
+| 10 | `https://peerdisclosures.com/compare/amzn-vs-shop` |
+| 11 | `https://peerdisclosures.com/compare/tsla-vs-f` |
+
+5. Optional: **Indexing → Pages** — scan for compare URLs “Discovered – currently not indexed” or crawl errors.
+
+### Optional compare slugs (earnings calendar)
+
+**Skipped** — week of 2026-06-30 has no new mega-cap pair clearly missing from `POPULAR_COMPARISONS` (Mag-7 reports cluster in late July; AMD/F/KO/PEP already covered). Revisit after July earnings calendar updates.
+
+### `NEXT_PUBLIC_APP_URL` verification (code + live)
+
+| Check | Result |
+|-------|--------|
+| `lib/seo.ts` → `getSiteUrl()` | Uses `process.env.NEXT_PUBLIC_APP_URL` with localhost fallback |
+| Docs / examples | `https://peerdisclosures.com` in `.env.production.example`, `scripts/vercel-production-env.example`, `docs/SEO_SETUP.md` |
+| Live sitemap `<loc>` | All URLs use `https://peerdisclosures.com` (confirms production env set on Vercel) |
+
+---
+
 ## Log template (future weeks)
 
 Copy the section above; update date, HTTP table, and GSC index status.
