@@ -105,3 +105,44 @@ Render fallback also healthy: `https://peerdisclosures-api.onrender.com/health` 
 ## Issues found
 
 None in this smoke pass — no code changes required.
+
+---
+
+## 2026-06-27 — AMD impairment fix + regression smoke
+
+**Date:** 2026-06-27  
+**Environment:** Production (`https://peerdisclosures.com`, `https://api.peerdisclosures.com`)  
+**Method:** curl + cursor-ide-browser MCP  
+**Fix commit:** `36fbe4a` (pushed to `main`; backend redeploy required for cache v9)  
+**Stripe / auth:** No live payment or magic-link sign-in completed
+
+### Summary
+
+| Step | Result | Notes |
+|------|--------|-------|
+| API health `GET api.peerdisclosures.com/health` | **PASS** | 200 — `{"status":"ok","service":"peer-disclosures-api",...}` |
+| Frontend proxy `GET peerdisclosures.com/api/backend/health` | **PASS** | 200 |
+| Home — Peer Disclosures branding | **PASS** | Title/nav “Peer Disclosures”; hero copy present |
+| Compare 3 tickers (`aapl-vs-msft-vs-googl`) | **PASS** | Page loads; columns render after API warmup |
+| 4th ticker paywall | **SKIP** | Not re-run this pass (see 2026-06-26 — PASS) |
+| `/account` sign-in UI | **PASS** | “Sign in with email” / “Sign in to your account” |
+| `/pricing` | **PASS** | HTTP 200 |
+| `/terms` | **PASS** | HTTP 200 |
+| `/privacy` | **PASS** | HTTP 200 |
+| AMD impairment (`nvda-vs-amd-vs-intc` → Impairment) | **FAIL** (pre-deploy) | AMD column shows **View SEC filing excerpt** (false positive from stale parse cache v8); click shows brief **Loading excerpt…** then Professional paywall on latest period. API `GET /parse/section?...AMD&note-impairment&fiscal_year=2025` → **404**. **Expected after deploy:** AMD → **Not in this filing**. |
+| Narrative Business section excerpt button | **FAIL** (pre-deploy) | `?section=business` did not activate Business; section nav has no **Business** item under “Business & Risk” (only Risk Factors+). Columns still on Financial Statements. Likely frontend not yet on `a54b3a8` or Business missing from indexed FY26·Q1 sections. |
+| `POST /dev/tier` → 404 | **SKIP** | Manual |
+| Stripe / magic link E2E | **SKIP** | Manual |
+
+**Overall:** 9 PASS · 2 FAIL (known pre-deploy) · 3 SKIP
+
+### Root cause (AMD impairment)
+
+Production disk cache (`PARSE_CACHE_VERSION=8`) still indexes AMD `note-impairment` from a risk-factor bullet (“We may incur future impairments…”). Live extraction with tightened patterns returns **404**, so the UI offered an excerpt that could not load. Fix in `36fbe4a`: bump cache to **v9**, reject bullet-prefixed pseudo-headings, prioritize “Not in this filing” over XBRL footnote spinner, and surface 404/empty excerpt errors in `FilingColumn`.
+
+### Re-test after deploy
+
+1. `nvda-vs-amd-vs-intc` → period **FY25** (annual) → **Impairment** → AMD should read **Not in this filing**.
+2. Same compare → **Business** nav item → **View SEC filing excerpt** on each column (post `a54b3a8`).
+3. Click AMD impairment excerpt (if any) — spinner must clear; no infinite **Loading excerpt…**.
+
