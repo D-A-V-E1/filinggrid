@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import AccountPanel from "@/components/account/AccountPanel";
+import { SITE_NAME } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Account",
   description: "Manage your Peer Disclosures account, plan, and billing.",
+  robots: { index: false, follow: false },
+  alternates: { canonical: "/account" },
+  openGraph: {
+    title: `Account | ${SITE_NAME}`,
+    description: "Manage your Peer Disclosures account, plan, and billing.",
+    url: "/account",
+  },
 };
 
 export default function AccountPage() {

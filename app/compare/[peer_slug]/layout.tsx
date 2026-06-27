@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { parsePeerSlug } from "@/lib/utils";
+import { SITE_NAME, compareJsonLd, sharedSocialMetadata } from "@/lib/seo";
 
 interface Props {
   params: Promise<{ peer_slug: string }>;
@@ -12,19 +13,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const year = new Date().getFullYear();
 
   const title = `${tickerStr} SEC Filing Comparison — ${year} 10-K Footnotes & MD&A`;
-  const description = `Side-by-side SEC filing footnote and MD&A comparison between ${tickers.join(", ")}. Fast, private ${year} 10-K and 10-Q disclosure workspace powered by Peer Disclosures.`;
+  const description = `Side-by-side SEC filing footnote and MD&A comparison between ${tickers.join(", ")}. Fast, private ${year} 10-K and 10-Q disclosure workspace powered by ${SITE_NAME}.`;
 
   return {
     title,
     description,
-    openGraph: {
-      title,
-      description,
-      type: "website",
-    },
-    alternates: {
-      canonical: `/compare/${peer_slug}`,
-    },
     keywords: [
       ...tickers.map((t) => `${t} 10-K`),
       ...tickers.map((t) => `${t} SEC filing`),
@@ -32,6 +25,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       "MD&A comparison",
       "peer group analysis",
     ],
+    ...sharedSocialMetadata({
+      title,
+      description,
+      path: `/compare/${peer_slug}`,
+    }),
   };
 }
 
@@ -44,15 +42,7 @@ export default async function CompareLayout({
 }) {
   const { peer_slug } = await params;
   const tickers = parsePeerSlug(peer_slug);
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    name: "Peer Disclosures",
-    applicationCategory: "FinanceApplication",
-    description: `SEC filing comparison for ${tickers.join(", ")}`,
-    url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/compare/${peer_slug}`,
-  };
+  const jsonLd = compareJsonLd(peer_slug, tickers);
 
   return (
     <>

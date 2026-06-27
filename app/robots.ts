@@ -1,9 +1,17 @@
 import { MetadataRoute } from "next";
+import { getSiteUrl } from "@/lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const base = getSiteUrl();
   return {
-    rules: { userAgent: "*", allow: ["/", "/compare/", "/pricing"] },
+    rules: [
+      {
+        userAgent: "*",
+        allow: ["/", "/compare/", "/pricing", "/privacy", "/terms"],
+        disallow: ["/account"],
+      },
+    ],
     sitemap: `${base}/sitemap.xml`,
+    host: base,
   };
 }

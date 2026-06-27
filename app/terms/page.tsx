@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SITE_NAME, sharedSocialMetadata } from "@/lib/seo";
+
+const title = "Terms of Service";
+const description = "Terms and conditions for using Peer Disclosures SEC filing comparison workspace.";
 
 export const metadata: Metadata = {
-  title: "Terms of Service",
-  description: "Terms and conditions for using Peer Disclosures.",
+  title,
+  description,
+  ...sharedSocialMetadata({ title: `${title} | ${SITE_NAME}`, description, path: "/terms" }),
 };
 
 const LAST_UPDATED = "June 20, 2026";

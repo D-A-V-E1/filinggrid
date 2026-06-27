@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Peer Disclosures  SEC Filing Comparison Workspace">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="55%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <text x="64" y="120" fill="#6ee7b7" font-family="system-ui, sans-serif" font-size="28" font-weight="600" letter-spacing="0.08em">SEC FILING WORKSPACE</text>
+  <text x="64" y="220" fill="#ffffff" font-family="system-ui, sans-serif" font-size="72" font-weight="700">Peer Disclosures</text>
+  <text x="64" y="300" fill="#cbd5e1" font-family="system-ui, sans-serif" font-size="36">SEC Filing Comparison Workspace</text>
+  <text x="64" y="380" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="28">Side-by-side footnotes, MD&amp;A, and XBRL  no Excel copy-paste</text>
+</svg>

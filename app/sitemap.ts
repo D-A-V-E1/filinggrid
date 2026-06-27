@@ -1,27 +1,18 @@
 import type { MetadataRoute } from "next";
-
-const POPULAR_SLUGS = [
-  "aapl-vs-msft",
-  "aapl-vs-msft-vs-nvda",
-  "nvda-vs-amd-vs-intc",
-  "jpm-vs-gs-vs-ms",
-  "goog-vs-meta",
-  "amzn-vs-shop",
-  "tsla-vs-f",
-  "ko-vs-pep",
-];
+import { POPULAR_COMPARE_SLUGS, getSiteUrl } from "@/lib/seo";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const base = getSiteUrl();
+  const now = new Date();
 
   return [
-    { url: base, lastModified: new Date(), changeFrequency: "weekly", priority: 1 },
-    { url: `${base}/pricing`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
-    { url: `${base}/privacy`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
-    { url: `${base}/terms`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
-    ...POPULAR_SLUGS.map((slug) => ({
+    { url: base, lastModified: now, changeFrequency: "weekly", priority: 1 },
+    { url: `${base}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${base}/privacy`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${base}/terms`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    ...POPULAR_COMPARE_SLUGS.map((slug) => ({
       url: `${base}/compare/${slug}`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: "weekly" as const,
       priority: 0.9,
     })),

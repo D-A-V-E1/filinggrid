@@ -5,6 +5,14 @@ import { Suspense } from "react";
 import ChunkErrorRecovery from "@/components/ChunkErrorRecovery";
 import HeaderNav from "@/components/HeaderNav";
 import QueryStatusBanner from "@/components/QueryStatusBanner";
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_KEYWORDS,
+  SITE_NAME,
+  SITE_TAGLINE,
+  sharedSocialMetadata,
+  siteMetadataBase,
+} from "@/lib/seo";
 import "./globals.css";
 
 const inter = Inter({
@@ -26,23 +34,27 @@ const ibmPlexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
+const defaultTitle = `${SITE_NAME} — ${SITE_TAGLINE}`;
+
 export const metadata: Metadata = {
+  metadataBase: siteMetadataBase(),
   title: {
-    default: "Peer Disclosures — SEC Filing Comparison Workspace",
-    template: "%s | Peer Disclosures",
+    default: defaultTitle,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "Compare SEC 10-K, 10-Q, 20-F, and 6-K filings side by side with synchronized sections and XBRL financials. Free for current-year peer review; Professional adds history, full GAAP statements, and saved peer groups.",
-  keywords: [
-    "SEC filing",
-    "10-K comparison",
-    "XBRL financials",
-    "footnote analysis",
-    "MD&A",
-    "peer comparison",
-    "20-F",
-    "ADR filers",
-  ],
+  description: DEFAULT_DESCRIPTION,
+  keywords: DEFAULT_KEYWORDS,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME, url: siteMetadataBase() }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  formatDetection: { email: false, address: false, telephone: false },
+  robots: { index: true, follow: true },
+  ...sharedSocialMetadata({
+    title: defaultTitle,
+    description: DEFAULT_DESCRIPTION,
+    path: "/",
+  }),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

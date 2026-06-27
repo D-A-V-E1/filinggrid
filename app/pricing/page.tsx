@@ -1,5 +1,23 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import PricingPlans from "@/components/pricing/PricingPlans";
+import { SITE_NAME, sharedSocialMetadata } from "@/lib/seo";
+
+const title = "Pricing";
+const description =
+  "Free SEC filing comparison for up to three tickers. Professional at $29/month unlocks eight columns, full filing history, GAAP statements, and saved peer groups.";
+
+export const metadata: Metadata = {
+  title,
+  description,
+  keywords: [
+    "SEC filing tool pricing",
+    "equity research software",
+    "10-K comparison subscription",
+    "Peer Disclosures Professional",
+  ],
+  ...sharedSocialMetadata({ title: `${title} | ${SITE_NAME}`, description, path: "/pricing" }),
+};
 
 export default function PricingPage() {
   return (

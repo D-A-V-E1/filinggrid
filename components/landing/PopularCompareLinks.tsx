@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { prewarmApi } from "@/lib/api-warmup";
-
-const POPULAR = [
-  { slug: "aapl-vs-msft", label: "Apple vs Microsoft" },
-  { slug: "nvda-vs-amd-vs-intc", label: "NVDA vs AMD vs Intel" },
-  { slug: "jpm-vs-gs-vs-ms", label: "JPM vs Goldman vs Morgan Stanley" },
-  { slug: "aapl-vs-nvda-vs-tsm", label: "Apple vs NVDA vs TSMC" },
-];
+import { POPULAR_COMPARISONS } from "@/lib/seo";
 
 export default function PopularCompareLinks() {
   const router = useRouter();
@@ -21,7 +15,7 @@ export default function PopularCompareLinks() {
 
   return (
     <div className="mt-4 flex flex-wrap gap-3">
-      {POPULAR.map((p) => {
+      {POPULAR_COMPARISONS.slice(0, 4).map((p) => {
         const href = `/compare/${p.slug}`;
         return (
           <Link

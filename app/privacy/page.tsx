@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SITE_NAME, sharedSocialMetadata } from "@/lib/seo";
+
+const title = "Privacy Policy";
+const description =
+  "How Peer Disclosures collects, uses, and stores your information. SEC filings are cached for performance — not sold or used for AI training.";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "How Peer Disclosures collects, uses, and stores your information.",
+  title,
+  description,
+  ...sharedSocialMetadata({ title: `${title} | ${SITE_NAME}`, description, path: "/privacy" }),
 };
 
 const LAST_UPDATED = "June 20, 2026";
