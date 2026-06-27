@@ -603,6 +603,7 @@ function FilingColumn({
     setShowHtmlExcerpt(false);
     setSectionHtml(null);
     setSectionError("");
+    setLoadingHtml(false);
   }, [activeSection, ticker]);
 
   useEffect(() => {
@@ -698,6 +699,11 @@ function FilingColumn({
 
     fetchSectionHtml(ticker, activeSection, requestFy, requestPeriod)
       .then((html) => {
+        if (!html?.trim()) {
+          setSectionError("No excerpt available for this section in the selected filing.");
+          setShowHtmlExcerpt(false);
+          return;
+        }
         if (cacheKey && html) saveSectionHtml(cacheKey, activeSection, html);
         setSectionHtml(html);
         setShowHtmlExcerpt(true);
@@ -714,7 +720,13 @@ function FilingColumn({
           setSectionError("");
           return;
         }
+        if (err instanceof ApiError && err.status === 404) {
+          setSectionError("This section is not available in the selected filing.");
+          setShowHtmlExcerpt(false);
+          return;
+        }
         setSectionError(err instanceof Error ? err.message : "Failed to load excerpt");
+        setShowHtmlExcerpt(false);
       })
       .finally(() => setLoadingHtml(false));
   }, [
@@ -841,6 +853,15 @@ function FilingColumn({
               <div className="h-4 w-5/6 animate-pulse rounded bg-brand-100" />
               <p className="text-[10px] text-brand-700/70">Loading SEC XBRL financials…</p>
             </div>
+          ) : !activeSection && sections.length === 0 && !showFinancialsBootstrap ? (
+            <p className="text-sm text-slate-400">Select a section from the left panel.</p>
+          ) : !section && !showFinancialsBootstrap && !showStatementBootstrap ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
+              <p className="text-sm font-medium text-slate-500">Not in this filing</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {ticker} did not include this disclosure in the selected period.
+              </p>
+            </div>
           ) : notesPending &&
             activeSection?.startsWith("note-") &&
             !xbrlPanel ? (
@@ -858,15 +879,6 @@ function FilingColumn({
               <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
               <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
               <p className="text-[10px] text-slate-500">Loading filing section…</p>
-            </div>
-          ) : !activeSection && sections.length === 0 && !showFinancialsBootstrap ? (
-            <p className="text-sm text-slate-400">Select a section from the left panel.</p>
-          ) : !section && !showFinancialsBootstrap && !showStatementBootstrap ? (
-            <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
-              <p className="text-sm font-medium text-slate-500">Not in this filing</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {ticker} did not include this disclosure in the selected period.
-              </p>
             </div>
           ) : showSecViewer ? (
             sectionFilingUrl ? (

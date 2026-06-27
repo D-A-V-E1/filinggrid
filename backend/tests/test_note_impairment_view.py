@@ -3,6 +3,14 @@
 from sec.section_extractor import _match_section
 
 
+def test_risk_factor_bullet_not_section_heading():
+    """List bullets in risk factors must not be indexed as section headings."""
+    heading = "• We may incur future impairments of our technology license purchases."
+    from sec.section_extractor import _is_section_heading
+
+    assert _is_section_heading(heading) is False
+
+
 def test_risk_factor_impairment_prose_not_note_impairment():
     """AMD-style risk bullets must not register as the impairment footnote."""
     heading = "We may incur future impairments of our technology license purchases."

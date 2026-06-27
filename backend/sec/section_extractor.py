@@ -298,6 +298,9 @@ def _is_section_heading(text: str) -> bool:
     cleaned = _normalize_text(text)
     if len(cleaned) < 3:
         return False
+    # Risk-factor and MD&A bullets are not section headings (e.g. AMD impairment prose).
+    if re.match(r"^[\u2022\u2013\u2014\-\*]\s", cleaned) or re.match(r"^[A-Za-z]\.\s+", cleaned):
+        return False
     if _ITEM_HEADER.match(cleaned) or _NOTE_HEADER.match(cleaned):
         return len(cleaned) <= _MAX_HEADING_CHARS
     return len(cleaned) <= 150

@@ -12,7 +12,7 @@ from config import get_settings
 
 settings = get_settings()
 _BACKEND_DIR = Path(__file__).resolve().parent
-PARSE_CACHE_VERSION = 8
+PARSE_CACHE_VERSION = 9
 
 
 def _cache_root() -> Path:
@@ -180,6 +180,8 @@ def find_cache_key(ticker: str, fiscal_year: int | None) -> str | None:
         try:
             with gzip.open(path, "rt", encoding="utf-8") as f:
                 data = json.load(f)
+            if data.get("parse_version") != PARSE_CACHE_VERSION:
+                continue
             col = data.get("column", {})
             if col.get("ticker", "").upper() != ticker:
                 continue
@@ -210,6 +212,8 @@ def find_section_html(ticker: str, section_id: str, fiscal_year: int | None) -> 
         try:
             with gzip.open(path, "rt", encoding="utf-8") as f:
                 data = json.load(f)
+            if data.get("parse_version") != PARSE_CACHE_VERSION:
+                continue
             col = data.get("column", {})
             if col.get("ticker", "").upper() != ticker:
                 continue
