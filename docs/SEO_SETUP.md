@@ -78,9 +78,9 @@ Use [Google Rich Results Test](https://search.google.com/test/rich-results) on h
 2. Import from Google Search Console or verify domain
 3. Submit the same sitemap URL
 
-### 6. Analytics hooks (recommended next)
+### 6. Analytics
 
-Search Console shows queries and impressions; add product analytics separately (e.g. Plausible, PostHog) to track compare sessions and checkout conversion. Not required for basic SEO.
+Search Console shows queries and impressions. **Vercel Web Analytics** is integrated in `app/layout.tsx` via `@vercel/analytics/react` (`<Analytics />`). After deploy, enable it in **Vercel → Project → Analytics → Enable** (Hobby tier; no env vars). Optional: add product analytics (e.g. Plausible, PostHog) for compare sessions and checkout conversion.
 
 ## Adding new indexable compare landing pages
 

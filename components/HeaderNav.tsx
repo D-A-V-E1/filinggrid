@@ -23,6 +23,7 @@ export default function HeaderNav() {
   const [error, setError] = useState("");
   const hasRealSubscription = auth?.tier === "professional";
   const isLandingPage = pathname === "/";
+  const isPricingPage = pathname === "/pricing";
 
   useEffect(() => {
     function openSignIn() {
@@ -59,18 +60,23 @@ export default function HeaderNav() {
 
   return (
     <>
-      <div className="flex flex-col items-end gap-1">
-        <nav className="flex items-center gap-4 text-sm">
+      <div className="flex w-full min-w-0 flex-col items-end gap-1">
+        <nav className="flex w-full min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs sm:gap-x-4 sm:text-sm">
           {hasRealSubscription && isLandingPage && <SavedPeerGroupsNav />}
 
-          <Link href="/pricing" className="text-slate-600 hover:text-slate-900">
-            Pricing
-          </Link>
+          {!isPricingPage && (
+            <Link
+              href="/pricing"
+              className="hidden whitespace-nowrap text-slate-600 hover:text-slate-900 sm:inline"
+            >
+              Pricing
+            </Link>
+          )}
 
           {loading ? (
             <span className="text-slate-400">…</span>
           ) : hasSession && displayEmail ? (
-            <div className="flex items-center gap-3">
+            <>
               {isPro ? (
                 <span className="hidden rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 sm:inline">
                   Professional
@@ -87,7 +93,7 @@ export default function HeaderNav() {
               >
                 {displayEmail}
               </Link>
-              <Link href="/account" className="text-slate-600 hover:text-slate-900 sm:hidden">
+              <Link href="/account" className="whitespace-nowrap text-slate-600 hover:text-slate-900 sm:hidden">
                 Account
               </Link>
               {hasRealSubscription && (
@@ -95,7 +101,7 @@ export default function HeaderNav() {
                   type="button"
                   onClick={handleManageBilling}
                   disabled={actionLoading}
-                  className="text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                  className="whitespace-nowrap text-slate-600 hover:text-slate-900 disabled:opacity-50"
                 >
                   Billing
                 </button>
@@ -104,16 +110,16 @@ export default function HeaderNav() {
                 type="button"
                 onClick={handleSignOut}
                 disabled={actionLoading}
-                className="text-slate-600 hover:text-slate-900 disabled:opacity-50"
+                className="whitespace-nowrap text-slate-600 hover:text-slate-900 disabled:opacity-50"
               >
                 Sign out
               </button>
-            </div>
+            </>
           ) : (
             <button
               type="button"
               onClick={() => setSignInOpen(true)}
-              className="text-slate-600 hover:text-slate-900"
+              className="whitespace-nowrap text-slate-600 hover:text-slate-900"
               title={configured ? undefined : "Supabase not configured"}
             >
               Sign in
@@ -123,7 +129,7 @@ export default function HeaderNav() {
           {!hasRealSubscription && (
             <Link
               href="/compare/aapl-vs-msft"
-              className="rounded-lg bg-brand-600 px-3 py-1.5 font-medium text-white hover:bg-brand-700"
+              className="whitespace-nowrap rounded-lg bg-brand-600 px-2 py-1 font-medium text-white hover:bg-brand-700 sm:px-3 sm:py-1.5"
             >
               Try demo
             </Link>

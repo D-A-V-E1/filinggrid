@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 import { Inter, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -63,15 +64,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-screen flex-col font-sans">
         <ChunkErrorRecovery />
         <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between px-4">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="font-mono text-lg font-bold tracking-tight text-slate-900">
+          <div className="mx-auto flex min-h-14 max-w-screen-2xl items-center justify-between gap-2 px-4 py-2 sm:gap-3">
+            <Link href="/" className="relative z-10 flex shrink-0 items-center gap-2">
+              <span className="font-mono text-base font-bold tracking-tight text-slate-900 sm:text-lg">
                 Peer<span className="text-brand-600">Disclosures</span>
               </span>
             </Link>
-            <Suspense fallback={<div className="h-8 w-32" />}>
-              <HeaderNav />
-            </Suspense>
+            <div className="min-w-0 flex-1">
+              <Suspense fallback={<div className="h-8 w-32" />}>
+                <HeaderNav />
+              </Suspense>
+            </div>
           </div>
           <Suspense fallback={null}>
             <QueryStatusBanner />
@@ -80,28 +83,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
         <footer className="shrink-0 border-t border-slate-200 bg-white py-3">
           <div className="mx-auto max-w-screen-2xl px-4 text-center text-xs leading-snug text-slate-400">
-            <p role="note">
+            <p className="text-slate-500">
+              © {new Date().getFullYear()} Peer Disclosures
+            </p>
+            <p className="mt-1.5" role="note">
               <span className="mr-1" aria-hidden="true">
                 🔒
               </span>
               <strong className="font-medium text-slate-500">Public SEC data</strong>
               {" — "}
-              Peer Disclosures is not affiliated with the U.S. Securities and Exchange Commission.
-              <span className="hidden sm:inline"> </span>
-              <span className="mt-0.5 block sm:mt-0 sm:inline">
-                SEC filings are public domain. Cached locally for performance — never stored in your
-                account database.
-              </span>
+              Not affiliated with the SEC. Filings are cached locally for performance, not stored in
+              your account.
             </p>
-            <p className="mt-1.5" role="note">
+            <p className="mt-1" role="note">
               <span className="mr-1" aria-hidden="true">
                 ⚠️
               </span>
               <strong className="font-medium text-slate-500">Research use only</strong>
               {" — "}
-              Not for financial or investment decisions. We pull from public SEC filings, but parsed
-              sections and numbers can be wrong or out of date — check the original filing before you
-              rely on anything. You&apos;re responsible for how you use what you find here.
+              Not investment advice. Parsed data may be wrong or outdated; verify against original
+              filings.
             </p>
             <nav className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-slate-500">
               <a href="mailto:support@peerdisclosures.com" className="hover:text-slate-700">
@@ -118,6 +119,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </div>
         </footer>
+        <Analytics />
       </body>
     </html>
   );
