@@ -14,6 +14,8 @@ interface SectionDeltaMapProps {
   sectionsWithDeltas: number;
   onCellClick: (ticker: string, sectionId: string, flag?: DeltaFlag) => void;
   defaultExpanded?: boolean;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 function formatSectionRowLabel(label: string): string {
@@ -32,9 +34,13 @@ export default function SectionDeltaMap({
   scannedCount,
   sectionsWithDeltas,
   onCellClick,
-  defaultExpanded = true,
+  defaultExpanded = false,
+  expanded: expandedProp,
+  onExpandedChange,
 }: SectionDeltaMapProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expandedInternal, setExpandedInternal] = useState(defaultExpanded);
+  const expanded = expandedProp ?? expandedInternal;
+  const setExpanded = onExpandedChange ?? setExpandedInternal;
 
   const columnByTicker = useMemo(() => {
     const map = new Map<string, FilingColumn>();
@@ -59,7 +65,7 @@ export default function SectionDeltaMap({
       <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-2">
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-2 text-left"
         >
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -70,8 +76,10 @@ export default function SectionDeltaMap({
           </span>
         </button>
         <p className="text-xs text-slate-500">
-          Scanned {scannedCount} sections · {sectionsWithDeltas} with deltas
-          <span className="ml-2 hidden sm:inline text-slate-400">· Metadata scan</span>
+          Full catalog — {sectionsWithDeltas} sections with any delta
+          <span className="ml-2 hidden sm:inline text-slate-400">
+            · Includes missing notes &amp; completeness checks
+          </span>
         </p>
       </div>
 

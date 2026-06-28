@@ -6,6 +6,7 @@ interface DeltaStripProps {
   flags: DeltaFlag[];
   loading?: boolean;
   totalFlagCount?: number;
+  tagline?: string;
   onFlagClick: (flag: DeltaFlag) => void;
   onViewMap?: () => void;
 }
@@ -20,6 +21,7 @@ export default function DeltaStrip({
   flags,
   loading,
   totalFlagCount,
+  tagline,
   onFlagClick,
   onViewMap,
 }: DeltaStripProps) {
@@ -32,22 +34,30 @@ export default function DeltaStrip({
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-          Deltas
+          Material deltas
         </h2>
         {loading && <span className="text-xs text-slate-400">Scanning…</span>}
         {!loading && flags.length === 0 && (
-          <span className="text-xs text-slate-500">No standout deltas in this group yet.</span>
+          <span className="text-xs text-slate-500">
+            {totalFlagCount && totalFlagCount > 0
+              ? "No headline movers or material events in this group."
+              : "No standout deltas in this group yet."}
+          </span>
         )}
-        {!loading && hiddenCount > 0 && onViewMap && (
+        {!loading && hiddenCount > 0 && onViewMap && totalFlagCount != null && (
           <button
             type="button"
             onClick={onViewMap}
             className="ml-auto text-xs font-medium text-brand-700 hover:text-brand-800"
           >
-            +{hiddenCount} more in delta map
+            See all {totalFlagCount} deltas
           </button>
         )}
       </div>
+
+      {tagline && !loading && (
+        <p className="mb-2 text-xs text-slate-500">{tagline}</p>
+      )}
 
       {!loading && flags.length > 0 && (
         <div className="flex flex-wrap gap-2">

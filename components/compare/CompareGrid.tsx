@@ -38,7 +38,11 @@ import TickerSearchBar from "../TickerSearchBar";
 import DevTierToggle from "../DevTierToggle";
 import { getCompareColumnLayout, compareGridTemplateColumns } from "@/lib/compare-layout";
 import { scanDeltas, foreignFilerTooltip } from "@/lib/delta-engine";
-import { rankDeltas } from "@/lib/delta-rank";
+import {
+  MAINSTREAM_STRIP_TAGLINE,
+  countMainstreamFlagsByTicker,
+  rankMainstreamStrip,
+} from "@/lib/delta-surface";
 import type { DeltaFlag } from "@/lib/delta-types";
 import DeltaStrip from "./DeltaStrip";
 import SectionDeltaMap from "./SectionDeltaMap";
@@ -87,6 +91,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const notesRetriedAfterParseRef = useRef(new Set<string>());
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
+  const [deltaMapExpanded, setDeltaMapExpanded] = useState(false);
   const deltaMapRef = useRef<HTMLDivElement>(null);
 
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
@@ -242,6 +247,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     notesRetriedAfterParseRef.current = new Set();
     setUpgradingNotesTickers(new Set());
     setMixedFilerBannerDismissed(false);
+    setDeltaMapExpanded(false);
     setActiveSection(DEFAULT_ACTIVE_SECTION);
     setError("");
     setSectionsParseError("");
@@ -483,7 +489,12 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
 
   const stripFlags = useMemo(() => {
     if (!deltaScan) return [];
-    return rankDeltas(deltaScan.flags, { cap: 7 });
+    return rankMainstreamStrip(deltaScan.flags, 5);
+  }, [deltaScan]);
+
+  const mainstreamHeat = useMemo(() => {
+    if (!deltaScan) return {};
+    return countMainstreamFlagsByTicker(deltaScan.flags);
   }, [deltaScan]);
 
   const handleDeltaFlagClick = useCallback(
@@ -494,6 +505,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   );
 
   const scrollToDeltaMap = useCallback(() => {
+    setDeltaMapExpanded(true);
     deltaMapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
@@ -607,8 +619,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
             flags={stripFlags}
             loading={deltasLoading}
             totalFlagCount={deltaScan?.flags.length}
+            tagline={MAINSTREAM_STRIP_TAGLINE}
             onFlagClick={handleDeltaFlagClick}
-            onViewMap={deltaScan && deltaScan.flags.length > stripFlags.length ? scrollToDeltaMap : undefined}
+            onViewMap={deltaScan && deltaScan.flags.length > 0 ? scrollToDeltaMap : undefined}
           />
           {deltaScan && deltaScan.flags.length > 0 && (
             <div ref={deltaMapRef}>
@@ -619,6 +632,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                 flags={deltaScan.flags}
                 scannedCount={deltaScan.coverage.scannedSections}
                 sectionsWithDeltas={deltaScan.coverage.sectionsWithDeltas}
+                expanded={deltaMapExpanded}
+                onExpandedChange={setDeltaMapExpanded}
                 onCellClick={(ticker, sectionId) => handleSectionSelect(sectionId)}
               />
             </div>
@@ -762,7 +777,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         fiscalYearFilter={resolvedFiscalYear ?? col.fiscal_year}
                         isPro={isPro}
                         onPaywall={handlePaywall}
-                        deltaFlagCount={deltaScan?.columnHeat[col.ticker] ?? 0}
+                        deltaFlagCount={mainstreamHeat[col.ticker] ?? 0}
                         foreignFilerTooltip={foreignFilerTooltip(col.form ?? formFromPeriodId(period))}
                       />
                     );
