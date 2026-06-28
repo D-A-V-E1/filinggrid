@@ -46,6 +46,8 @@ interface FilingColumnProps {
   fiscalYearFilter?: number | null;
   isPro?: boolean;
   onPaywall?: (reason: string, message: string) => void;
+  deltaFlagCount?: number;
+  foreignFilerTooltip?: string | null;
 }
 
 function formatSectionLabel(label: string): string {
@@ -463,6 +465,8 @@ function FilingColumn({
   fiscalYearFilter = null,
   isPro = false,
   onPaywall,
+  deltaFlagCount = 0,
+  foreignFilerTooltip = null,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const isCompact = columnLayout?.density === "compact";
@@ -779,6 +783,8 @@ function FilingColumn({
         filingDate={filingDate}
         fiscalYear={fiscalYear}
         compact={isCompact}
+        deltaFlagCount={deltaFlagCount}
+        foreignFilerTooltip={foreignFilerTooltip}
       />
 
       <div
@@ -940,6 +946,8 @@ function ColumnHeader({
   filingDate,
   fiscalYear,
   compact = false,
+  deltaFlagCount = 0,
+  foreignFilerTooltip = null,
 }: {
   ticker: string;
   companyName: string;
@@ -947,18 +955,34 @@ function ColumnHeader({
   filingDate: string | null;
   fiscalYear: number | null;
   compact?: boolean;
+  deltaFlagCount?: number;
+  foreignFilerTooltip?: string | null;
 }) {
+  const heatTone =
+    deltaFlagCount >= 5 ? "bg-amber-100 text-amber-900" : deltaFlagCount >= 2 ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600";
+
   return (
     <header
       className={`column-header-bar shrink-0 border-b border-slate-200 bg-white ${
         compact ? "px-3.5 py-2.5" : "px-5 py-3"
-      }`}
+      }${deltaFlagCount > 0 ? " ring-1 ring-inset ring-amber-200/60" : ""}`}
     >
-      <div className="flex items-baseline gap-2">
+      <div className="flex flex-wrap items-baseline gap-2">
         <span className="font-mono text-lg font-bold text-slate-900">{ticker}</span>
         {form && (
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">
+          <span
+            className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600"
+            title={foreignFilerTooltip ?? undefined}
+          >
             {form}
+          </span>
+        )}
+        {deltaFlagCount > 0 && (
+          <span
+            className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${heatTone}`}
+            title={`${deltaFlagCount} delta${deltaFlagCount === 1 ? "" : "s"} vs peers`}
+          >
+            {deltaFlagCount} Δ
           </span>
         )}
       </div>

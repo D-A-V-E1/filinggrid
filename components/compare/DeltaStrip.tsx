@@ -1,0 +1,71 @@
+"use client";
+
+import type { DeltaFlag } from "@/lib/delta-types";
+
+interface DeltaStripProps {
+  flags: DeltaFlag[];
+  loading?: boolean;
+  totalFlagCount?: number;
+  onFlagClick: (flag: DeltaFlag) => void;
+  onViewMap?: () => void;
+}
+
+const SEVERITY_STYLES: Record<DeltaFlag["severity"], string> = {
+  P1: "border-amber-300 bg-amber-50 text-amber-950",
+  P2: "border-brand-200 bg-brand-50/70 text-brand-900",
+  P3: "border-slate-200 bg-slate-50 text-slate-700",
+};
+
+export default function DeltaStrip({
+  flags,
+  loading,
+  totalFlagCount,
+  onFlagClick,
+  onViewMap,
+}: DeltaStripProps) {
+  const hiddenCount = Math.max(0, (totalFlagCount ?? flags.length) - flags.length);
+
+  return (
+    <section
+      className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-3"
+      aria-label="Peer deltas"
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+          Deltas
+        </h2>
+        {loading && <span className="text-xs text-slate-400">Scanning…</span>}
+        {!loading && flags.length === 0 && (
+          <span className="text-xs text-slate-500">No standout deltas in this group yet.</span>
+        )}
+        {!loading && hiddenCount > 0 && onViewMap && (
+          <button
+            type="button"
+            onClick={onViewMap}
+            className="ml-auto text-xs font-medium text-brand-700 hover:text-brand-800"
+          >
+            +{hiddenCount} more in delta map
+          </button>
+        )}
+      </div>
+
+      {!loading && flags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {flags.map((flag) => (
+            <button
+              key={flag.id}
+              type="button"
+              onClick={() => onFlagClick(flag)}
+              className={`max-w-full rounded-full border px-3 py-1.5 text-left text-xs font-medium transition hover:shadow-sm ${SEVERITY_STYLES[flag.severity]}`}
+              title={`${flag.severity} · ${flag.ruleId}`}
+            >
+              <span className="font-mono text-[10px] uppercase opacity-70">{flag.ticker}</span>
+              <span className="mx-1.5 opacity-40">·</span>
+              <span>{flag.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}

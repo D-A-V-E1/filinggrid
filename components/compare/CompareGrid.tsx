@@ -31,12 +31,17 @@ import ApiHealthBanner from "../ApiHealthBanner";
 import FilingColumnComponent from "./FilingColumn";
 import SectionNav from "./SectionNav";
 import FilingPeriodPicker from "./FilingPeriodPicker";
-import { fiscalYearFromPeriod, type ComparePeriod } from "@/lib/filing-period";
+import { fiscalYearFromPeriod, formFromPeriodId, type ComparePeriod } from "@/lib/filing-period";
 import PeerGroupsMenu from "./PeerGroupsMenu";
 import PaywallModal from "../billing/PaywallModal";
 import TickerSearchBar from "../TickerSearchBar";
 import DevTierToggle from "../DevTierToggle";
 import { getCompareColumnLayout, compareGridTemplateColumns } from "@/lib/compare-layout";
+import { scanDeltas, foreignFilerTooltip } from "@/lib/delta-engine";
+import { rankDeltas } from "@/lib/delta-rank";
+import type { DeltaFlag } from "@/lib/delta-types";
+import DeltaStrip from "./DeltaStrip";
+import SectionDeltaMap from "./SectionDeltaMap";
 
 interface CompareGridProps {
   tickers: string[];
@@ -81,6 +86,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const upgradedFullFinancialsRef = useRef(new Set<string>());
   const notesRetriedAfterParseRef = useRef(new Set<string>());
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
+  const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
+  const deltaMapRef = useRef<HTMLDivElement>(null);
 
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
 
@@ -234,6 +241,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     upgradedFullFinancialsRef.current = new Set();
     notesRetriedAfterParseRef.current = new Set();
     setUpgradingNotesTickers(new Set());
+    setMixedFilerBannerDismissed(false);
     setActiveSection(DEFAULT_ACTIVE_SECTION);
     setError("");
     setSectionsParseError("");
@@ -450,6 +458,47 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     setActiveSection(sectionId);
   }, []);
 
+  const deltaScan = useMemo(() => {
+    if (!data || tickers.length === 0) return null;
+    return scanDeltas({
+      tickers,
+      columns: data.columns,
+      catalog: navigableCatalog,
+      financialsByTicker,
+      financialsErrors,
+      fiscalYear: resolvedFiscalYear ?? null,
+      period,
+      isPro,
+    });
+  }, [
+    data,
+    tickers,
+    navigableCatalog,
+    financialsByTicker,
+    financialsErrors,
+    resolvedFiscalYear,
+    period,
+    isPro,
+  ]);
+
+  const stripFlags = useMemo(() => {
+    if (!deltaScan) return [];
+    return rankDeltas(deltaScan.flags, { cap: 7 });
+  }, [deltaScan]);
+
+  const handleDeltaFlagClick = useCallback(
+    (flag: DeltaFlag) => {
+      handleSectionSelect(flag.sectionId);
+    },
+    [handleSectionSelect]
+  );
+
+  const scrollToDeltaMap = useCallback(() => {
+    deltaMapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
+
+  const deltasLoading = loadingFinancials || loadingSections;
+
   const handlePaywall = useCallback(
     (reason: string, message: string) => {
       if (isPro) return;
@@ -539,6 +588,43 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           )}
         </div>
       </div>
+
+      {canShowCompare && !columnLimitExceeded && (
+        <>
+          {deltaScan?.mixedFilerBanner && !mixedFilerBannerDismissed && (
+            <div className="flex shrink-0 items-start gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
+              <p className="flex-1">{deltaScan.mixedFilerBanner}</p>
+              <button
+                type="button"
+                onClick={() => setMixedFilerBannerDismissed(true)}
+                className="shrink-0 font-medium text-amber-800 hover:text-amber-900"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          <DeltaStrip
+            flags={stripFlags}
+            loading={deltasLoading}
+            totalFlagCount={deltaScan?.flags.length}
+            onFlagClick={handleDeltaFlagClick}
+            onViewMap={deltaScan && deltaScan.flags.length > stripFlags.length ? scrollToDeltaMap : undefined}
+          />
+          {deltaScan && deltaScan.flags.length > 0 && (
+            <div ref={deltaMapRef}>
+              <SectionDeltaMap
+                tickers={tickers}
+                catalog={navigableCatalog}
+                columns={data?.columns ?? []}
+                flags={deltaScan.flags}
+                scannedCount={deltaScan.coverage.scannedSections}
+                sectionsWithDeltas={deltaScan.coverage.sectionsWithDeltas}
+                onCellClick={(ticker, sectionId) => handleSectionSelect(sectionId)}
+              />
+            </div>
+          )}
+        </>
+      )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {authLoading && tickers.length > 3 && !data && (
@@ -676,6 +762,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         fiscalYearFilter={resolvedFiscalYear ?? col.fiscal_year}
                         isPro={isPro}
                         onPaywall={handlePaywall}
+                        deltaFlagCount={deltaScan?.columnHeat[col.ticker] ?? 0}
+                        foreignFilerTooltip={foreignFilerTooltip(col.form ?? formFromPeriodId(period))}
                       />
                     );
                   })}
