@@ -26,7 +26,8 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
         r"item\s*7[\.\s—–-]*management", r"item\s*5[\.\s—–-]*operating",
         r"item\s*2[\.\s—–-]*management", r"item\s*2[\.\s—–-]*md&a",
         r"^management.s\s*discussion", r"^md&a$", r"^operating\s*and\s*financial\s*review",
-        r"results\s*of\s*operations",
+        r"^discussion\s*and\s*analysis", r"^financial\s*condition\s*and\s*results",
+        r"^results\s*of\s*operations",
     ]},
     {"id": "market-risk", "label": "Item 7A — Market Risk", "patterns": [
         r"item\s*7a", r"item\s*3[\.\s—–-]*quantitative", r"item\s*3[\.\s—–-]*market",
@@ -34,7 +35,8 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
     ]},
     {"id": "financial-statements", "label": "Item 8 — Financial Statements", "patterns": [
         r"item\s*8", r"item\s*1[\.\s—–-]*financial", r"^financial\s*statements",
-        r"condensed\s*consolidated\s*financial",
+        r"condensed\s*consolidated\s*financial", r"condensed\s*consolidated\s*statements",
+        r"^consolidated\s*statements\s*of",
     ]},
     {"id": "disagreements", "label": "Item 9 — Disagreements", "patterns": [r"item\s*9[\.\s—–-]*"]},
     {"id": "controls", "label": "Item 9A — Controls & Procedures", "patterns": [
@@ -153,9 +155,12 @@ _ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"operating\s*and\s*financial\s*review", re.IGNORECASE), "mda"),
     (re.compile(r"information\s*on\s*the\s*company", re.IGNORECASE), "business"),
     (re.compile(r"management.s\s*discussion|md&a", re.IGNORECASE), "mda"),
+    (re.compile(r"discussion\s*and\s*analysis", re.IGNORECASE), "mda"),
+    (re.compile(r"financial\s*condition\s*and\s*results", re.IGNORECASE), "mda"),
     (re.compile(r"risk\s*factors", re.IGNORECASE), "risk-factors"),
     (re.compile(r"financial\s*statements", re.IGNORECASE), "financial-statements"),
     (re.compile(r"condensed\s*consolidated", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"consolidated\s*statements\s*of", re.IGNORECASE), "financial-statements"),
     (re.compile(r"legal\s+and\s+administrative\s+proceed", re.IGNORECASE), "legal-proceedings"),
     (re.compile(r"legal\s*proceed", re.IGNORECASE), "legal-proceedings"),
     (re.compile(r"quantitative.*qualitative.*market|market\s*risk", re.IGNORECASE), "market-risk"),

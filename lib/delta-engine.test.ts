@@ -6,18 +6,19 @@ import type { DeltaSessionState } from "@/lib/delta-types";
 const LONG_NARRATIVE =
   "During the fiscal year we evaluated goodwill and intangible assets for impairment indicators across all reporting units.";
 
-function column(ticker: string, sections: Array<{ id: string; preview?: string }>): FilingColumn {
+function column(ticker: string, sections: Array<{ id: string; preview?: string; heading?: string; label?: string }>, form = "10-K"): FilingColumn {
   return {
     ticker,
     company_name: ticker,
     cik: "0000000000",
-    form: "10-K",
+    form,
     filing_date: "2024-06-30",
     report_date: "2024-06-30",
     fiscal_year: 2024,
     sections: sections.map((s) => ({
       id: s.id,
-      label: s.id,
+      label: s.label ?? s.id,
+      heading: s.heading ?? s.label ?? s.id,
       text_preview: s.preview ?? "",
     })),
     error: null,
@@ -464,5 +465,124 @@ describe("scanDeltas prose_number_gap", () => {
     });
 
     expect(flagsByRule(state, "prose_number_gap", "note-impairment")).toHaveLength(0);
+  });
+});
+
+describe("scanDeltas foreign filer section alignment", () => {
+  const annualCatalog = [
+    { id: "risk-factors", label: "Item 1A — Risk Factors" },
+    { id: "mda", label: "Item 7 — MD&A" },
+    { id: "market-risk", label: "Item 7A — Market Risk" },
+    { id: "controls", label: "Item 9A — Controls & Procedures" },
+    { id: "unresolved-staff", label: "Item 1B — Unresolved Staff Comments" },
+  ];
+
+  it("does not flag BABA missing risk-factors when 20-F heading alias is present", () => {
+    const state = baseState({
+      catalog: annualCatalog,
+      columns: [
+        column("AMZN", [{ id: "risk-factors", preview: LONG_NARRATIVE }]),
+        column("WMT", [{ id: "risk-factors", preview: LONG_NARRATIVE }]),
+        column(
+          "BABA",
+          [{ id: "full-document", heading: "D. Risk Factors", label: "D. Risk Factors", preview: LONG_NARRATIVE }],
+          "20-F"
+        ),
+      ],
+    });
+
+    expect(flagsByRule(state, "missing_section", "risk-factors")).toHaveLength(0);
+  });
+
+  it("suppresses missing controls for 20-F when domestic peers have Item 9A", () => {
+    const state = baseState({
+      catalog: annualCatalog,
+      columns: [
+        column("AMZN", [{ id: "controls", preview: LONG_NARRATIVE }]),
+        column("WMT", [{ id: "controls", preview: LONG_NARRATIVE }]),
+        column("BABA", [{ id: "mda", preview: LONG_NARRATIVE }], "20-F"),
+      ],
+    });
+
+    expect(flagsByRule(state, "missing_section", "controls")).toHaveLength(0);
+  });
+
+  it("mixed interim AMZN 10-Q + BABA 6-K: mda via heading alias avoids missing_section", () => {
+    const interimCatalog = [
+      { id: "mda", label: "Item 2 — MD&A" },
+      { id: "financial-statements", label: "Item 1 — Financial Statements" },
+      { id: "market-risk", label: "Item 3 — Market Risk" },
+    ];
+    const state = baseState({
+      catalog: interimCatalog,
+      period: "interim-2025-Q3",
+      fiscalYear: 2025,
+      columns: [
+        column("AMZN", [{ id: "mda", preview: LONG_NARRATIVE }], "10-Q"),
+        column("WMT", [{ id: "mda", preview: LONG_NARRATIVE }], "10-Q"),
+        column(
+          "BABA",
+          [
+            {
+              id: "full-document",
+              heading: "Discussion and Analysis",
+              label: "Discussion and Analysis",
+              preview: LONG_NARRATIVE,
+            },
+          ],
+          "6-K"
+        ),
+      ],
+    });
+
+    expect(flagsByRule(state, "missing_section", "mda")).toHaveLength(0);
+  });
+
+  it("emits metrics_not_comparable for mixed domestic 10-Q and foreign 6-K interim", () => {
+    const state = baseState({
+      period: "interim-2025-Q3",
+      fiscalYear: 2025,
+      columns: [
+        column("AMZN", [{ id: "mda", preview: LONG_NARRATIVE }], "10-Q"),
+        column("BABA", [{ id: "mda", preview: LONG_NARRATIVE }], "6-K"),
+      ],
+      financialsByTicker: {
+        AMZN: {
+          ticker: "AMZN",
+          cik: "",
+          entity_name: "AMZN",
+          fiscal_year_filter: 2025,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          metrics: {
+            revenue: {
+              label: "revenue",
+              concept: "revenue",
+              quarterly: [{ fy: 2025, fp: "Q3", value: 100_000_000_000 }],
+            },
+          },
+        },
+        BABA: {
+          ticker: "BABA",
+          cik: "",
+          entity_name: "BABA",
+          fiscal_year_filter: 2025,
+          source: "sec_html_filing",
+          from_cache: false,
+          annual_summary: [],
+          metrics: {
+            revenue: {
+              label: "revenue",
+              concept: "revenue",
+              quarterly: [{ fy: 2025, fp: "Q3", value: 90_000_000_000 }],
+            },
+          },
+        },
+      },
+    });
+
+    expect(flagsByRule(state, "metrics_not_comparable_mixed_filers")).toHaveLength(1);
+    expect(flagsByRule(state, "headline_vs_median")).toHaveLength(0);
   });
 });

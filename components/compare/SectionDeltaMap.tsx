@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { FilingColumn } from "@/lib/api";
 import type { DeltaFlag, DeltaSeverity } from "@/lib/delta-types";
 import { flagsForSection } from "@/lib/delta-engine";
+import { columnHasCatalogSection } from "@/lib/section-presence";
 import {
   cellFlagsTooltip,
   DELTA_MAP_ALIGNED_LABEL,
@@ -41,7 +42,7 @@ const SEVERITY_CELL_TONE: Record<DeltaSeverity, string> = {
 const SEVERITY_ORDER: Record<DeltaSeverity, number> = { P1: 0, P2: 1, P3: 2 };
 
 function cellHasSection(col: FilingColumn | undefined, sectionId: string): boolean {
-  return col?.sections.some((s) => s.id === sectionId) ?? false;
+  return col != null && columnHasCatalogSection(col, sectionId);
 }
 
 function severityTone(severity: DeltaSeverity): string {

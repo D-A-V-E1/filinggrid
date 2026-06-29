@@ -1,5 +1,11 @@
 import type { FilingColumn, FinancialsXbrl, NoteSectionXbrl } from "@/lib/api";
-import { formFromPeriodId } from "@/lib/filing-period";
+import {
+  columnHasCatalogSection,
+  isDomesticForm,
+  isForeignForm,
+  resolveColumnForm,
+  shouldSuppressMissingSection,
+} from "@/lib/section-presence";
 import { GAAP_STATEMENT_SECTION_IDS, getCatalogOrder } from "@/lib/sections";
 import {
   contingencyEmphasisLabel,
@@ -58,19 +64,11 @@ function flagId(ruleId: string, ticker: string, sectionId: string, suffix = ""):
 }
 
 function resolveForm(col: FilingColumn, period?: string): string | null {
-  return col.form ?? formFromPeriodId(period);
+  return resolveColumnForm(col, period);
 }
 
-function isDomesticForm(form: string | null): boolean {
-  if (!form) return true;
-  const base = form.replace(/\/A$/i, "").toUpperCase();
-  return base === "10-K" || base === "10-Q";
-}
-
-function isForeignForm(form: string | null): boolean {
-  if (!form) return false;
-  const base = form.replace(/\/A$/i, "").toUpperCase();
-  return base === "20-F" || base === "6-K";
+function columnHasSection(col: FilingColumn, sectionId: string): boolean {
+  return columnHasCatalogSection(col, sectionId);
 }
 
 function detectMixedFilers(columns: FilingColumn[], period?: string): {
@@ -171,10 +169,6 @@ function sectionLabel(catalog: { id: string; label: string }[], sectionId: strin
   return found.label.replace(/^Item \d+[A-Z]? — /, "").replace(/^Note — /, "");
 }
 
-function columnHasSection(col: FilingColumn, sectionId: string): boolean {
-  return col.sections.some((s) => s.id === sectionId);
-}
-
 function sectionPreview(col: FilingColumn, sectionId: string): string {
   return col.sections.find((s) => s.id === sectionId)?.text_preview?.trim() ?? "";
 }
@@ -271,6 +265,7 @@ function scanMissingSections(
 
     const label = sectionLabel(state.catalog, sectionId);
     for (const col of peersWithout) {
+      if (shouldSuppressMissingSection(col, sectionId, state.period)) continue;
       pushFlag(flags, {
         id: flagId("missing_section", col.ticker, sectionId),
         ruleId: "missing_section",

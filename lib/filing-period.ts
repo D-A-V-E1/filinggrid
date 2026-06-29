@@ -79,6 +79,9 @@ export function normalizeComparePeriodId(period?: string | null): string | null 
   const interim = period.match(/^interim-(\d{4})-(Q[1-4])(?:-.+)?$/i);
   if (interim) return `interim-${interim[1]}-${interim[2].toUpperCase()}`;
   if (/^annual-\d{4}-20f$/i.test(period)) return period.replace(/-20f$/i, "");
+  if (/^interim-\d{4}-(Q[1-4])-6k$/i.test(period)) {
+    return period.replace(/-6k$/i, "");
+  }
   return period;
 }
 
@@ -87,9 +90,14 @@ export function formFromPeriodId(period?: string): string | null {
   if (!period) return null;
   if (period.startsWith("interim-")) {
     const slotMatch = period.match(/interim-\d{4}-(Q[1-4])-(.+)$/i);
-    return slotMatch ? slotMatch[2].toUpperCase() : null;
+    if (!slotMatch) return null;
+    const raw = slotMatch[2].toUpperCase();
+    if (raw === "6K" || raw === "6-K") return "6-K";
+    if (raw === "10Q" || raw === "10-Q") return "10-Q";
+    return raw;
   }
   if (period.includes("-20f")) return "20-F";
+  if (/-6k$/i.test(period)) return "6-K";
   if (period.startsWith("annual-")) return null;
   return null;
 }

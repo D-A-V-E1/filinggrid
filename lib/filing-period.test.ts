@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sectionHtmlRequestParams } from "@/lib/filing-period";
+import { formFromPeriodId, normalizeComparePeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
 
 describe("sectionHtmlRequestParams", () => {
   it("returns null period params for default compare (no URL period/year)", () => {
@@ -36,5 +36,10 @@ describe("sectionHtmlRequestParams", () => {
   it("works for note sections (note-eps) same as financial-statements", () => {
     // Section id is not part of params — only compare period matters for gating.
     expect(sectionHtmlRequestParams(null, null)).toEqual({ fiscalYear: null, period: null });
+  });
+
+  it("infers 6-K from interim period id suffix", () => {
+    expect(formFromPeriodId("interim-2025-Q3-6K")).toBe("6-K");
+    expect(normalizeComparePeriodId("interim-2025-Q3-6K")).toBe("interim-2025-Q3");
   });
 });
