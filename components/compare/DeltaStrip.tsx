@@ -35,7 +35,7 @@ export default function DeltaStrip({
 
   return (
     <section
-      className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-3"
+      className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-brand-50/30 px-4 py-3"
       aria-label="Peer deltas"
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -57,9 +57,9 @@ export default function DeltaStrip({
           <button
             type="button"
             onClick={onViewMap}
-            className="ml-auto text-xs font-medium text-brand-700 hover:text-brand-800"
+            className="ml-auto rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 transition hover:bg-brand-100 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            See all {totalFlagCount} deltas
+            Open section map · {totalFlagCount} total
           </button>
         )}
       </div>
