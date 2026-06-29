@@ -39,10 +39,10 @@ export default function DeltaReportLinkBar({
       }`}
       aria-label="Section delta map summary"
     >
-      <div className="flex w-full flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
-        <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+      <div className="flex w-full flex-col gap-1.5 px-4 py-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
           <span
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold shadow-md ${
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-bold shadow-sm ${
               hasFlags
                 ? "bg-brand-600 text-white shadow-brand-600/25"
                 : "bg-slate-200 text-slate-600 shadow-slate-200/50"

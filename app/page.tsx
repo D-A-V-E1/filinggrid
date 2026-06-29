@@ -75,12 +75,12 @@ export default function HomePage() {
       <ProCallout />
 
       {/* Popular comparisons */}
-      <section className="py-12">
+      <section className="border-t border-slate-200 py-8">
         <div className="mx-auto max-w-screen-xl px-4">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
             Popular comparisons
           </h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-xs text-slate-500">
             Jump in with a preset peer set, or search any tickers above.
           </p>
           <PopularCompareLinks />
