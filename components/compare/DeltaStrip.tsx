@@ -114,7 +114,7 @@ export default function DeltaStrip({
               onClick={viewMoreHandler}
               className="w-full text-left text-xs font-medium text-brand-700 hover:text-brand-800 hover:underline"
             >
-              +{moreInMapCount} more in section map
+              +{moreInMapCount} more in delta report
             </button>
           </footer>
         )}
@@ -148,7 +148,7 @@ export default function DeltaStrip({
             onClick={onViewMap}
             className="ml-auto rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 transition hover:bg-brand-100 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            Open section map · {totalFlagCount} total
+            Open delta report · {totalFlagCount} total
           </button>
         )}
       </div>

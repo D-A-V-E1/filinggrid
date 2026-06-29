@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ApiError,
   fetchFinancials,
@@ -20,7 +21,15 @@ import {
   DEFAULT_ACTIVE_SECTION,
   FINANCIALS_BOOTSTRAP_CATALOG,
 } from "@/lib/sections";
-import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta, saveParseMetaDraft } from "@/lib/parse-cache";
+import {
+  clearParseMeta,
+  hasSectionIndex,
+  isRetriableParseError,
+  loadParseMeta,
+  parseMetaCacheKey,
+  saveParseMeta,
+  saveParseMetaDraft,
+} from "@/lib/parse-cache";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
@@ -49,16 +58,20 @@ import {
 } from "@/lib/delta-surface";
 import type { DeltaFlag } from "@/lib/delta-types";
 import DeltaLeftDrawer from "./DeltaLeftDrawer";
-import SectionDeltaMap from "./SectionDeltaMap";
+import DeltaReportLinkBar from "./DeltaReportLinkBar";
+import { deltaReportPath } from "@/lib/delta-report";
 
 interface CompareGridProps {
+  peerSlug: string;
   tickers: string[];
   fiscalYear?: number;
   period?: string;
   slugError?: string | null;
 }
 
-export default function CompareGrid({ tickers, fiscalYear, period, slugError }: CompareGridProps) {
+export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slugError }: CompareGridProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const comparePeriod = useMemo<ComparePeriod>(
     () => ({ fiscalYear, period }),
     [fiscalYear, period]
@@ -98,8 +111,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const notesRetriedAfterParseRef = useRef(new Set<string>());
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
-  const [deltaMapExpanded, setDeltaMapExpanded] = useState(false);
   const [deltaPanelOpen, setDeltaPanelOpen] = useState(false);
+  const focusHandledRef = useRef(false);
   const [sectionScrollRequest, setSectionScrollRequest] = useState(0);
   const [sectionFocusTicker, setSectionFocusTicker] = useState<string | null>(null);
   const [sectionFocusRowKey, setSectionFocusRowKey] = useState<string | null>(null);
@@ -277,7 +290,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     notesRetriedAfterParseRef.current = new Set();
     setUpgradingNotesTickers(new Set());
     setMixedFilerBannerDismissed(false);
-    setDeltaMapExpanded(false);
+    focusHandledRef.current = false;
     setSectionFocusTicker(null);
     setSectionFocusRowKey(null);
     setActiveSection(DEFAULT_ACTIVE_SECTION);
@@ -553,6 +566,17 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     return data.columns.filter((c) => c.error);
   }, [data]);
 
+  const canRetryFailedColumns = useMemo(
+    () => columnParseErrors.some((c) => isRetriableParseError(c.error)),
+    [columnParseErrors]
+  );
+
+  const retryFailedColumns = useCallback(() => {
+    clearParseMeta(cacheKey);
+    compareLoadKeyRef.current = null;
+    loadFilings();
+  }, [cacheKey, loadFilings]);
+
   const stripFlags = useMemo(() => {
     if (!deltaScan) return [];
     return rankMainstreamStrip(deltaScan.flags, MAINSTREAM_STRIP_CAP);
@@ -585,17 +609,26 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     [handleSectionSelect]
   );
 
-  const openDeltaMap = useCallback(() => {
+  const openDeltaReport = useCallback(() => {
     setDeltaPanelOpen(false);
-    setDeltaMapExpanded(true);
-  }, []);
+    router.push(deltaReportPath(peerSlug, comparePeriod));
+  }, [router, peerSlug, comparePeriod]);
 
   const openKeyDeltas = useCallback(() => {
-    setDeltaMapExpanded(false);
     setDeltaPanelOpen(true);
   }, []);
 
   const deltasLoading = loadingFinancials || loadingSections;
+
+  useEffect(() => {
+    if (focusHandledRef.current || !data || availableSectionIds.size === 0) return;
+    const section = searchParams.get("section");
+    const ticker = searchParams.get("ticker");
+    const row = searchParams.get("row");
+    if (!section) return;
+    focusHandledRef.current = true;
+    handleSectionSelect(section, ticker ?? undefined, row ?? undefined);
+  }, [data, availableSectionIds.size, searchParams, handleSectionSelect]);
 
   const handlePaywall = useCallback(
     (reason: string, message: string) => {
@@ -688,7 +721,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       </div>
 
       {canShowCompare && !columnLimitExceeded && (
-        <div className={`relative shrink-0 ${deltaMapExpanded ? "z-[45]" : "z-20"}`}>
+        <div className="relative shrink-0 z-20">
           {deltaScan?.mixedFilerBanner && !mixedFilerBannerDismissed && (
             <div className="flex shrink-0 items-start gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
               <p className="flex-1">{deltaScan.mixedFilerBanner}</p>
@@ -702,22 +735,13 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
             </div>
           )}
           {mapFlags.length > 0 && (
-            <SectionDeltaMap
+            <DeltaReportLinkBar
+              peerSlug={peerSlug}
               tickers={tickers}
-              catalog={navigableCatalog}
-              columns={data?.columns ?? []}
-              financialsByTicker={financialsByTicker}
+              period={comparePeriod}
               flags={mapFlags}
               scannedCount={deltaScan?.coverage.scannedSections ?? 0}
               sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
-              expanded={deltaMapExpanded}
-              onExpandedChange={setDeltaMapExpanded}
-              keyDeltaCount={stripFlags.length}
-              onOpenKeyDeltas={stripFlags.length > 0 || deltasLoading ? openKeyDeltas : undefined}
-              onCellClick={(ticker, sectionId, flag) => {
-                handleSectionSelect(sectionId, ticker, flag?.rowKey);
-                setDeltaMapExpanded(false);
-              }}
             />
           )}
         </div>
@@ -821,20 +845,35 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               totalFlagCount={mapCoverage.flagCount}
               tagline={MAINSTREAM_STRIP_TAGLINE}
               onFlagClick={handleDeltaFlagClick}
-              onViewMoreInMap={mapFlags.length > 0 ? openDeltaMap : undefined}
+              onViewMoreInMap={mapFlags.length > 0 ? openDeltaReport : undefined}
             />
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {columnParseErrors.length > 0 && (
                 <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-900">
-                  {columnParseErrors.length === data.columns.length ? (
-                    <span>Could not parse filings: {columnParseErrors.map((c) => c.error).filter(Boolean).join(" · ")}</span>
-                  ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
-                      Could not parse{" "}
-                      {columnParseErrors.map((c) => `${c.ticker} (${c.error ?? "unknown error"})`).join("; ")}
-                      . Other tickers loaded normally — refresh to retry failed columns.
+                      {columnParseErrors.length === data.columns.length ? (
+                        <>Could not parse filings: {columnParseErrors.map((c) => c.error).filter(Boolean).join(" · ")}</>
+                      ) : (
+                        <>
+                          Could not parse{" "}
+                          {columnParseErrors.map((c) => `${c.ticker} (${c.error ?? "unknown error"})`).join("; ")}
+                          . Other tickers loaded normally
+                          {canRetryFailedColumns ? " — use Retry to refetch failed columns." : " — refresh to retry failed columns."}
+                        </>
+                      )}
                     </span>
-                  )}
+                    {canRetryFailedColumns && (
+                      <button
+                        type="button"
+                        onClick={retryFailedColumns}
+                        disabled={loadingSections}
+                        className="shrink-0 rounded border border-red-300 bg-white px-2.5 py-1 font-sans text-[11px] font-semibold text-red-800 shadow-sm transition hover:bg-red-100 disabled:opacity-60"
+                      >
+                        {loadingSections ? "Retrying…" : "Retry failed columns"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               {sectionsParseError && (

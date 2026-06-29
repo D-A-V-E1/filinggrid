@@ -388,62 +388,6 @@
     }
   }
 
-  .delta-map-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    border: none;
-    padding: 0;
-    background: rgb(15 23 42 / 0.22);
-    backdrop-filter: blur(2px);
-    cursor: default;
-  }
-
-  .delta-map-panel {
-    position: fixed;
-    inset-inline: 0;
-    z-index: 50;
-    display: flex;
-    max-height: min(56rem, calc(100vh - var(--delta-map-panel-top, 0px) - 0.75rem));
-    flex-direction: column;
-    overflow: hidden;
-    border-bottom: 1px solid rgb(226 232 240);
-    background: rgb(255 255 255);
-    box-shadow:
-      0 4px 6px -1px rgb(0 0 0 / 0.06),
-      0 20px 40px -8px rgb(0 0 0 / 0.14);
-  }
-
-  .delta-map-overlay-scroll {
-    max-height: min(48rem, calc(100vh - var(--delta-map-panel-top, 0px) - 6.5rem));
-    overflow: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .delta-map-overlay-scroll thead th {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    background: white;
-    box-shadow: 0 1px 0 rgb(226 232 240);
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .delta-map-trigger-pulse {
-      animation: delta-map-pulse 2.5s ease-in-out infinite;
-    }
-
-    @keyframes delta-map-pulse {
-      0%,
-      100% {
-        box-shadow: 0 0 0 0 rgb(5 150 105 / 0.35);
-      }
-      50% {
-        box-shadow: 0 0 0 4px rgb(5 150 105 / 0);
-      }
-    }
-  }
 
   .filing-column-scroll {
     min-width: 0;

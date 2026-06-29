@@ -1,5 +1,4 @@
 import { checkApiHealth } from "@/lib/api";
-import { agentDebugLog } from "@/lib/debug-log";
 
 /** Backoff between API warmup probes (Render cold start can exceed 30s). */
 export const WARMUP_BACKOFF_MS = [0, 2000, 5000, 10000, 20000, 30000];
@@ -46,8 +45,7 @@ export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   options: RetryWithBackoffOptions<T> = {}
 ): Promise<T | null> {
-  const { signal, location = "lib/api-warmup.ts:retryWithBackoff", isSuccess = () => true } =
-    options;
+  const { signal, isSuccess = () => true } = options;
 
   for (let attempt = 0; attempt < WARMUP_BACKOFF_MS.length; attempt++) {
     if (signal?.aborted) return null;
@@ -59,30 +57,13 @@ export async function retryWithBackoff<T>(
       }
     }
 
-    const started = Date.now();
     try {
       const result = await fn();
       if (isSuccess(result)) {
-        agentDebugLog(location, "warmup ok", { attempt, ms: Date.now() - started }, "H3");
         return result;
       }
-      agentDebugLog(
-        location,
-        "warmup probe not ready",
-        { attempt, ms: Date.now() - started },
-        "H2"
-      );
-    } catch (err) {
-      agentDebugLog(
-        location,
-        "warmup failed",
-        {
-          attempt,
-          ms: Date.now() - started,
-          error: err instanceof Error ? err.name : "unknown",
-        },
-        "H1"
-      );
+    } catch {
+      // retry with backoff
     }
   }
 

@@ -15,6 +15,7 @@ export default async function ComparePage({ params, searchParams }: Props) {
 
   return (
     <CompareGrid
+      peerSlug={peer_slug}
       tickers={tickers}
       fiscalYear={fiscalYear}
       period={period}
