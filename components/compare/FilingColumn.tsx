@@ -40,6 +40,9 @@ import { sanitizeExcerptHtml } from "@/lib/sanitize-excerpt-html";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
 import { forwardVerticalWheelFromHorizontalScrollContainer, attachFilingTableWheelForwarding } from "@/lib/forward-vertical-wheel";
+import {
+  scrollFilingColumnToTop,
+} from "@/lib/filing-column-scroll";
 import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
@@ -69,19 +72,6 @@ interface FilingColumnProps {
   foreignFilerTooltip?: string | null;
   sectionScrollRequest?: number;
   focusRowKey?: string | null;
-}
-
-function scrollColumnContentToTop(scrollEl: HTMLDivElement | null): void {
-  if (!scrollEl) return;
-  const apply = () => {
-    scrollEl.scrollTop = 0;
-    scrollEl.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  };
-  apply();
-  requestAnimationFrame(() => {
-    apply();
-    requestAnimationFrame(apply);
-  });
 }
 
 function scrollMetricRowIntoView(scrollEl: HTMLDivElement | null, rowKey: string): boolean {
@@ -573,6 +563,8 @@ function FilingColumn({
     fiscalYearFilter ?? financialsXbrl?.fiscal_year_filter ?? fiscalYear ?? null;
   const scrollRef = useRef<HTMLDivElement>(null);
   const bodyTopRef = useRef<HTMLDivElement>(null);
+  const activeSectionRef = useRef(activeSection);
+  activeSectionRef.current = activeSection;
   const scrollResetActiveRef = useRef(false);
   const columnContentKey = `${activeSection ?? "none"}:${sectionScrollRequest}`;
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
@@ -748,20 +740,17 @@ function FilingColumn({
       scrollResetActiveRef.current = false;
       return;
     }
-    scrollColumnContentToTop(scrollRef.current);
+    scrollFilingColumnToTop(scrollRef.current);
     scrollResetActiveRef.current = true;
   }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
 
   useLayoutEffect(() => {
     if (!activeSection) return;
-    if (sectionsPending) return;
-    if (notesPending && activeSection.startsWith("note-")) return;
-    if (financialsPending && activeSection === "financial-statements") return;
     if (focusRowKey && scrollMetricRowIntoView(scrollRef.current, focusRowKey)) {
       scrollResetActiveRef.current = false;
       return;
     }
-    scrollColumnContentToTop(scrollRef.current);
+    scrollFilingColumnToTop(scrollRef.current);
     scrollResetActiveRef.current = true;
   }, [
     activeSection,
@@ -777,6 +766,32 @@ function FilingColumn({
   ]);
 
   useEffect(() => {
+    if (!activeSection) return;
+    if (focusRowKey) return;
+
+    scrollFilingColumnToTop(scrollRef.current);
+    const t50 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 50);
+    const t300 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 300);
+    const t1000 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 1000);
+
+    return () => {
+      window.clearTimeout(t50);
+      window.clearTimeout(t300);
+      window.clearTimeout(t1000);
+    };
+  }, [
+    activeSection,
+    sectionsPending,
+    notesPending,
+    financialsPending,
+    sectionHtml,
+    showHtmlExcerpt,
+    loadingHtml,
+    sectionScrollRequest,
+    focusRowKey,
+  ]);
+
+  useEffect(() => {
     scrollResetActiveRef.current = true;
     const scrollEl = scrollRef.current;
     const bodyEl = bodyTopRef.current;
@@ -784,13 +799,13 @@ function FilingColumn({
 
     const observer = new ResizeObserver(() => {
       if (!scrollResetActiveRef.current) return;
-      scrollColumnContentToTop(scrollEl);
+      scrollFilingColumnToTop(scrollEl);
     });
     observer.observe(bodyEl);
 
     const stop = window.setTimeout(() => {
       scrollResetActiveRef.current = false;
-    }, 1200);
+    }, 2500);
 
     return () => {
       observer.disconnect();
@@ -852,17 +867,18 @@ function FilingColumn({
 
     if (sectionHtml) {
       setShowHtmlExcerpt(true);
-      scrollColumnContentToTop(scrollRef.current);
+      scrollFilingColumnToTop(scrollRef.current);
       return;
     }
 
     if (!sectionHtmlRequest) return;
 
+    const requestedSectionId = sectionHtmlRequest.sectionId;
     const cached = readCachedSectionHtml(sectionHtmlRequest);
     if (cached) {
       setSectionHtml(sanitizeExcerptHtml(cached));
       setShowHtmlExcerpt(true);
-      scrollColumnContentToTop(scrollRef.current);
+      scrollFilingColumnToTop(scrollRef.current);
       return;
     }
 
@@ -871,6 +887,7 @@ function FilingColumn({
 
     fetchSectionHtmlDeduped(sectionHtmlRequest)
       .then((html) => {
+        if (requestedSectionId !== activeSectionRef.current) return;
         if (!html?.trim()) {
           setSectionError("No excerpt available for this section in the selected filing.");
           setShowHtmlExcerpt(false);
@@ -878,9 +895,10 @@ function FilingColumn({
         }
         setSectionHtml(html);
         setShowHtmlExcerpt(true);
-        scrollColumnContentToTop(scrollRef.current);
+        scrollFilingColumnToTop(scrollRef.current);
       })
       .catch((err) => {
+        if (requestedSectionId !== activeSectionRef.current) return;
         if (err instanceof ApiError && err.isPaywall) {
           const detail = err.detail;
           const reason =
@@ -973,11 +991,12 @@ function FilingColumn({
       </div>
 
       <div
+        key={columnContentKey}
         ref={scrollRef}
+        data-filing-column-scroll=""
         className="filing-column-scroll min-h-0 flex-1 overflow-y-scroll overscroll-y-contain"
       >
         <div
-          key={columnContentKey}
           ref={bodyTopRef}
           className={`compare-column-body ${isCompact ? "px-3.5 py-3.5" : "px-5 py-5"}`}
         >

@@ -59,6 +59,10 @@ import {
 import type { DeltaFlag } from "@/lib/delta-types";
 import DeltaReportLinkBar from "./DeltaReportLinkBar";
 import { deltaReportPath } from "@/lib/delta-report";
+import {
+  resetCompareViewScroll,
+  resetCompareViewScrollWhenReady,
+} from "@/lib/filing-column-scroll";
 
 interface CompareGridProps {
   peerSlug: string;
@@ -149,22 +153,19 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     [scrollTickerColumnIntoView]
   );
 
-  const resetFilingColumnScrollPositions = useCallback(() => {
-    const container = columnsScrollRef.current;
-    if (!container) return;
-    container.querySelectorAll<HTMLElement>(".filing-column-scroll").forEach((el) => {
-      el.scrollTop = 0;
-      el.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    });
-  }, []);
-
-  const resetFilingColumnScrollWhenReady = useCallback(
-    (attemptsLeft = 8) => {
-      resetFilingColumnScrollPositions();
-      if (attemptsLeft <= 0) return;
-      requestAnimationFrame(() => resetFilingColumnScrollWhenReady(attemptsLeft - 1));
+  const handleSectionSelect = useCallback(
+    (sectionId: string, focusTicker?: string, rowKey?: string) => {
+      resetCompareViewScroll();
+      setActiveSection(sectionId);
+      setSectionScrollRequest((n) => n + 1);
+      setSectionFocusTicker(focusTicker ?? null);
+      setSectionFocusRowKey(rowKey ?? null);
+      if (focusTicker) {
+        scrollTickerColumnIntoViewWhenReady(focusTicker);
+      }
+      requestAnimationFrame(() => resetCompareViewScrollWhenReady());
     },
-    [resetFilingColumnScrollPositions]
+    [scrollTickerColumnIntoViewWhenReady]
   );
 
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
@@ -551,29 +552,6 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     tickers.length,
     isPro,
   ]);
-
-  const handleSectionSelect = useCallback(
-    (sectionId: string, focusTicker?: string, rowKey?: string) => {
-      if (!rowKey) {
-        resetFilingColumnScrollPositions();
-      }
-      setActiveSection(sectionId);
-      setSectionScrollRequest((n) => n + 1);
-      setSectionFocusTicker(focusTicker ?? null);
-      setSectionFocusRowKey(rowKey ?? null);
-      if (focusTicker) {
-        scrollTickerColumnIntoViewWhenReady(focusTicker);
-      }
-      if (!rowKey) {
-        requestAnimationFrame(() => resetFilingColumnScrollWhenReady());
-      }
-    },
-    [
-      resetFilingColumnScrollPositions,
-      resetFilingColumnScrollWhenReady,
-      scrollTickerColumnIntoViewWhenReady,
-    ]
-  );
 
   const deltaScan = useMemo(() => {
     if (!data || tickers.length === 0) return null;
