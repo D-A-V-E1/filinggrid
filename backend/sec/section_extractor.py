@@ -734,7 +734,8 @@ def _extract_between(
     outer = _outermost_blocks(slice_blocks)
     html = "".join(str(b) for b in outer)
     raw = html if html else str(start)
-    return _normalize_excerpt_html(raw)
+    normalized = _safe_normalize_excerpt_html(raw)
+    return normalized if normalized is not None else raw
 
 
 _IX_TAG = re.compile(r"^ix:", re.I)
@@ -884,6 +885,26 @@ def _wrap_tables_for_display(soup: BeautifulSoup) -> None:
         wrap["class"] = [_TABLE_WRAP_CLASS]
         table.insert_before(wrap)
         wrap.append(table.extract())
+
+
+_MAX_SECTION_HTML_BYTES = 2_000_000
+
+
+def _safe_normalize_excerpt_html(html: str | None) -> str | None:
+    """Normalize excerpt HTML; fall back to raw input or None when unusable."""
+    if not html or not isinstance(html, str):
+        return None
+    stripped = html.strip()
+    if not stripped:
+        return None
+    if len(stripped.encode("utf-8", errors="replace")) > _MAX_SECTION_HTML_BYTES:
+        return None
+    if len(stripped) < 5:
+        return stripped
+    try:
+        return _normalize_excerpt_html(stripped)
+    except Exception:
+        return stripped if len(stripped.encode("utf-8", errors="replace")) <= _MAX_SECTION_HTML_BYTES else None
 
 
 def _normalize_excerpt_html(html: str) -> str:

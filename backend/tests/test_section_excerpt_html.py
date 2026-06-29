@@ -1,6 +1,12 @@
 """Tests for SEC filing excerpt HTML normalization."""
 
-from sec.section_extractor import _normalize_excerpt_html
+from sec.section_extractor import _normalize_excerpt_html, _safe_normalize_excerpt_html
+
+
+def test_safe_normalize_returns_raw_on_failure():
+    assert _safe_normalize_excerpt_html(None) is None
+    assert _safe_normalize_excerpt_html("") is None
+    assert _safe_normalize_excerpt_html("  hi  ") == "hi"
 
 
 def test_unwraps_spans_and_inserts_word_spacing():

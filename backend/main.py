@@ -50,7 +50,11 @@ class GZipExceptStreamMiddleware:
         self.gzip = GZipMiddleware(app, minimum_size=minimum_size)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and scope.get("path") in ("/parse/stream", "/filings/financials/batch"):
+        if scope["type"] == "http" and scope.get("path") in (
+            "/parse/stream",
+            "/filings/financials/batch",
+            "/parse/section",
+        ):
             await self.app(scope, receive, send)
             return
         await self.gzip(scope, receive, send)

@@ -75,6 +75,7 @@ import {
   resetAllFilingColumnScrollsExcept,
 } from "@/lib/filing-column-scroll";
 import { isMetricFocusDeltaFlag } from "@/lib/delta-labels";
+import { computeDeltasSettling, NOTES_UPGRADE_TIMEOUT_MS } from "@/lib/compare-settling";
 
 interface CompareGridProps {
   peerSlug: string;
@@ -132,6 +133,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     new Set<string>(peekCompareSession(cacheKey)?.upgradedTickers ?? [])
   );
   const notesRetriedAfterParseRef = useRef(new Set<string>());
+  const notesUpgradeStartedAtRef = useRef(new Map<string, number>());
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
   const focusHandledRef = useRef(false);
@@ -286,7 +288,16 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       const upper = ticker.toUpperCase();
       if (upgradedFullFinancialsRef.current.has(upper)) return;
       upgradedFullFinancialsRef.current.add(upper);
+      notesUpgradeStartedAtRef.current.set(upper, Date.now());
       setUpgradingNotesTickers((prev) => new Set(prev).add(upper));
+      const timeoutId = window.setTimeout(() => {
+        setUpgradingNotesTickers((prev) => {
+          if (!prev.has(upper)) return prev;
+          const next = new Set(prev);
+          next.delete(upper);
+          return next;
+        });
+      }, NOTES_UPGRADE_TIMEOUT_MS);
       void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
         .then((full) => {
           setFinancialsByTicker((prev) => ({ ...prev, [upper]: full }));
@@ -303,6 +314,8 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
           setFinancialsErrors((prev) => ({ ...prev, [upper]: message }));
         })
         .finally(() => {
+          window.clearTimeout(timeoutId);
+          notesUpgradeStartedAtRef.current.delete(upper);
           setUpgradingNotesTickers((prev) => {
             const next = new Set(prev);
             next.delete(upper);
@@ -719,34 +732,32 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const financialsDeferredPending = financialsByTicker !== deferredFinancialsByTicker;
 
-  const deltasSettling = useMemo(() => {
-    if (financialsDeferredPending) return true;
-    if (!data || loadingSections || loadingFinancials) return true;
-    if (loadingTickers.length > 0) return true;
-    for (const ticker of tickers) {
-      const upper = ticker.toUpperCase();
-      if (upgradingNotesTickers.has(upper)) return true;
-      if (financialsErrors[upper]) continue;
-      const fin = financialsByTicker[upper];
-      if (!fin) return true;
-      if (fin.headline_only !== false) {
-        const notes = fin.notes_xbrl;
-        const hasNotes = notes && Object.keys(notes).length > 0;
-        if (!hasNotes) return true;
-      }
-    }
-    return false;
-  }, [
-    financialsDeferredPending,
-    data,
-    loadingSections,
-    loadingFinancials,
-    loadingTickers.length,
-    tickers,
-    financialsByTicker,
-    upgradingNotesTickers,
-    financialsErrors,
-  ]);
+  const deltasSettling = useMemo(
+    () =>
+      computeDeltasSettling({
+        financialsDeferredPending,
+        data,
+        loadingSections,
+        loadingFinancials,
+        loadingTickersCount: loadingTickers.length,
+        tickers,
+        financialsByTicker,
+        financialsErrors,
+        upgradingNotesTickers,
+        notesUpgradeStartedAt: notesUpgradeStartedAtRef.current,
+      }),
+    [
+      financialsDeferredPending,
+      data,
+      loadingSections,
+      loadingFinancials,
+      loadingTickers.length,
+      tickers,
+      financialsByTicker,
+      financialsErrors,
+      upgradingNotesTickers,
+    ]
+  );
 
   useEffect(() => {
     if (!data) return;

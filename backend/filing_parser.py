@@ -15,7 +15,6 @@ from parse_cache import (
     clear_filing_structure,
     evict_parsed_column,
     find_cache_key,
-    find_section_html,
     get_filing_structure,
     load_parsed_column,
     make_cache_key,
@@ -500,10 +499,23 @@ def _section_html_from_parsed_cache(cache_key: str | None, section_id: str) -> s
     _, sections = cached
     for section in sections:
         if section.get("id") == section_id:
-            html = section.get("html")
-            if html:
-                return html
+            raw = section.get("html")
+            if not raw:
+                return None
+            from sec.section_extractor import _safe_normalize_excerpt_html
+
+            return _safe_normalize_excerpt_html(raw)
     return None
+
+
+def _plain_text_section_as_html(text: str) -> str:
+    import html as html_module
+
+    escaped = html_module.escape(text)
+    return (
+        f'<pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-800">'
+        f"{escaped}</pre>"
+    )
 
 
 async def get_section_html(
@@ -524,8 +536,6 @@ async def get_section_html(
 
     if want_html:
         html = _section_html_from_parsed_cache(resolved_cache_key, section_id)
-        if html is None:
-            html = find_section_html(ticker, section_id, fiscal_year)
 
     if (want_html and html is None) or want_text:
         extracted_html, extracted_text, resolved_cache_key = await _extract_and_cache_section(
@@ -533,25 +543,33 @@ async def get_section_html(
             section_id,
             fiscal_year,
             resolved_cache_key,
-            want_html=want_html,
-            want_text=want_text,
+            want_html=want_html and html is None,
+            want_text=want_text or (want_html and html is None),
         )
-        if html is None:
-            html = extracted_html
-        text = extracted_text
+        if html is None and extracted_html:
+            from sec.section_extractor import _safe_normalize_excerpt_html
+
+            html = _safe_normalize_excerpt_html(extracted_html)
+        if want_text:
+            text = extracted_text
 
     if want_html and not html:
-        raise ValueError(f"Section '{section_id}' not found for ticker {ticker}")
+        if not text:
+            _, fallback_text, _ = await _extract_and_cache_section(
+                ticker,
+                section_id,
+                fiscal_year,
+                resolved_cache_key,
+                want_html=False,
+                want_text=True,
+            )
+            text = fallback_text
+        if text:
+            html = _plain_text_section_as_html(text)
+        else:
+            raise ValueError(f"Section '{section_id}' not found for ticker {ticker}")
     if want_text and not text:
         raise ValueError(f"Section '{section_id}' not found for ticker {ticker}")
-
-    if html:
-        from sec.section_extractor import _normalize_excerpt_html
-
-        try:
-            html = _normalize_excerpt_html(html)
-        except Exception:
-            pass
 
     return SectionHtmlResponse(
         ticker=ticker,
@@ -644,13 +662,11 @@ async def _extract_and_cache_section(
     if want_html:
         html = await asyncio.to_thread(extract_section_html, html_bytes, section_id, structure)
         if html and cache_key:
-            from sec.section_extractor import _normalize_excerpt_html
+            from sec.section_extractor import _safe_normalize_excerpt_html
 
-            try:
-                normalized = _normalize_excerpt_html(html)
-            except Exception:
-                normalized = html
-            store_section_html(cache_key, section_id, normalized)
+            normalized = _safe_normalize_excerpt_html(html)
+            if normalized:
+                store_section_html(cache_key, section_id, normalized)
 
     if want_text:
         text = await asyncio.to_thread(extract_section_text, html_bytes, section_id, structure)

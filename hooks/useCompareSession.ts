@@ -34,6 +34,7 @@ import { isLocalDevHost } from "@/lib/api-environment";
 import { fiscalYearFromPeriod, type ComparePeriod } from "@/lib/filing-period";
 import { scanDeltas } from "@/lib/delta-engine";
 import { filterMapWorthyFlags, mapWorthyCoverage } from "@/lib/delta-surface";
+import { computeDeltasSettling, NOTES_UPGRADE_TIMEOUT_MS } from "@/lib/compare-settling";
 
 export interface UseCompareSessionOptions {
   tickers: string[];
@@ -76,6 +77,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
   const compareLoadKeyRef = useRef<string | null>(null);
   const upgradedFullFinancialsRef = useRef(new Set<string>(warmSession?.upgradedTickers ?? []));
   const notesRetriedAfterParseRef = useRef(new Set<string>());
+  const notesUpgradeStartedAtRef = useRef(new Map<string, number>());
   const isProRef = useRef(false);
 
   const { auth, loading: authLoading, isSignedIn, configured } = useAuth();
@@ -387,7 +389,16 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
       const upper = ticker.toUpperCase();
       if (upgradedFullFinancialsRef.current.has(upper)) return;
       upgradedFullFinancialsRef.current.add(upper);
+      notesUpgradeStartedAtRef.current.set(upper, Date.now());
       setUpgradingNotesTickers((prev) => new Set(prev).add(upper));
+      const timeoutId = window.setTimeout(() => {
+        setUpgradingNotesTickers((prev) => {
+          if (!prev.has(upper)) return prev;
+          const next = new Set(prev);
+          next.delete(upper);
+          return next;
+        });
+      }, NOTES_UPGRADE_TIMEOUT_MS);
       void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
         .then((full) => {
           setFinancialsByTicker((prev) => ({ ...prev, [upper]: full }));
@@ -404,6 +415,8 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
           setFinancialsErrors((prev) => ({ ...prev, [upper]: message }));
         })
         .finally(() => {
+          window.clearTimeout(timeoutId);
+          notesUpgradeStartedAtRef.current.delete(upper);
           setUpgradingNotesTickers((prev) => {
             const next = new Set(prev);
             next.delete(upper);
@@ -486,34 +499,32 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
   const loading = loadingFinancials || loadingSections || !apiWarmupDone;
   const financialsDeferredPending = financialsByTicker !== deferredFinancialsByTicker;
 
-  const deltasSettling = useMemo(() => {
-    if (financialsDeferredPending) return true;
-    if (!data || loadingSections || loadingFinancials) return true;
-    if (loadingTickers.length > 0) return true;
-    for (const ticker of tickers) {
-      const upper = ticker.toUpperCase();
-      if (upgradingNotesTickers.has(upper)) return true;
-      if (financialsErrors[upper]) continue;
-      const fin = financialsByTicker[upper];
-      if (!fin) return true;
-      if (fin.headline_only !== false) {
-        const notes = fin.notes_xbrl;
-        const hasNotes = notes && Object.keys(notes).length > 0;
-        if (!hasNotes) return true;
-      }
-    }
-    return false;
-  }, [
-    financialsDeferredPending,
-    data,
-    loadingSections,
-    loadingFinancials,
-    loadingTickers.length,
-    tickers,
-    financialsByTicker,
-    upgradingNotesTickers,
-    financialsErrors,
-  ]);
+  const deltasSettling = useMemo(
+    () =>
+      computeDeltasSettling({
+        financialsDeferredPending,
+        data,
+        loadingSections,
+        loadingFinancials,
+        loadingTickersCount: loadingTickers.length,
+        tickers,
+        financialsByTicker,
+        financialsErrors,
+        upgradingNotesTickers,
+        notesUpgradeStartedAt: notesUpgradeStartedAtRef.current,
+      }),
+    [
+      financialsDeferredPending,
+      data,
+      loadingSections,
+      loadingFinancials,
+      loadingTickers.length,
+      tickers,
+      financialsByTicker,
+      financialsErrors,
+      upgradingNotesTickers,
+    ]
+  );
 
   useEffect(() => {
     if (!data) return;
