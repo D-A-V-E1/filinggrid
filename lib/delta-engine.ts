@@ -17,10 +17,25 @@ import type { DeltaFlag, DeltaScanResult, DeltaSessionState } from "@/lib/delta-
 
 const HEADLINE_METRICS = ["revenue", "net_income", "operating_income", "eps_diluted"] as const;
 
-const TOPIC_PRESENCE_SECTIONS = [
-  "legal-proceedings",
+/** Dollar-event footnotes — require non-zero tagged FY amounts, not narrative alone. */
+const DOLLAR_EVENT_NOTE_SECTIONS = new Set([
   "note-impairment",
   "note-contingencies",
+  "note-restructuring",
+  "note-acquisitions",
+]);
+
+/** Governance / open-matter sections — substantive preview is sufficient. */
+const GOVERNANCE_TOPIC_SECTIONS = new Set([
+  "unresolved-staff",
+  "controls",
+  "disagreements",
+]);
+
+const TOPIC_PRESENCE_SECTIONS = [
+  "legal-proceedings",
+  ...DOLLAR_EVENT_NOTE_SECTIONS,
+  ...GOVERNANCE_TOPIC_SECTIONS,
 ] as const;
 
 const CONTINGENCY_SECTIONS = ["legal-proceedings", "note-contingencies"] as const;
@@ -159,20 +174,38 @@ function hasNonZeroNoteMetricsForFy(note: NoteSectionXbrl, fiscalYear: number | 
   return false;
 }
 
+function isDollarEventNoteSection(sectionId: string): boolean {
+  return DOLLAR_EVENT_NOTE_SECTIONS.has(sectionId);
+}
+
 /** Material topic signal for strip eligibility — not catalog section presence alone. */
 function columnHasTopicPresenceSignal(
   col: FilingColumn,
   sectionId: string,
   state: DeltaSessionState
 ): boolean {
-  const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
-  if (note?.has_data) {
-    if (note.annual_summary?.length) {
-      return hasNonZeroNoteMetricsForFy(note, state.fiscalYear);
-    }
-    if (note.disclosures?.length) return true;
+  if (isDollarEventNoteSection(sectionId)) {
+    const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
+    if (!note) return false;
+    return hasNonZeroNoteMetricsForFy(note, state.fiscalYear);
   }
+
+  if (GOVERNANCE_TOPIC_SECTIONS.has(sectionId)) {
+    return isSubstantivePreview(sectionPreview(col, sectionId));
+  }
+
   return isSubstantivePreview(sectionPreview(col, sectionId));
+}
+
+function columnEligibleForContingencyEmphasis(
+  col: FilingColumn,
+  sectionId: string,
+  state: DeltaSessionState
+): boolean {
+  if (sectionId !== "note-contingencies") return true;
+  const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
+  if (!note) return false;
+  return hasNonZeroNoteMetricsForFy(note, state.fiscalYear);
 }
 
 function keywordHits(text: string, keywords: string[]): number {
@@ -370,6 +403,7 @@ function scanContingencyEmphasis(state: DeltaSessionState, flags: DeltaFlag[]): 
     const hitsByTicker: Record<string, number> = {};
     for (const col of state.columns) {
       if (!columnHasSection(col, sectionId)) continue;
+      if (!columnEligibleForContingencyEmphasis(col, sectionId, state)) continue;
       const preview = sectionPreview(col, sectionId);
       const hits = keywordHits(preview, CONTINGENCY_KEYWORDS);
       if (hits > 0) hitsByTicker[col.ticker] = hits;
