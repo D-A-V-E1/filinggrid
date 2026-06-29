@@ -700,8 +700,8 @@ function FilingColumn({
 
     return (
       <>
-        {disclosuresPanel}
         {metricsPanel}
+        {disclosuresPanel}
       </>
     );
   }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows, xbrlMetricsSubtitle, focusRowKey]);
