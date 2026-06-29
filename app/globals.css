@@ -354,7 +354,7 @@
     inset-inline: 0;
     z-index: 50;
     display: flex;
-    max-height: min(32rem, calc(100vh - var(--delta-map-panel-top, 0px)));
+    max-height: min(40rem, calc(100vh - var(--delta-map-panel-top, 0px)));
     flex-direction: column;
     overflow: hidden;
     border-bottom: 1px solid rgb(226 232 240);
@@ -365,7 +365,7 @@
   }
 
   .delta-map-overlay-scroll {
-    max-height: min(22rem, 52vh);
+    max-height: min(30rem, 68vh);
     overflow: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;

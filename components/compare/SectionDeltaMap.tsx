@@ -9,7 +9,6 @@ import {
   cellFlagsTooltip,
   DELTA_MAP_ALIGNED_LABEL,
   DELTA_MAP_ALIGNED_TOOLTIP,
-  DELTA_MAP_BADGE_CONFIG,
   DELTA_MAP_NOT_FILED_LABEL,
   DELTA_MAP_NOT_FILED_TOOLTIP,
   deltaMapHeadline,
@@ -104,43 +103,6 @@ function DeltaMapTooltip({ tip, children }: { tip: ReactNode; children: ReactNod
           document.body,
         )}
     </span>
-  );
-}
-
-function DeltaMapLegend() {
-  return (
-    <div className="space-y-2 text-[11px]">
-      <p className="font-medium text-slate-700">What each cell means</p>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {DELTA_MAP_BADGE_CONFIG.map((entry) => (
-          <div key={entry.ruleId} className="flex min-w-0 gap-2 rounded-md border border-slate-100 bg-slate-50/50 px-2 py-1.5">
-            <span
-              className={`shrink-0 whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-semibold ${severityTone(entry.severity)}`}
-            >
-              {entry.icon} {entry.badgeLabel}
-            </span>
-            <div className="min-w-0 leading-snug">
-              <p className="text-slate-600">{entry.subtitle}</p>
-              <p className="italic text-slate-400">e.g. {entry.example}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="border-t border-slate-100 pt-1.5 leading-snug text-slate-500">
-        <span className="inline-flex items-center gap-1 font-medium text-brand-700">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden />
-          {DELTA_MAP_ALIGNED_LABEL}
-        </span>
-        {" — "}
-        section matches peers
-        <span className="mx-1.5 text-slate-300">·</span>
-        <span className="font-medium text-slate-500">{DELTA_MAP_NOT_FILED_LABEL}</span>
-        {" — "}
-        absent from this filing
-        <span className="mx-1.5 text-slate-300">·</span>
-        minor footnote wording not shown
-      </p>
-    </div>
   );
 }
 
@@ -245,12 +207,20 @@ export default function SectionDeltaMap({
       role="dialog"
       aria-label="Section delta map grid"
     >
-      <div className="sticky top-0 z-30 shrink-0 border-b border-slate-100 bg-white px-4 py-2.5">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="sticky top-0 z-30 shrink-0 border-b border-slate-100 bg-white px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold text-slate-900">{headline}</p>
-          <p className="text-[11px] text-slate-500">{coverageText}</p>
+          <div className="flex items-center gap-3">
+            <p className="text-[11px] text-slate-500">{coverageText}</p>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-800"
+            >
+              Collapse
+            </button>
+          </div>
         </div>
-        <DeltaMapLegend />
       </div>
 
       <div className="delta-map-overlay-scroll min-h-0 flex-1 px-4 py-2">

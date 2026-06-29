@@ -174,9 +174,6 @@ export function deltaRuleBadgeWithIcon(ruleId: string): string {
   return `${config.icon} ${config.badgeLabel}`;
 }
 
-/** @deprecated Use DELTA_MAP_BADGE_CONFIG — kept for imports that expect a string. */
-export const DELTA_MAP_BADGE_LEGEND = DELTA_MAP_BADGE_CONFIG.map((e) => e.badgeLabel).join(" · ");
-
 export interface CellFlagsTooltip {
   heading: string;
   lines: string[];
