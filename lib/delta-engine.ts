@@ -1,7 +1,7 @@
 import type { FilingColumn, FinancialsXbrl, NoteSectionXbrl } from "@/lib/api";
 import {
   catalogSectionPreview,
-  columnHasCatalogSection,
+  columnHasSectionPresence,
   isDomesticForm,
   isForeignForm,
   resolveColumnForm,
@@ -68,8 +68,8 @@ function resolveForm(col: FilingColumn, period?: string): string | null {
   return resolveColumnForm(col, period);
 }
 
-function columnHasSection(col: FilingColumn, sectionId: string): boolean {
-  return columnHasCatalogSection(col, sectionId);
+function columnHasSection(col: FilingColumn, sectionId: string, state: DeltaSessionState): boolean {
+  return columnHasSectionPresence(col, sectionId, state.financialsByTicker[col.ticker]);
 }
 
 function detectMixedFilers(columns: FilingColumn[], period?: string): {
@@ -255,11 +255,11 @@ function scanMissingSections(
   for (const sectionId of catalogOrder) {
     if (GAAP_STATEMENT_SECTION_IDS.has(sectionId)) continue;
 
-    const peersWith = state.columns.filter((c) => columnHasSection(c, sectionId));
+    const peersWith = state.columns.filter((c) => columnHasSection(c, sectionId, state));
     // Single-peer presence is topic_only_peer territory — not a catalog gap.
     if (peersWith.length < 2) continue;
 
-    const peersWithout = state.columns.filter((c) => !columnHasSection(c, sectionId));
+    const peersWithout = state.columns.filter((c) => !columnHasSection(c, sectionId, state));
     if (peersWithout.length === 0) continue;
     // Only flag when the missing peer(s) are a minority vs peers who have the section.
     if (peersWithout.length >= peersWith.length) continue;
@@ -284,7 +284,7 @@ function scanMissingSections(
 function scanTopicPresence(state: DeltaSessionState, flags: DeltaFlag[]): void {
   for (const sectionId of TOPIC_PRESENCE_SECTIONS) {
     const withSection = state.columns.filter(
-      (c) => columnHasSection(c, sectionId) && columnHasTopicPresenceSignal(c, sectionId, state)
+      (c) => columnHasSection(c, sectionId, state) && columnHasTopicPresenceSignal(c, sectionId, state)
     );
     if (withSection.length === 0 || withSection.length === state.columns.length) continue;
 
@@ -399,7 +399,7 @@ function scanHeadlineMetrics(state: DeltaSessionState, flags: DeltaFlag[], compa
 function scanOpenMattersMetadata(state: DeltaSessionState, flags: DeltaFlag[]): void {
   const staffOpen: FilingColumn[] = [];
   for (const col of state.columns) {
-    if (!columnHasSection(col, "unresolved-staff")) continue;
+    if (!columnHasSection(col, "unresolved-staff", state)) continue;
     const preview = sectionPreview(col, "unresolved-staff");
     if (isSubstantivePreview(preview)) {
       staffOpen.push(col);
@@ -429,7 +429,7 @@ function scanOpenMattersMetadata(state: DeltaSessionState, flags: DeltaFlag[]): 
   }
 
   for (const col of state.columns) {
-    if (!columnHasSection(col, "disagreements")) continue;
+    if (!columnHasSection(col, "disagreements", state)) continue;
     const preview = sectionPreview(col, "disagreements");
     if (isSubstantivePreview(preview, 30)) {
       pushFlag(flags, {
@@ -449,7 +449,7 @@ function scanContingencyEmphasis(state: DeltaSessionState, flags: DeltaFlag[]): 
   for (const sectionId of CONTINGENCY_SECTIONS) {
     const hitsByTicker: Record<string, number> = {};
     for (const col of state.columns) {
-      if (!columnHasSection(col, sectionId)) continue;
+      if (!columnHasSection(col, sectionId, state)) continue;
       if (!columnEligibleForContingencyEmphasis(col, sectionId, state)) continue;
       const preview = sectionPreview(col, sectionId);
       const hits = keywordHits(preview, CONTINGENCY_KEYWORDS);

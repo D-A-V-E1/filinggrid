@@ -42,6 +42,29 @@ function noteWithMetrics(
   };
 }
 
+function noteWithDisclosures(
+  sectionId: string,
+  text: string
+): FinancialsXbrl["notes_xbrl"] {
+  return {
+    [sectionId]: {
+      section_id: sectionId,
+      label: sectionId,
+      has_data: true,
+      metrics: {},
+      annual_summary: [],
+      disclosures: [
+        {
+          key: "disclosure",
+          label: "Earnings per share",
+          concept: "EarningsPerShareTextBlock",
+          text,
+        },
+      ],
+    },
+  };
+}
+
 function baseState(overrides: Partial<DeltaSessionState>): DeltaSessionState {
   return {
     tickers: ["MSFT", "AAPL"],
@@ -740,5 +763,56 @@ describe("mega-cap note presence (live parse index patterns)", () => {
     });
 
     expect(flagsByRule(state, "missing_section", "note-software")).toHaveLength(0);
+  });
+});
+
+describe("mega-cap note-eps presence (parse index vs XBRL disclosures)", () => {
+  const EPS_CATALOG = [{ id: "note-eps", label: "Note — Earnings Per Share" }];
+
+  it("does not flag NVDA missing note-eps when XBRL disclosure exists but parse index omits the note", () => {
+    const state = baseState({
+      tickers: ["NVDA", "AMD", "INTC"],
+      catalog: EPS_CATALOG,
+      columns: [
+        column("NVDA", [{ id: "financial-statements", preview: LONG_NARRATIVE }]),
+        column("AMD", [{ id: "note-eps", preview: LONG_NARRATIVE }]),
+        column("INTC", [{ id: "note-eps", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+      financialsByTicker: {
+        NVDA: {
+          ticker: "NVDA",
+          cik: "0",
+          entity_name: "NVIDIA",
+          fiscal_year_filter: 2025,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithDisclosures(
+            "note-eps",
+            "Basic and diluted earnings per share are computed using weighted-average shares outstanding."
+          ),
+        },
+      },
+    });
+
+    expect(flagsByRule(state, "missing_section", "note-eps")).toHaveLength(0);
+  });
+
+  it("still flags NVDA when peers file note-eps and neither parse index nor XBRL has the note", () => {
+    const state = baseState({
+      tickers: ["NVDA", "AMD", "INTC"],
+      catalog: EPS_CATALOG,
+      columns: [
+        column("NVDA", [{ id: "financial-statements", preview: LONG_NARRATIVE }]),
+        column("AMD", [{ id: "note-eps", preview: LONG_NARRATIVE }]),
+        column("INTC", [{ id: "note-eps", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section", "note-eps").map((f) => f.ticker)).toEqual(["NVDA"]);
   });
 });

@@ -2,10 +2,10 @@
 
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { FilingColumn } from "@/lib/api";
+import type { FilingColumn, FinancialsXbrl } from "@/lib/api";
 import type { DeltaFlag, DeltaSeverity } from "@/lib/delta-types";
 import { flagsForSection } from "@/lib/delta-engine";
-import { columnHasCatalogSection, columnHasSparseSectionIndex } from "@/lib/section-presence";
+import { columnHasSectionPresence, columnHasSparseSectionIndex } from "@/lib/section-presence";
 import {
   cellFlagsTooltip,
   DELTA_MAP_ALIGNED_LABEL,
@@ -26,6 +26,7 @@ interface SectionDeltaMapProps {
   tickers: string[];
   catalog: { id: string; label: string }[];
   columns: FilingColumn[];
+  financialsByTicker?: Record<string, FinancialsXbrl>;
   flags: DeltaFlag[];
   scannedCount: number;
   sectionsWithDeltas: number;
@@ -43,8 +44,13 @@ const SEVERITY_CELL_TONE: Record<DeltaSeverity, string> = {
 
 const SEVERITY_ORDER: Record<DeltaSeverity, number> = { P1: 0, P2: 1, P3: 2 };
 
-function cellHasSection(col: FilingColumn | undefined, sectionId: string): boolean {
-  return col != null && columnHasCatalogSection(col, sectionId);
+function cellHasSection(
+  col: FilingColumn | undefined,
+  sectionId: string,
+  financialsByTicker?: Record<string, FinancialsXbrl>
+): boolean {
+  if (col == null) return false;
+  return columnHasSectionPresence(col, sectionId, financialsByTicker?.[col.ticker]);
 }
 
 function severityTone(severity: DeltaSeverity): string {
@@ -146,6 +152,7 @@ export default function SectionDeltaMap({
   tickers,
   catalog,
   columns,
+  financialsByTicker,
   flags,
   scannedCount,
   sectionsWithDeltas,
@@ -283,7 +290,7 @@ export default function SectionDeltaMap({
                       </td>
                       {tickers.map((ticker) => {
                         const col = columnByTicker.get(ticker);
-                        const present = cellHasSection(col, row.id);
+                        const present = cellHasSection(col, row.id, financialsByTicker);
                         const sparseIndex = col != null && columnHasSparseSectionIndex(col);
                         const cellFlags = row.flags.filter((f) => f.ticker === ticker);
                         const topFlag = topFlagForCell(cellFlags);

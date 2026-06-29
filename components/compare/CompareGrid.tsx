@@ -716,6 +716,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               tickers={tickers}
               catalog={navigableCatalog}
               columns={data?.columns ?? []}
+              financialsByTicker={financialsByTicker}
               flags={mapFlags}
               scannedCount={deltaScan?.coverage.scannedSections ?? 0}
               sectionsWithDeltas={mapCoverage.sectionsWithDeltas}

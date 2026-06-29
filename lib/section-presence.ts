@@ -1,4 +1,4 @@
-import type { FilingColumn } from "@/lib/api";
+import type { FilingColumn, FinancialsXbrl, NoteSectionXbrl } from "@/lib/api";
 import { formFromPeriodId } from "@/lib/filing-period";
 
 /** US-only Items frequently omitted on 20-F / 6-K — absence is not a catalog gap vs domestic peers. */
@@ -117,6 +117,38 @@ export function sectionsHaveCatalogSection(
 /** True when the column exposes a catalog section by id or foreign/interim heading alias. */
 export function columnHasCatalogSection(col: FilingColumn, sectionId: string): boolean {
   return sectionsHaveCatalogSection(col.sections, sectionId);
+}
+
+/** True when XBRL note data includes tagged amounts or disclosure text blocks. */
+export function noteSectionHasXbrlContent(note: NoteSectionXbrl | undefined): boolean {
+  if (!note?.has_data) return false;
+  return Boolean(
+    (note.annual_summary?.length ?? 0) > 0 || (note.disclosures?.length ?? 0) > 0
+  );
+}
+
+/** True when companyfacts expose a catalog note or financial-statements headline data. */
+export function financialsHaveCatalogSection(
+  financials: FinancialsXbrl | undefined,
+  sectionId: string
+): boolean {
+  if (!financials) return false;
+  if (sectionId === "financial-statements") {
+    return (financials.annual_summary?.length ?? 0) > 0;
+  }
+  if (sectionId.startsWith("note-")) {
+    return noteSectionHasXbrlContent(financials.notes_xbrl?.[sectionId]);
+  }
+  return false;
+}
+
+/** Parse index section or XBRL-backed catalog section — used for missing_section alignment. */
+export function columnHasSectionPresence(
+  col: FilingColumn,
+  sectionId: string,
+  financials?: FinancialsXbrl
+): boolean {
+  return columnHasCatalogSection(col, sectionId) || financialsHaveCatalogSection(financials, sectionId);
 }
 
 /** Preview text for a catalog section — direct id or alias / full-document fallback. */
