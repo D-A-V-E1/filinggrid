@@ -116,13 +116,13 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   const [sectionFocusRowKey, setSectionFocusRowKey] = useState<string | null>(null);
   const columnsScrollRef = useRef<HTMLDivElement>(null);
 
-  const scrollTickerColumnIntoView = useCallback((ticker: string) => {
+  const scrollTickerColumnIntoView = useCallback((ticker: string): boolean => {
     const container = columnsScrollRef.current;
-    if (!container) return;
+    if (!container) return false;
     const column = container.querySelector<HTMLElement>(
       `[data-compare-ticker="${ticker.toUpperCase()}"]`
     );
-    if (!column) return;
+    if (!column || column.offsetWidth < 1) return false;
 
     const colLeft = column.offsetLeft;
     const colRight = colLeft + column.offsetWidth;
@@ -133,7 +133,21 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     } else if (colRight > viewRight) {
       container.scrollLeft = colRight - container.clientWidth;
     }
+    return true;
   }, []);
+
+  const scrollTickerColumnIntoViewWhenReady = useCallback(
+    (ticker: string) => {
+      let attempts = 0;
+      const tryScroll = () => {
+        if (scrollTickerColumnIntoView(ticker) || attempts >= 12) return;
+        attempts += 1;
+        requestAnimationFrame(tryScroll);
+      };
+      requestAnimationFrame(tryScroll);
+    },
+    [scrollTickerColumnIntoView]
+  );
 
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
 
@@ -527,13 +541,10 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       setSectionFocusTicker(focusTicker ?? null);
       setSectionFocusRowKey(rowKey ?? null);
       if (focusTicker) {
-        requestAnimationFrame(() => {
-          scrollTickerColumnIntoView(focusTicker);
-          requestAnimationFrame(() => scrollTickerColumnIntoView(focusTicker));
-        });
+        scrollTickerColumnIntoViewWhenReady(focusTicker);
       }
     },
-    [scrollTickerColumnIntoView]
+    [scrollTickerColumnIntoViewWhenReady]
   );
 
   const deltaScan = useMemo(() => {

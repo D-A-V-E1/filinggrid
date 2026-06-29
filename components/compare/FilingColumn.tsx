@@ -185,10 +185,9 @@ interface XbrlPanelProps {
   highlightRowKey?: string | null;
 }
 
-/** Fewer FY columns when the compare grid is wider so tables stay readable. */
+/** Fewer FY columns as the compare grid adds tickers so tables stay readable in each column. */
 function maxFyColumnsForLayout(columnCount: number): number {
-  if (columnCount >= 4) return 1;
-  if (columnCount >= 3) return 2;
+  if (columnCount >= 3) return 1;
   return 4;
 }
 
@@ -564,7 +563,7 @@ function FilingColumn({
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const isCompact = columnLayout?.density === "compact";
-  const tableFit = isCompact;
+  const tableFit = isCompact || columnCount >= 3;
   const headlineMetricRows = useMemo(() => {
     const base = tableFit ? FINANCIAL_STATEMENT_ROWS_DENSE : FINANCIAL_STATEMENT_ROWS;
     const metrics = financialsXbrl?.metrics;
