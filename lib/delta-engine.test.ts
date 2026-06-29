@@ -817,6 +817,178 @@ describe("mega-cap note-eps presence (parse index vs XBRL disclosures)", () => {
   });
 });
 
+describe("airlines note presence (headline-only vs XBRL disclosures)", () => {
+  const AIRLINE_NOTE_CATALOG = [
+    { id: "note-revenue", label: "Note — Revenue Recognition" },
+    { id: "note-summary-policies", label: "Note — Summary of Significant Accounting Policies" },
+    { id: "note-stock-comp", label: "Note — Stock-Based Compensation" },
+    { id: "note-eps", label: "Note — Earnings Per Share" },
+  ];
+
+  const REVENUE_DISCLOSURE =
+    "Passenger revenue is recognized when transportation is provided. Loyalty revenue is deferred until mileage credits are redeemed.";
+
+  function headlineOnlyFinancials(ticker: string): FinancialsXbrl {
+    return {
+      ticker,
+      cik: "0",
+      entity_name: ticker,
+      fiscal_year_filter: 2024,
+      source: "sec_companyfacts",
+      from_cache: false,
+      headline_only: true,
+      annual_summary: [{ fy: 2024, revenue: 1 }],
+      notes_xbrl: {},
+    };
+  }
+
+  function luvDisclosureFinancials(): FinancialsXbrl {
+    return {
+      ticker: "LUV",
+      cik: "0",
+      entity_name: "Southwest",
+      fiscal_year_filter: 2024,
+      source: "sec_companyfacts",
+      from_cache: false,
+      headline_only: false,
+      annual_summary: [{ fy: 2024, revenue: 1 }],
+      notes_xbrl: {
+        "note-revenue": {
+          section_id: "note-revenue",
+          label: "Revenue Recognition",
+          has_data: true,
+          metrics: {},
+          annual_summary: [],
+          disclosures: [
+            {
+              key: "revenue_text",
+              label: "Revenue recognition",
+              concept: "RevenueFromContractWithCustomerTextBlock",
+              text: REVENUE_DISCLOSURE,
+            },
+          ],
+        },
+        "note-summary-policies": {
+          section_id: "note-summary-policies",
+          label: "Summary of Significant Accounting Policies",
+          has_data: true,
+          metrics: {},
+          annual_summary: [],
+          disclosures: [
+            {
+              key: "policies",
+              label: "Policies",
+              concept: "SignificantAccountingPoliciesTextBlock",
+              text: "Basis of presentation and use of estimates for airline operations.",
+            },
+          ],
+        },
+        "note-stock-comp": {
+          section_id: "note-stock-comp",
+          label: "Stock-Based Compensation",
+          has_data: true,
+          metrics: {},
+          annual_summary: [],
+          disclosures: [
+            {
+              key: "sbc",
+              label: "Stock-based compensation",
+              concept: "ShareBasedCompensationTextBlock",
+              text: "Restricted stock units vest over three years for eligible employees.",
+            },
+          ],
+        },
+        "note-eps": {
+          section_id: "note-eps",
+          label: "Earnings Per Share",
+          has_data: true,
+          metrics: {},
+          annual_summary: [],
+          disclosures: [
+            {
+              key: "eps",
+              label: "Earnings per share",
+              concept: "EarningsPerShareTextBlock",
+              text: "Basic and diluted EPS use weighted-average shares outstanding.",
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  it("does not flag LUV missing note sections when headline-only scan lacks notes_xbrl", () => {
+    const state = baseState({
+      tickers: ["DAL", "UAL", "LUV"],
+      catalog: AIRLINE_NOTE_CATALOG,
+      columns: [
+        column("DAL", [{ id: "note-revenue", preview: LONG_NARRATIVE }]),
+        column("UAL", [{ id: "note-revenue", preview: LONG_NARRATIVE }]),
+        column("LUV", [{ id: "financial-statements", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2024",
+      fiscalYear: 2024,
+      financialsByTicker: {
+        DAL: headlineOnlyFinancials("DAL"),
+        UAL: headlineOnlyFinancials("UAL"),
+        LUV: headlineOnlyFinancials("LUV"),
+      },
+    });
+
+    for (const sectionId of AIRLINE_NOTE_CATALOG.map((s) => s.id)) {
+      expect(flagsByRule(state, "missing_section", sectionId)).toHaveLength(0);
+    }
+  });
+
+  it("does not flag LUV when full XBRL disclosures exist but parse index omits notes", () => {
+    const state = baseState({
+      tickers: ["DAL", "UAL", "LUV"],
+      catalog: AIRLINE_NOTE_CATALOG,
+      columns: [
+        column("DAL", [{ id: "note-revenue", preview: LONG_NARRATIVE }]),
+        column("UAL", [{ id: "note-revenue", preview: LONG_NARRATIVE }]),
+        column("LUV", [{ id: "financial-statements", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2024",
+      fiscalYear: 2024,
+      financialsByTicker: {
+        DAL: headlineOnlyFinancials("DAL"),
+        UAL: headlineOnlyFinancials("UAL"),
+        LUV: luvDisclosureFinancials(),
+      },
+    });
+
+    for (const sectionId of AIRLINE_NOTE_CATALOG.map((s) => s.id)) {
+      expect(flagsByRule(state, "missing_section", sectionId)).toHaveLength(0);
+    }
+  });
+
+  it("still flags a peer with neither parse index nor XBRL note data after full scan", () => {
+    const state = baseState({
+      tickers: ["DAL", "UAL", "LUV"],
+      catalog: [{ id: "note-revenue", label: "Note — Revenue Recognition" }],
+      columns: [
+        column("DAL", [{ id: "note-revenue", preview: LONG_NARRATIVE }]),
+        column("UAL", [{ id: "note-revenue", preview: LONG_NARRATIVE }]),
+        column("LUV", [{ id: "financial-statements", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2024",
+      fiscalYear: 2024,
+      financialsByTicker: {
+        DAL: headlineOnlyFinancials("DAL"),
+        UAL: headlineOnlyFinancials("UAL"),
+        LUV: {
+          ...headlineOnlyFinancials("LUV"),
+          headline_only: false,
+          notes_xbrl: {},
+        },
+      },
+    });
+
+    expect(flagsByRule(state, "missing_section", "note-revenue").map((f) => f.ticker)).toEqual(["LUV"]);
+  });
+});
+
 describe("parse-failed columns excluded from missing_section", () => {
   const CATALOG = [
     { id: "note-leases", label: "Note — Leases" },

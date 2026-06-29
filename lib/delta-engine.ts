@@ -1,6 +1,7 @@
 import type { FilingColumn, FinancialsXbrl, NoteSectionXbrl } from "@/lib/api";
 import {
   catalogSectionPreview,
+  columnEligibleForMissingSectionGap,
   columnHasReliableSectionPresence,
   columnHasSectionPresence,
   columnParseFailed,
@@ -266,7 +267,11 @@ function scanMissingSections(
     // Single-peer presence is topic_only_peer territory — not a catalog gap.
     if (peersWith.length < 2) continue;
 
-    const peersWithout = comparableColumns.filter((c) => !columnReliablyHasSection(c, sectionId, state));
+    const peersWithout = comparableColumns.filter(
+      (c) =>
+        columnEligibleForMissingSectionGap(c, sectionId, state.financialsByTicker[c.ticker]) &&
+        !columnReliablyHasSection(c, sectionId, state)
+    );
     if (peersWithout.length === 0) continue;
     // Only flag when the missing peer(s) are a minority vs peers who have the section.
     if (peersWithout.length >= peersWith.length) continue;

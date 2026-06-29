@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { FilingColumn } from "@/lib/api";
 import {
   catalogSectionPreview,
+  columnEligibleForMissingSectionGap,
   columnHasCatalogSection,
   columnHasReliableSectionPresence,
   columnHasSectionPresence,
   columnParseFailed,
   financialsHaveCatalogSection,
+  financialsNotesXbrlPending,
   isSubstantiveSectionPreview,
   noteSectionHasXbrlContent,
   sectionsHaveCatalogSection,
@@ -132,6 +134,58 @@ describe("columnHasSectionPresence xbrl fallback", () => {
     expect(financialsHaveCatalogSection(epsDisclosureFinancials, "note-eps")).toBe(true);
     expect(columnHasSectionPresence(epsColumn, "note-eps", epsDisclosureFinancials)).toBe(true);
     expect(columnHasReliableSectionPresence(epsColumn, "note-eps", epsDisclosureFinancials)).toBe(true);
+  });
+
+  it("detects disclosure text when has_data is false but text blocks exist", () => {
+    const note = {
+      section_id: "note-revenue",
+      label: "Revenue",
+      has_data: false,
+      metrics: {},
+      annual_summary: [],
+      disclosures: [
+        {
+          key: "revenue_text",
+          label: "Revenue recognition",
+          concept: "RevenueFromContractWithCustomerTextBlock",
+          text: "We recognize passenger revenue when transportation is provided.",
+        },
+      ],
+    };
+    expect(noteSectionHasXbrlContent(note)).toBe(true);
+    expect(
+      financialsHaveCatalogSection(
+        { ...epsDisclosureFinancials, notes_xbrl: { "note-revenue": note } },
+        "note-revenue"
+      )
+    ).toBe(true);
+  });
+});
+
+describe("financialsNotesXbrlPending", () => {
+  const headlineFin = {
+    ticker: "LUV",
+    cik: "0",
+    entity_name: "Southwest",
+    fiscal_year_filter: 2024,
+    source: "sec_companyfacts",
+    from_cache: false,
+    headline_only: true,
+    annual_summary: [{ fy: 2024, revenue: 1 }],
+    notes_xbrl: {},
+  };
+
+  it("marks note sections pending on headline-only financials", () => {
+    expect(financialsNotesXbrlPending(headlineFin, "note-revenue")).toBe(true);
+    expect(financialsNotesXbrlPending(headlineFin, "mda")).toBe(false);
+  });
+
+  it("excludes pending peers from missing_section gap eligibility", () => {
+    const column = col([{ id: "financial-statements", preview: "Statements." }], "10-K");
+    expect(columnEligibleForMissingSectionGap(column, "note-revenue", headlineFin)).toBe(false);
+    expect(columnEligibleForMissingSectionGap(column, "note-revenue", { ...headlineFin, headline_only: false })).toBe(
+      true
+    );
   });
 });
 

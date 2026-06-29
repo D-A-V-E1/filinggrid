@@ -2755,6 +2755,7 @@ async def fetch_ticker_financials(
         "api_url": COMPANYFACTS_URL.format(cik=cik_padded),
         "from_cache": from_cache,
         "fetch_ms": elapsed_ms,
+        "headline_only": headline_only,
         "notes_xbrl": notes_xbrl,
         **{k: v for k, v in extracted.items() if k not in ("entity_name", "cik")},
     }

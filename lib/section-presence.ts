@@ -57,6 +57,7 @@ const SECTION_HEADING_ALIASES: Record<string, RegExp[]> = {
   "note-leases": [/\bleases\b/i],
   "note-debt": [/long.term\s*debt/i, /\bborrowings\b/i],
   "note-eps": [/earnings\s*per\s*share/i],
+  "note-stock-comp": [/stock.based\s*compensation/i, /share.based\s*payment/i],
 };
 
 export function isDomesticForm(form: string | null): boolean {
@@ -121,10 +122,24 @@ export function columnHasCatalogSection(col: FilingColumn, sectionId: string): b
 
 /** True when XBRL note data includes tagged amounts or disclosure text blocks. */
 export function noteSectionHasXbrlContent(note: NoteSectionXbrl | undefined): boolean {
-  if (!note?.has_data) return false;
-  return Boolean(
-    (note.annual_summary?.length ?? 0) > 0 || (note.disclosures?.length ?? 0) > 0
-  );
+  if (!note) return false;
+  if ((note.disclosures?.length ?? 0) > 0) return true;
+  if (!note.has_data) return false;
+  return (note.annual_summary?.length ?? 0) > 0;
+}
+
+/** Note disclosures not loaded yet (headline-only financials batch). */
+export function financialsNotesXbrlPending(
+  financials: FinancialsXbrl | undefined,
+  sectionId: string
+): boolean {
+  if (!sectionId.startsWith("note-")) return false;
+  if (!financials) return false;
+  if (financials.headline_only === true) return true;
+  if (financials.headline_only === false) return false;
+  const hasHeadline = (financials.annual_summary?.length ?? 0) > 0;
+  const notesEmpty = !financials.notes_xbrl || Object.keys(financials.notes_xbrl).length === 0;
+  return hasHeadline && notesEmpty;
 }
 
 const NONE_PREVIEW_PATTERNS =
@@ -174,6 +189,19 @@ export function columnHasReliableSectionPresence(
   if (financialsHaveCatalogSection(financials, sectionId)) return true;
   if (!columnHasCatalogSection(col, sectionId)) return false;
   return isSubstantiveSectionPreview(catalogSectionPreview(col, sectionId));
+}
+
+/**
+ * Eligible for missing_section gap rules — excludes peers whose note XBRL has not been scanned.
+ */
+export function columnEligibleForMissingSectionGap(
+  col: FilingColumn,
+  sectionId: string,
+  financials?: FinancialsXbrl
+): boolean {
+  if (columnParseFailed(col)) return false;
+  if (financialsNotesXbrlPending(financials, sectionId)) return false;
+  return true;
 }
 
 /** Preview text for a catalog section — direct id or alias / full-document fallback. */

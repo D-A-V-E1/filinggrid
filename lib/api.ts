@@ -112,6 +112,8 @@ export interface FinancialsXbrl {
   }>;
   metrics?: Record<string, XbrlMetricSeries>;
   notes_xbrl?: Record<string, NoteSectionXbrl>;
+  /** True when note disclosures were skipped for a fast headline load. */
+  headline_only?: boolean;
 }
 
 export interface StatementRow {

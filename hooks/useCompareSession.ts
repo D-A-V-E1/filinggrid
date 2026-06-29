@@ -3,6 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
+  fetchFinancials,
   fetchFinancialsBatch,
   parseFilingsStream,
   prefetchAuthToken,
@@ -60,6 +61,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
 
   const loadIdRef = useRef(0);
   const compareLoadKeyRef = useRef<string | null>(null);
+  const upgradedFullFinancialsRef = useRef(new Set<string>());
   const isProRef = useRef(false);
 
   const { auth, loading: authLoading, isSignedIn, configured } = useAuth();
@@ -123,6 +125,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
 
   const loadFilings = useCallback(() => {
     const loadId = ++loadIdRef.current;
+    upgradedFullFinancialsRef.current = new Set();
     setError("");
     setSectionsParseError("");
     setFinancialsByTicker({});
@@ -340,6 +343,44 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     tickers.length,
     isPro,
   ]);
+
+  const upgradeFullFinancials = useCallback(
+    (ticker: string) => {
+      const upper = ticker.toUpperCase();
+      if (upgradedFullFinancialsRef.current.has(upper)) return;
+      upgradedFullFinancialsRef.current.add(upper);
+      void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
+        .then((full) => {
+          setFinancialsByTicker((prev) => ({ ...prev, [upper]: full }));
+          setFinancialsErrors((prev) => {
+            if (!(upper in prev)) return prev;
+            const next = { ...prev };
+            delete next[upper];
+            return next;
+          });
+        })
+        .catch((err) => {
+          upgradedFullFinancialsRef.current.delete(upper);
+          const message = err instanceof Error ? err.message : "Failed to load financials";
+          setFinancialsErrors((prev) => ({ ...prev, [upper]: message }));
+        });
+    },
+    [resolvedFiscalYear, period]
+  );
+
+  useEffect(() => {
+    if (loadingFinancials) return;
+    for (const ticker of tickers) {
+      const upper = ticker.toUpperCase();
+      const fin = financialsByTicker[upper];
+      if (!fin) continue;
+      if (fin.headline_only === false) continue;
+      const notes = fin.notes_xbrl;
+      const hasNotes = notes && Object.keys(notes).length > 0;
+      if (hasNotes) continue;
+      upgradeFullFinancials(upper);
+    }
+  }, [tickers, financialsByTicker, loadingFinancials, upgradeFullFinancials]);
 
   const deltaScan = useMemo(() => {
     if (!data || tickers.length === 0) return null;
