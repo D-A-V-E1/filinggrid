@@ -34,6 +34,9 @@ interface SectionDeltaMapProps {
   defaultExpanded?: boolean;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
+  /** Opens the Key deltas left drawer (L0 glance). */
+  onOpenKeyDeltas?: () => void;
+  keyDeltaCount?: number;
 }
 
 const SEVERITY_CELL_TONE: Record<DeltaSeverity, string> = {
@@ -160,6 +163,8 @@ export default function SectionDeltaMap({
   defaultExpanded = false,
   expanded: expandedProp,
   onExpandedChange,
+  onOpenKeyDeltas,
+  keyDeltaCount = 0,
 }: SectionDeltaMapProps) {
   const [expandedInternal, setExpandedInternal] = useState(defaultExpanded);
   const expanded = expandedProp ?? expandedInternal;
@@ -445,6 +450,18 @@ export default function SectionDeltaMap({
             </div>
           </div>
           <span className="flex shrink-0 items-center gap-2 self-end sm:self-center">
+            {onOpenKeyDeltas && keyDeltaCount > 0 && !expanded && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenKeyDeltas();
+                }}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:border-brand-200 hover:text-brand-800"
+              >
+                Key deltas · {keyDeltaCount}
+              </button>
+            )}
             <span className="text-xs font-medium text-brand-700 group-hover:text-brand-800">
               {expanded ? "Collapse" : "Explore grid"}
             </span>

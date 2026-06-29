@@ -48,7 +48,7 @@ import {
   rankMainstreamStrip,
 } from "@/lib/delta-surface";
 import type { DeltaFlag } from "@/lib/delta-types";
-import DeltaRail from "./DeltaRail";
+import DeltaLeftDrawer from "./DeltaLeftDrawer";
 import SectionDeltaMap from "./SectionDeltaMap";
 
 interface CompareGridProps {
@@ -99,6 +99,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
   const [deltaMapExpanded, setDeltaMapExpanded] = useState(false);
+  const [deltaPanelOpen, setDeltaPanelOpen] = useState(false);
   const [sectionScrollRequest, setSectionScrollRequest] = useState(0);
   const [sectionFocusTicker, setSectionFocusTicker] = useState<string | null>(null);
   const [sectionFocusRowKey, setSectionFocusRowKey] = useState<string | null>(null);
@@ -585,7 +586,13 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   );
 
   const openDeltaMap = useCallback(() => {
+    setDeltaPanelOpen(false);
     setDeltaMapExpanded(true);
+  }, []);
+
+  const openKeyDeltas = useCallback(() => {
+    setDeltaMapExpanded(false);
+    setDeltaPanelOpen(true);
   }, []);
 
   const deltasLoading = loadingFinancials || loadingSections;
@@ -705,6 +712,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
               expanded={deltaMapExpanded}
               onExpandedChange={setDeltaMapExpanded}
+              keyDeltaCount={stripFlags.length}
+              onOpenKeyDeltas={stripFlags.length > 0 || deltasLoading ? openKeyDeltas : undefined}
               onCellClick={(ticker, sectionId, flag) => {
                 handleSectionSelect(sectionId, ticker, flag?.rowKey);
                 setDeltaMapExpanded(false);
@@ -788,7 +797,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
         )}
 
         {canShowCompare && data && availableSectionIds.size > 0 && !columnLimitExceeded && (
-          <div className="flex h-full min-h-0 w-full overflow-hidden">
+          <div className="relative flex h-full min-h-0 w-full overflow-hidden">
             <SectionNav
               availableSectionIds={availableSectionIds}
               sectionCatalog={navigableCatalog}
@@ -798,8 +807,18 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               mobileOpen={navOpen}
               onMobileClose={() => setNavOpen(false)}
             />
-            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-              <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <DeltaLeftDrawer
+              open={deltaPanelOpen}
+              onOpenChange={setDeltaPanelOpen}
+              flags={stripFlags}
+              loading={deltasLoading}
+              stripTotalCount={stripTotalCount}
+              totalFlagCount={mapCoverage.flagCount}
+              tagline={MAINSTREAM_STRIP_TAGLINE}
+              onFlagClick={handleDeltaFlagClick}
+              onViewMoreInMap={mapFlags.length > 0 ? openDeltaMap : undefined}
+            />
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {columnParseErrors.length > 0 && (
                 <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-900">
                   {columnParseErrors.length === data.columns.length ? (
@@ -894,16 +913,6 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                   })}
                 </div>
               </div>
-              </div>
-              <DeltaRail
-                flags={stripFlags}
-                loading={deltasLoading}
-                stripTotalCount={stripTotalCount}
-                totalFlagCount={mapCoverage.flagCount}
-                tagline={MAINSTREAM_STRIP_TAGLINE}
-                onFlagClick={handleDeltaFlagClick}
-                onViewMoreInMap={mapFlags.length > 0 ? openDeltaMap : undefined}
-              />
             </div>
           </div>
         )}
