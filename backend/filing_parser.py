@@ -24,6 +24,7 @@ from parse_cache import (
 from sec.client import (
     build_filing_url,
     fetch_filing_html,
+    fetch_filing_report_html,
     fetch_submissions,
     fetch_ticker_map,
     find_filing,
@@ -256,7 +257,7 @@ async def _build_section_index(resolved: _ResolvedFiling) -> tuple[ColumnResult,
     if resolved.sections is not None:
         return resolved.column, resolved.sections, resolved.from_cache
 
-    html_bytes = await fetch_filing_html(resolved.resolved["cik"], resolved.filing)
+    html_bytes = await fetch_filing_report_html(resolved.resolved["cik"], resolved.filing)
 
     def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         structure = _prepare_filing_structure(html_bytes)
@@ -543,9 +544,9 @@ async def _extract_and_cache_section(
     if not cik or not accession:
         return None, None, cache_key
 
-    from filing_store import load_filing_html
+    from filing_store import load_filing_html, load_filing_report_html
 
-    html_bytes = load_filing_html(cik, accession)
+    html_bytes = load_filing_report_html(cik, accession) or load_filing_html(cik, accession)
     if not html_bytes:
         ticker_map = await fetch_ticker_map()
         resolved = await resolve_ticker(ticker, ticker_map)
@@ -553,7 +554,7 @@ async def _extract_and_cache_section(
         filing = find_filing(submissions, fiscal_year=fiscal_year or column_meta.get("fiscal_year"))
         if not filing:
             return None, None, cache_key
-        html_bytes = await fetch_filing_html(resolved["cik"], filing)
+        html_bytes = await fetch_filing_report_html(resolved["cik"], filing)
 
     structure = get_filing_structure(cache_key) if cache_key else None
     if structure is None:

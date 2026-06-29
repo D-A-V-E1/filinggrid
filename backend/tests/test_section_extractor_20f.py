@@ -52,6 +52,17 @@ _MINIMAL_20F_HTML = """
 """
 
 
+def test_20f_item_18_financial_statements():
+    heading = "ITEM 18. FINANCIAL STATEMENTS"
+    assert _match_section(heading) == ("financial-statements", "Item 8 — Financial Statements")
+    assert _is_section_heading(heading) is True
+
+
+def test_20f_operating_and_financial_reviews_plural():
+    heading = "OPERATING AND FINANCIAL REVIEWS AND PROSPECTS"
+    assert _match_section(heading) == ("mda", "Item 7 — MD&A")
+
+
 def test_minimal_20f_html_extracts_risk_legal_mda_market_risk():
     result = parse_filing_section_index(_MINIMAL_20F_HTML.encode())
     ids = set(result["section_ids"])

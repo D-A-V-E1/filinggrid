@@ -26,6 +26,7 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
         r"item\s*7[\.\s—–-]*management", r"item\s*5[\.\s—–-]*operating",
         r"item\s*2[\.\s—–-]*management", r"item\s*2[\.\s—–-]*md&a",
         r"^management.s\s*discussion", r"^md&a$", r"^operating\s*and\s*financial\s*review",
+        r"operating\s*and\s*financial\s*reviews",
         r"^discussion\s*and\s*analysis", r"^financial\s*condition\s*and\s*results",
         r"^results\s*of\s*operations",
     ]},
@@ -34,7 +35,8 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
         r"quantitative.*qualitative.*market",
     ]},
     {"id": "financial-statements", "label": "Item 8 — Financial Statements", "patterns": [
-        r"item\s*8", r"item\s*1[\.\s—–-]*financial", r"^financial\s*statements",
+        r"item\s*8", r"item\s*18", r"item\s*1[\.\s—–-]*financial", r"^financial\s*statements",
+        r"consolidated\s*financial\s*statements", r"notes\s*to\s*consolidated\s*financial",
         r"condensed\s*consolidated\s*financial", r"condensed\s*consolidated\s*statements",
         r"^consolidated\s*statements\s*of",
     ]},
@@ -146,6 +148,7 @@ _ITEM_IDS = {
     "7": "mda",
     "7a": "market-risk",
     "8": "financial-statements",
+    "18": "financial-statements",
     "9": "disagreements",
     "9a": "controls",
     "9b": "other-info",
@@ -153,12 +156,15 @@ _ITEM_IDS = {
 # Item numbers differ between 10-K and 10-Q; resolve using the subtitle when present.
 _ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"operating\s*and\s*financial\s*review", re.IGNORECASE), "mda"),
+    (re.compile(r"operating\s*and\s*financial\s*reviews", re.IGNORECASE), "mda"),
     (re.compile(r"information\s*on\s*the\s*company", re.IGNORECASE), "business"),
     (re.compile(r"management.s\s*discussion|md&a", re.IGNORECASE), "mda"),
     (re.compile(r"discussion\s*and\s*analysis", re.IGNORECASE), "mda"),
     (re.compile(r"financial\s*condition\s*and\s*results", re.IGNORECASE), "mda"),
     (re.compile(r"risk\s*factors", re.IGNORECASE), "risk-factors"),
     (re.compile(r"financial\s*statements", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"consolidated\s*financial\s*statements", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"notes\s*to\s*consolidated\s*financial", re.IGNORECASE), "financial-statements"),
     (re.compile(r"condensed\s*consolidated", re.IGNORECASE), "financial-statements"),
     (re.compile(r"consolidated\s*statements\s*of", re.IGNORECASE), "financial-statements"),
     (re.compile(r"legal\s+and\s+administrative\s+proceed", re.IGNORECASE), "legal-proceedings"),
@@ -210,6 +216,31 @@ def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip())
 
 
+def _strip_exhibit_prefix(text: str) -> str:
+    """Drop leading exhibit labels from 6-K cover rows (e.g. 'Exhibit 99.1 Consolidated...')."""
+    cleaned = _normalize_text(text)
+    stripped = re.sub(
+        r"^(?:exhibit\s+(?:number|no\.?|#)?\s*)?\d+[A-Za-z]?(?:\.\d+)?[\.\:\)]?\s*",
+        "",
+        cleaned,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    return stripped if len(stripped) >= 8 else cleaned
+
+
+def _heading_match_candidates(text: str) -> list[str]:
+    cleaned = _normalize_text(text)
+    candidates = [cleaned]
+    stripped = _strip_exhibit_prefix(cleaned)
+    if stripped != cleaned:
+        candidates.append(stripped)
+    clause = re.split(r"\s+(?:for the|and independent|for the year)\b", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
+    if clause and clause not in candidates:
+        candidates.append(_normalize_text(clause))
+    return candidates
+
+
 def _section_label(section_id: str) -> str:
     return next(s["label"] for s in SECTION_DEFINITIONS if s["id"] == section_id)
 
@@ -253,6 +284,14 @@ def _resolve_item_section(item_num: str, head: str) -> tuple[str, str] | None:
 
 
 def _match_section(text: str) -> tuple[str, str] | None:
+    for candidate in _heading_match_candidates(text):
+        match = _match_section_candidate(candidate)
+        if match:
+            return match
+    return None
+
+
+def _match_section_candidate(text: str) -> tuple[str, str] | None:
     cleaned = _normalize_text(text)
     if len(cleaned) < 3:
         return None
@@ -314,6 +353,8 @@ def _is_section_heading(text: str) -> bool:
             return len(cleaned) <= _MAX_HEADING_CHARS
         return False
     if _ITEM_HEADER.match(cleaned) or _NOTE_HEADER.match(cleaned):
+        return len(cleaned) <= _MAX_HEADING_CHARS
+    if _match_section(cleaned) is not None:
         return len(cleaned) <= _MAX_HEADING_CHARS
     return len(cleaned) <= 150
 

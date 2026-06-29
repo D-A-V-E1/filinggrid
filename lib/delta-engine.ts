@@ -1,5 +1,6 @@
 import type { FilingColumn, FinancialsXbrl, NoteSectionXbrl } from "@/lib/api";
 import {
+  catalogSectionPreview,
   columnHasCatalogSection,
   isDomesticForm,
   isForeignForm,
@@ -170,7 +171,7 @@ function sectionLabel(catalog: { id: string; label: string }[], sectionId: strin
 }
 
 function sectionPreview(col: FilingColumn, sectionId: string): string {
-  return col.sections.find((s) => s.id === sectionId)?.text_preview?.trim() ?? "";
+  return catalogSectionPreview(col, sectionId);
 }
 
 function isSubstantivePreview(text: string, minLen = 40): boolean {

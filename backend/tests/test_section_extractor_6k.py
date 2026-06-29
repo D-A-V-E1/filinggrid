@@ -39,6 +39,17 @@ def test_6k_lettered_risk_factors_like_20f():
     assert _is_section_heading(heading) is True
 
 
+def test_6k_exhibit_prefix_consolidated_financial_statements():
+    heading = "Exhibit 99.1 Consolidated Financial Statements"
+    assert _match_section(heading) == ("financial-statements", "Item 8 — Financial Statements")
+    assert _is_section_heading(heading) is True
+
+
+def test_6k_operating_and_financial_reviews_plural():
+    heading = "OPERATING AND FINANCIAL REVIEWS AND PROSPECTS"
+    assert _match_section(heading) == ("mda", "Item 7 — MD&A")
+
+
 _MINIMAL_6K_HTML = """
 <html><body>
 <div><p>Discussion and Analysis</p><p>Quarterly operating review with sufficient narrative length for extraction.</p></div>
@@ -48,8 +59,58 @@ _MINIMAL_6K_HTML = """
 """
 
 
+def test_6k_consolidated_financial_statements_long_title():
+    heading = (
+        "Consolidated Financial Statements for the Nine Months Ended September 30, 2025 "
+        "and 2024 and Independent Auditors' Review Report"
+    )
+    assert _match_section(heading) == (
+        "financial-statements",
+        "Item 8 — Financial Statements",
+    )
+    assert _is_section_heading(heading) is True
+
+
+def test_6k_exhibit_prefixed_consolidated_statements():
+    heading = "Exhibit 99.1 Consolidated Financial Statements for the Nine Months Ended September 30, 2025"
+    assert _match_section(heading) == (
+        "financial-statements",
+        "Item 8 — Financial Statements",
+    )
+
+
+def test_6k_notes_to_consolidated_financial_statements():
+    heading = "Notes to Consolidated Financial Statements"
+    assert _match_section(heading) == (
+        "financial-statements",
+        "Item 8 — Financial Statements",
+    )
+
+
+_MINIMAL_TSM_6K_COVER_HTML = """
+<html><body>
+<p>FORM 6-K</p>
+<p>Exhibit 99.1 Consolidated Financial Statements for the Nine Months Ended September 30, 2025</p>
+<p>Notes to Consolidated Financial Statements</p>
+<p>Revenue Recognition</p>
+<p>Segment Information</p>
+<p>Cash and Cash Equivalents</p>
+</body></html>
+"""
+
+
+def test_tsm_style_6k_cover_extracts_financial_and_notes():
+    result = parse_filing_section_index(_MINIMAL_TSM_6K_COVER_HTML.encode())
+    ids = set(result["section_ids"])
+    assert "financial-statements" in ids
+    assert "note-revenue" in ids
+    assert "note-segments" in ids
+    assert "note-cash" in ids
+
+
 def test_minimal_6k_html_extracts_mda_and_financial_statements():
     result = parse_filing_section_index(_MINIMAL_6K_HTML.encode())
     ids = set(result["section_ids"])
     assert "mda" in ids
     assert "financial-statements" in ids
+

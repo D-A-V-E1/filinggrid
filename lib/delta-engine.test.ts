@@ -525,9 +525,9 @@ describe("scanDeltas foreign filer section alignment", () => {
           [
             {
               id: "full-document",
-              heading: "Discussion and Analysis",
-              label: "Discussion and Analysis",
-              preview: LONG_NARRATIVE,
+              heading: "Full Filing",
+              label: "Full Document",
+              preview: `${LONG_NARRATIVE} Management's Discussion and Analysis of Financial Condition and Results of Operations.`,
             },
           ],
           "6-K"
@@ -536,6 +536,100 @@ describe("scanDeltas foreign filer section alignment", () => {
     });
 
     expect(flagsByRule(state, "missing_section", "mda")).toHaveLength(0);
+  });
+
+  it("AAPL/MSFT/TSM interim: no missing_section for financial-statements when TSM 6-K has exhibit preview", () => {
+    const interimCatalog = [
+      { id: "financial-statements", label: "Item 1 — Financial Statements" },
+      { id: "note-revenue", label: "Note — Revenue Recognition" },
+      { id: "note-segments", label: "Note — Segment Information" },
+      { id: "note-cash", label: "Note — Cash & Cash Equivalents" },
+    ];
+    const state = baseState({
+      catalog: interimCatalog,
+      period: "interim-2025-Q1",
+      fiscalYear: 2025,
+      columns: [
+        column("AAPL", [{ id: "financial-statements", preview: LONG_NARRATIVE }], "10-Q"),
+        column("MSFT", [{ id: "financial-statements", preview: LONG_NARRATIVE }], "10-Q"),
+        column(
+          "TSM",
+          [
+            {
+              id: "full-document",
+              heading: "Full Filing",
+              label: "Full Document",
+              preview:
+                "Exhibit 99.1 Consolidated Financial Statements and Notes. Revenue Recognition policies and Segment Information for operating segments. Cash and cash equivalents at end of period.",
+            },
+          ],
+          "6-K"
+        ),
+      ],
+    });
+
+    expect(flagsByRule(state, "missing_section", "financial-statements")).toHaveLength(0);
+    expect(flagsByRule(state, "missing_section", "note-revenue")).toHaveLength(0);
+    expect(flagsByRule(state, "missing_section", "note-segments")).toHaveLength(0);
+    expect(flagsByRule(state, "missing_section", "note-cash")).toHaveLength(0);
+  });
+
+  it("suppresses missing_section for TSM-style sparse 6-K full-document index", () => {
+    const interimCatalog = [
+      { id: "mda", label: "Item 2 — MD&A" },
+      { id: "financial-statements", label: "Item 1 — Financial Statements" },
+      { id: "note-revenue", label: "Note — Revenue Recognition" },
+    ];
+    const state = baseState({
+      catalog: interimCatalog,
+      period: "interim-2025-Q3",
+      fiscalYear: 2025,
+      columns: [
+        column("AAPL", [{ id: "mda", preview: LONG_NARRATIVE }], "10-Q"),
+        column("MSFT", [{ id: "mda", preview: LONG_NARRATIVE }], "10-Q"),
+        column(
+          "TSM",
+          [
+            {
+              id: "full-document",
+              heading: "Full Filing",
+              label: "Full Document",
+              preview: `${LONG_NARRATIVE} Management's Discussion and Analysis of Financial Condition and Results of Operations.`,
+            },
+          ],
+          "6-K"
+        ),
+      ],
+    });
+
+    expect(flagsByRule(state, "missing_section")).toHaveLength(0);
+  });
+
+  it("does not flag TSM missing financial-statements when 6-K exhibit sections are indexed", () => {
+    const interimCatalog = [
+      { id: "financial-statements", label: "Item 1 — Financial Statements" },
+      { id: "note-revenue", label: "Note — Revenue Recognition" },
+    ];
+    const state = baseState({
+      catalog: interimCatalog,
+      period: "interim-2025-Q3",
+      fiscalYear: 2025,
+      columns: [
+        column("AAPL", [{ id: "financial-statements", preview: LONG_NARRATIVE }], "10-Q"),
+        column("MSFT", [{ id: "financial-statements", preview: LONG_NARRATIVE }], "10-Q"),
+        column(
+          "TSM",
+          [
+            { id: "financial-statements", preview: LONG_NARRATIVE },
+            { id: "note-revenue", preview: LONG_NARRATIVE },
+          ],
+          "6-K"
+        ),
+      ],
+    });
+
+    expect(flagsByRule(state, "missing_section", "financial-statements")).toHaveLength(0);
+    expect(flagsByRule(state, "missing_section", "note-revenue")).toHaveLength(0);
   });
 
   it("emits metrics_not_comparable for mixed domestic 10-Q and foreign 6-K interim", () => {

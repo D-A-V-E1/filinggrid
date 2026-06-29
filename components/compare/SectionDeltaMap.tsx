@@ -5,13 +5,15 @@ import { createPortal } from "react-dom";
 import type { FilingColumn } from "@/lib/api";
 import type { DeltaFlag, DeltaSeverity } from "@/lib/delta-types";
 import { flagsForSection } from "@/lib/delta-engine";
-import { columnHasCatalogSection } from "@/lib/section-presence";
+import { columnHasCatalogSection, columnHasSparseSectionIndex } from "@/lib/section-presence";
 import {
   cellFlagsTooltip,
   DELTA_MAP_ALIGNED_LABEL,
   DELTA_MAP_ALIGNED_TOOLTIP,
   DELTA_MAP_NOT_FILED_LABEL,
   DELTA_MAP_NOT_FILED_TOOLTIP,
+  DELTA_MAP_NOT_INDEXED_LABEL,
+  DELTA_MAP_NOT_INDEXED_TOOLTIP,
   deltaMapHeadline,
   deltaMapInsightTeaser,
   deltaMapRowSummary,
@@ -125,6 +127,17 @@ function NotFiledCell() {
       aria-label={DELTA_MAP_NOT_FILED_LABEL}
     >
       —
+    </span>
+  );
+}
+
+function NotIndexedCell() {
+  return (
+    <span
+      className="inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded border border-dashed border-slate-300 bg-slate-100 text-[9px] font-medium text-slate-500"
+      aria-label={DELTA_MAP_NOT_INDEXED_LABEL}
+    >
+      ?
     </span>
   );
 }
@@ -271,9 +284,27 @@ export default function SectionDeltaMap({
                       {tickers.map((ticker) => {
                         const col = columnByTicker.get(ticker);
                         const present = cellHasSection(col, row.id);
+                        const sparseIndex = col != null && columnHasSparseSectionIndex(col);
                         const cellFlags = row.flags.filter((f) => f.ticker === ticker);
                         const topFlag = topFlagForCell(cellFlags);
                         const tooltip = cellFlagsTooltip(cellFlags);
+
+                        if (!present && sparseIndex) {
+                          return (
+                            <td key={ticker} className="px-2 py-2 text-center">
+                              <DeltaMapTooltip
+                                tip={
+                                  <TooltipContent
+                                    heading={DELTA_MAP_NOT_INDEXED_LABEL}
+                                    lines={[DELTA_MAP_NOT_INDEXED_TOOLTIP]}
+                                  />
+                                }
+                              >
+                                <NotIndexedCell />
+                              </DeltaMapTooltip>
+                            </td>
+                          );
+                        }
 
                         if (!present && cellFlags.some((f) => f.ruleId === "missing_section")) {
                           const missingTip = cellFlagsTooltip(cellFlags);

@@ -26,23 +26,37 @@ export const INTERIM_OPTIONAL_SECTION_IDS = new Set([
 const SECTION_HEADING_ALIASES: Record<string, RegExp[]> = {
   "risk-factors": [/risk\s*factors/i, /^[A-Z]\.\s*Risk\s*Factors/i],
   mda: [
-    /operating\s*and\s*financial\s*review/i,
+    /operating\s*and\s*financial\s*reviews?/i,
     /management.s\s*discussion/i,
     /^md&a\b/i,
     /discussion\s*and\s*analysis/i,
     /financial\s*condition\s*and\s*results/i,
     /^results\s*of\s*operations/i,
   ],
-  "market-risk": [/quantitative.*qualitative.*market/i, /\bmarket\s*risk\b/i],
+  "market-risk": [/quantitative.*qualitative.*market/i, /\bmarket\s*risk/i],
   "legal-proceedings": [/legal\s*and\s*administrative\s*proceed/i, /legal\s*proceed/i],
   "financial-statements": [
     /condensed\s*consolidated\s*financial/i,
     /condensed\s*consolidated\s*statements/i,
+    /consolidated\s*financial\s*statements/i,
     /consolidated\s*statements\s*of/i,
+    /notes\s*to\s*consolidated\s*financial/i,
     /^financial\s*statements\b/i,
+    /^item\s*18\b/i,
   ],
   controls: [/controls\s*and\s*procedures/i],
   business: [/information\s*on\s*the\s*company/i],
+  "note-revenue": [/revenue\s*recognition/i],
+  "note-segments": [/segment\s*information/i, /operating\s*segments/i, /reportable\s*segments/i],
+  "note-cash": [/cash\s*and\s*cash\s*equivalent/i, /cash\s*equivalents/i],
+  "note-summary-policies": [
+    /summary\s*of\s*significant\s*accounting/i,
+    /significant\s*accounting\s*polic/i,
+  ],
+  "note-income-tax": [/income\s*tax/i],
+  "note-leases": [/\bleases\b/i],
+  "note-debt": [/long.term\s*debt/i, /\bborrowings\b/i],
+  "note-eps": [/earnings\s*per\s*share/i],
 };
 
 export function isDomesticForm(form: string | null): boolean {
@@ -65,10 +79,19 @@ export function resolveColumnForm(col: FilingColumn, period?: string): string | 
   return col.form ?? formFromPeriodId(period);
 }
 
+function sectionAliasHaystack(section: FilingColumn["sections"][number]): string {
+  const parts = [section.heading ?? "", section.label ?? ""];
+  // 6-K / stale-parse fallback: indexer may collapse to full-document with useful preview text.
+  if (section.id === "full-document") {
+    parts.push(section.text_preview ?? "");
+  }
+  return parts.join(" ").trim();
+}
+
 function sectionTextMatchesAlias(section: FilingColumn["sections"][number], sectionId: string): boolean {
   const patterns = SECTION_HEADING_ALIASES[sectionId];
   if (!patterns?.length) return false;
-  const haystack = `${section.heading ?? ""} ${section.label ?? ""}`.trim();
+  const haystack = sectionAliasHaystack(section);
   if (!haystack) return false;
   return patterns.some((re) => re.test(haystack));
 }
@@ -77,6 +100,20 @@ function sectionTextMatchesAlias(section: FilingColumn["sections"][number], sect
 export function columnHasCatalogSection(col: FilingColumn, sectionId: string): boolean {
   if (col.sections.some((s) => s.id === sectionId)) return true;
   return col.sections.some((s) => sectionTextMatchesAlias(s, sectionId));
+}
+
+/** Preview text for a catalog section — direct id or alias / full-document fallback. */
+export function catalogSectionPreview(col: FilingColumn, sectionId: string): string {
+  const direct = col.sections.find((s) => s.id === sectionId)?.text_preview?.trim();
+  if (direct) return direct;
+  const aliasSection = col.sections.find((s) => sectionTextMatchesAlias(s, sectionId));
+  return aliasSection?.text_preview?.trim() ?? "";
+}
+
+/** True when parse fell back to a single full-document stub (common on 6-K cover pages). */
+export function columnHasSparseSectionIndex(col: FilingColumn): boolean {
+  if (col.sections.length !== 1) return false;
+  return col.sections[0]?.id === "full-document";
 }
 
 /** Skip missing_section when foreign/interim form norms explain the gap vs domestic peers. */
@@ -88,5 +125,6 @@ export function shouldSuppressMissingSection(
   const form = resolveColumnForm(col, period);
   if (isForeignForm(form) && FOREIGN_OPTIONAL_SECTION_IDS.has(sectionId)) return true;
   if (isInterimPeriod(period) && INTERIM_OPTIONAL_SECTION_IDS.has(sectionId)) return true;
+  if (isForeignForm(form) && columnHasSparseSectionIndex(col)) return true;
   return false;
 }

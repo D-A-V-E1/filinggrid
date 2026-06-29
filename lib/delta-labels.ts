@@ -213,6 +213,10 @@ export const DELTA_MAP_ALIGNED_TOOLTIP =
 export const DELTA_MAP_NOT_FILED_LABEL = "Not filed";
 export const DELTA_MAP_NOT_FILED_TOOLTIP = "Section absent from this peer's report";
 
+export const DELTA_MAP_NOT_INDEXED_LABEL = "Not indexed";
+export const DELTA_MAP_NOT_INDEXED_TOOLTIP =
+  "Filing sections could not be indexed (common on 6-K cover pages before exhibit load)";
+
 export function formatSectionRowLabel(label: string): string {
   return label.replace(/^Item \d+[A-Z]? — /, "").replace(/^Note — /, "");
 }

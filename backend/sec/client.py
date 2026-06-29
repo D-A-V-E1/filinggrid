@@ -466,11 +466,18 @@ def _html_financial_score(html: bytes) -> int:
 
 async def fetch_filing_report_html(cik: str, filing: dict[str, Any]) -> bytes:
     """Load the best financial report HTML for a filing (6-K exhibits are often separate)."""
-    primary_html = await fetch_filing_html(cik, filing)
+    from filing_store import load_filing_report_html, save_filing_report_html
+
+    accession = filing["accession_no_dash"]
     form = (filing.get("form") or "").replace("/A", "").upper()
     if form != "6-K":
-        return primary_html
+        return await fetch_filing_html(cik, filing)
 
+    cached = load_filing_report_html(cik, accession)
+    if cached:
+        return cached
+
+    primary_html = await fetch_filing_html(cik, filing)
     try:
         index_items = await _fetch_filing_index(cik, filing)
     except httpx.HTTPError:
@@ -485,11 +492,14 @@ async def fetch_filing_report_html(cik: str, filing: dict[str, Any]) -> bytes:
         if doc_name == filing.get("primary_document"):
             continue
         try:
-            html = await fetch_filing_document(cik, filing["accession_no_dash"], doc_name)
+            html = await fetch_filing_document(cik, accession, doc_name)
         except httpx.HTTPError:
             continue
         score = _html_financial_score(html)
         if score > best_score or (score == best_score and len(html) > len(best)):
             best = html
             best_score = score
+
+    if best is not primary_html:
+        save_filing_report_html(cik, accession, best)
     return best
