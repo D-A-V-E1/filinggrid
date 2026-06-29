@@ -358,6 +358,63 @@ describe("scanDeltas headline metrics", () => {
     expect(flagsByRule(state, "headline_vs_median")).toHaveLength(0);
   });
 
+
+  it("uses interim 1.35x / 0.65x headline_vs_median thresholds on 10-Q compare", () => {
+    const state = baseState({
+      fiscalYear: 2026,
+      period: INTERIM_PERIOD,
+      columns: [column("MSFT", []), column("AAPL", [])],
+      financialsByTicker: {
+        MSFT: finWithQuarterly("MSFT", 2026, "Q2", { revenue: 100_000_000_000 }),
+        AAPL: finWithQuarterly("AAPL", 2026, "Q2", { revenue: 220_000_000_000 }),
+      },
+    });
+
+    const flags = flagsByRule(state, "headline_vs_median", "financial-statements");
+    expect(flags.some((f) => f.ticker === "AAPL" && f.metadata?.metric === "revenue")).toBe(true);
+  });
+
+  it("keeps annual 1.5x / 0.5x thresholds when interim band would not fire", () => {
+    const state = baseState({
+      fiscalYear: 2026,
+      period: INTERIM_PERIOD,
+      columns: [column("MSFT", []), column("AAPL", [])],
+      financialsByTicker: {
+        MSFT: finWithQuarterly("MSFT", 2026, "Q2", { revenue: 100_000_000_000 }),
+        AAPL: finWithQuarterly("AAPL", 2026, "Q2", { revenue: 200_000_000_000 }),
+      },
+    });
+
+    expect(flagsByRule(state, "headline_vs_median", "financial-statements")).toHaveLength(0);
+
+    const annual = baseState({
+      fiscalYear: 2025,
+      columns: [column("MSFT", []), column("AAPL", [])],
+      financialsByTicker: {
+        MSFT: {
+          ticker: "MSFT",
+          cik: "",
+          entity_name: "MSFT",
+          fiscal_year_filter: 2025,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [{ fy: 2025, revenue: 50_000_000_000 }],
+        },
+        AAPL: {
+          ticker: "AAPL",
+          cik: "",
+          entity_name: "AAPL",
+          fiscal_year_filter: 2025,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [{ fy: 2025, revenue: 151_000_000_000 }],
+        },
+      },
+    });
+
+    const annualFlags = flagsByRule(annual, "headline_vs_median", "financial-statements");
+    expect(annualFlags.some((f) => f.ticker === "AAPL" && f.metadata?.metric === "revenue")).toBe(true);
+  });
   it("still flags annual headline_vs_median from annual_summary", () => {
     const state = baseState({
       fiscalYear: 2025,

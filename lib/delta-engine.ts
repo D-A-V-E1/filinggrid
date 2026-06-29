@@ -308,8 +308,17 @@ function scanTopicPresence(state: DeltaSessionState, flags: DeltaFlag[]): void {
   }
 }
 
+function headlineVsMedianThresholds(period?: string): { high: number; low: number } {
+  if (parseInterimSlot(period)) {
+    return { high: 1.35, low: 0.65 };
+  }
+  return { high: 1.5, low: 0.5 };
+}
+
 function scanHeadlineMetrics(state: DeltaSessionState, flags: DeltaFlag[], comparable: boolean): void {
   if (!comparable) return;
+
+  const { high: highMult, low: lowMult } = headlineVsMedianThresholds(state.period);
 
   const valuesByMetric: Record<string, Record<string, number>> = {};
   for (const ticker of state.tickers) {
@@ -338,7 +347,7 @@ function scanHeadlineMetrics(state: DeltaSessionState, flags: DeltaFlag[], compa
     if (med == null || med === 0) continue;
 
     for (const [ticker, value] of Object.entries(byTicker)) {
-      if (value > med * 1.5) {
+      if (value > med * highMult) {
         pushFlag(flags, {
           id: flagId("headline_vs_median", ticker, "financial-statements", metric),
           ruleId: "headline_vs_median",
@@ -350,7 +359,7 @@ function scanHeadlineMetrics(state: DeltaSessionState, flags: DeltaFlag[], compa
           label: headlineVsMedianLabel(ticker, metric, "high"),
           metadata: { metric, value, median: med },
         });
-      } else if (value < med * 0.5 && value !== med) {
+      } else if (value < med * lowMult && value !== med) {
         pushFlag(flags, {
           id: flagId("headline_vs_median", ticker, "financial-statements", metric),
           ruleId: "headline_vs_median",
