@@ -67,7 +67,7 @@ export default function DeltaStrip({
                   >
                     Key deltas
                   </h2>
-                  {!loading && flags.length > 0 && (
+                  {flags.length > 0 && (
                     <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
                       {flags.length}
                     </span>
@@ -109,7 +109,7 @@ export default function DeltaStrip({
                 : "No material differences detected across scanned sections."}
             </p>
           )}
-          {!loading && flags.length > 0 && (
+          {flags.length > 0 && (
             <ul className={`flex flex-col ${compact ? "gap-1" : "gap-1.5"}`}>
               {flags.map((flag) => (
                 <li key={flag.id}>
@@ -165,7 +165,7 @@ export default function DeltaStrip({
               : "No material differences detected across scanned sections."}
           </span>
         )}
-        {!loading && stripHiddenCount > 0 && (
+        {stripHiddenCount > 0 && (
           <span className="text-xs text-slate-500">+{stripHiddenCount} more</span>
         )}
         {!loading && mapHiddenCount > 0 && onViewMap && totalFlagCount != null && (
@@ -181,7 +181,7 @@ export default function DeltaStrip({
 
       {tagline && !loading && <p className="mb-2 text-xs text-slate-500">{tagline}</p>}
 
-      {!loading && flags.length > 0 && (
+      {flags.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {flags.map((flag) => (
             <button

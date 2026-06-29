@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import DeltaCountBadge from "@/components/compare/DeltaCountBadge";
 import {
   DELTA_MAP_HEADLINE_SCANNING,
@@ -32,24 +31,13 @@ export default function DeltaReportLinkBar({
   sectionsWithDeltas,
   settling = false,
 }: DeltaReportLinkBarProps) {
-  const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    if (settling) {
-      setRevealed(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setRevealed(true), 300);
-    return () => window.clearTimeout(timer);
-  }, [settling, flags.length, sectionsWithDeltas]);
-
-  const spinning = settling || !revealed;
-  const headline = spinning
-    ? DELTA_MAP_HEADLINE_SCANNING
-    : deltaMapHeadline(flags.length, sectionsWithDeltas);
-  const insightTeaser = spinning ? null : deltaMapInsightTeaser(flags);
+  const headline =
+    settling && flags.length === 0
+      ? DELTA_MAP_HEADLINE_SCANNING
+      : deltaMapHeadline(flags.length, sectionsWithDeltas);
+  const insightTeaser = settling ? null : deltaMapInsightTeaser(flags);
   const reportHref = deltaReportPath(peerSlug, period);
-  const hasFlags = !spinning && flags.length > 0;
+  const hasFlags = flags.length > 0;
 
   return (
     <section
@@ -62,7 +50,7 @@ export default function DeltaReportLinkBar({
     >
       <div className="flex w-full flex-col gap-1.5 px-4 py-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
-          <DeltaCountBadge count={flags.length} spinning={spinning} hasFlags={flags.length > 0} />
+          <DeltaCountBadge count={flags.length} loading={settling} hasFlags={flags.length > 0} />
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">
               Section delta map
@@ -72,7 +60,7 @@ export default function DeltaReportLinkBar({
               <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{insightTeaser}</p>
             )}
             <p className="mt-0.5 text-[11px] text-slate-500">
-              {spinning
+              {settling
                 ? "Scanning sections for differences…"
                 : `Scanned ${scannedCount} section${scannedCount === 1 ? "" : "s"} across ${tickers.length} peers`}
             </p>
