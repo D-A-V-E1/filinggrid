@@ -13,7 +13,6 @@ import {
 import {
   fetchFinancialStatements,
   ApiError,
-  fetchSectionHtml,
   formatApiError,
   type FinancialStatementsXbrl,
   type FinancialsXbrl,
@@ -23,6 +22,12 @@ import {
   type XbrlDisclosure,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
+import {
+  fetchSectionHtmlDeduped,
+  prefetchSectionHtml,
+  readCachedSectionHtml,
+  type SectionHtmlRequest,
+} from "@/lib/section-html";
 import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
 import { resolveFilingColumnContentMode } from "@/lib/filingColumnView";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
@@ -446,15 +451,19 @@ function ExcerptToggleButton({
   label,
   loading,
   onClick,
+  onWarm,
 }: {
   label: string;
   loading: boolean;
   onClick: () => void;
+  onWarm?: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={onWarm}
+      onFocus={onWarm}
       disabled={loading}
       className="mb-3 inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 font-sans text-[11px] font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-60"
     >
@@ -621,6 +630,27 @@ function FilingColumn({
     isStatementSection,
   });
 
+  const sectionHtmlRequest = useMemo((): SectionHtmlRequest | null => {
+    if (!activeSection || !showExcerptToggle) return null;
+    const compareFiscalYear = fiscalYearFilter ?? null;
+    const { fiscalYear: requestFy, period: requestPeriod } = sectionHtmlRequestParams(
+      period,
+      compareFiscalYear
+    );
+    return {
+      ticker,
+      sectionId: activeSection,
+      fiscalYear: requestFy,
+      period: requestPeriod,
+      filingCacheKey: cacheKey,
+      sessionCacheKey: cacheKey,
+    };
+  }, [activeSection, showExcerptToggle, ticker, period, fiscalYearFilter, cacheKey]);
+
+  const warmSectionHtml = useCallback(() => {
+    if (sectionHtmlRequest) prefetchSectionHtml(sectionHtmlRequest);
+  }, [sectionHtmlRequest]);
+
   const xbrlPanel = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return null;
 
@@ -676,10 +706,51 @@ function FilingColumn({
 
   useEffect(() => {
     setShowHtmlExcerpt(false);
-    setSectionHtml(null);
     setSectionError("");
     setLoadingHtml(false);
-  }, [activeSection, ticker]);
+
+    if (!activeSection) {
+      setSectionHtml(null);
+      return;
+    }
+
+    const inline = section?.html?.trim();
+    if (inline) {
+      setSectionHtml(inline);
+      if (cacheKey) saveSectionHtml(cacheKey, activeSection, inline);
+      return;
+    }
+
+    if (cacheKey) {
+      const cached = loadSectionHtml(cacheKey, activeSection);
+      if (cached) {
+        setSectionHtml(cached);
+        return;
+      }
+    }
+
+    setSectionHtml(null);
+  }, [activeSection, ticker, cacheKey, section?.html]);
+
+  useEffect(() => {
+    if (!sectionHtmlRequest || sectionHtml) return;
+    if (readCachedSectionHtml(sectionHtmlRequest)) return;
+
+    let cancelled = false;
+    void fetchSectionHtmlDeduped(sectionHtmlRequest)
+      .then((html) => {
+        if (cancelled || !html?.trim()) return;
+        setSectionHtml(html);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && (err.isPaywall || err.status === 404)) return;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sectionHtmlRequest, sectionHtml]);
 
   useLayoutEffect(() => {
     scrollResetActiveRef.current = !applyColumnScrollFocus(scrollRef.current, focusRowKey);
@@ -781,36 +852,30 @@ function FilingColumn({
 
     if (sectionHtml) {
       setShowHtmlExcerpt(true);
+      scrollColumnContentToTop(scrollRef.current);
       return;
     }
 
-    if (cacheKey) {
-      const cached = loadSectionHtml(cacheKey, activeSection);
-      if (cached) {
-        setSectionHtml(cached);
-        setShowHtmlExcerpt(true);
-        scrollColumnContentToTop(scrollRef.current);
-        return;
-      }
+    if (!sectionHtmlRequest) return;
+
+    const cached = readCachedSectionHtml(sectionHtmlRequest);
+    if (cached) {
+      setSectionHtml(cached);
+      setShowHtmlExcerpt(true);
+      scrollColumnContentToTop(scrollRef.current);
+      return;
     }
 
     setLoadingHtml(true);
     setSectionError("");
 
-    const compareFiscalYear = fiscalYearFilter ?? null;
-    const { fiscalYear: requestFy, period: requestPeriod } = sectionHtmlRequestParams(
-      period,
-      compareFiscalYear
-    );
-
-    fetchSectionHtml(ticker, activeSection, requestFy, requestPeriod)
+    fetchSectionHtmlDeduped(sectionHtmlRequest)
       .then((html) => {
         if (!html?.trim()) {
           setSectionError("No excerpt available for this section in the selected filing.");
           setShowHtmlExcerpt(false);
           return;
         }
-        if (cacheKey && html) saveSectionHtml(cacheKey, activeSection, html);
         setSectionHtml(html);
         setShowHtmlExcerpt(true);
         scrollColumnContentToTop(scrollRef.current);
@@ -843,11 +908,7 @@ function FilingColumn({
     activeSection,
     loadingHtml,
     sectionHtml,
-    cacheKey,
-    ticker,
-    fiscalYear,
-    period,
-    fiscalYearFilter,
+    sectionHtmlRequest,
     onPaywall,
   ]);
 
@@ -1013,6 +1074,7 @@ function FilingColumn({
                     label="View SEC filing excerpt"
                     loading={loadingHtml}
                     onClick={loadHtmlExcerpt}
+                    onWarm={warmSectionHtml}
                   />
                   {isNarrativeSection(activeSection) && sectionFilingUrl && (
                     <EdgarSectionLink filingUrl={sectionFilingUrl} />

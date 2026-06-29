@@ -590,7 +590,8 @@ export async function fetchSectionHtml(
   ticker: string,
   sectionId: string,
   fiscalYear?: number | null,
-  period?: string | null
+  period?: string | null,
+  filingCacheKey?: string | null
 ): Promise<string> {
   const params = new URLSearchParams({
     ticker: ticker.toUpperCase(),
@@ -599,6 +600,7 @@ export async function fetchSectionHtml(
   });
   if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
   if (period?.trim()) params.set("period", period.trim());
+  if (filingCacheKey?.trim()) params.set("cache_key", filingCacheKey.trim());
 
   const url = `/parse/section?${params}`;
   const result = await apiFetch<SectionHtmlResponse>(url);

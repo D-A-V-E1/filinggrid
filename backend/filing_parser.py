@@ -420,12 +420,28 @@ async def list_periods_for_tickers(tickers: list[str]) -> list[dict[str, Any]]:
     return merge_filing_periods(period_lists)
 
 
+def _section_html_from_parsed_cache(cache_key: str | None, section_id: str) -> str | None:
+    if not cache_key:
+        return None
+    cached = load_parsed_column(cache_key)
+    if not cached:
+        return None
+    _, sections = cached
+    for section in sections:
+        if section.get("id") == section_id:
+            html = section.get("html")
+            if html:
+                return html
+    return None
+
+
 async def get_section_html(
     ticker: str,
     section_id: str,
     fiscal_year: int | None,
     *,
     content_format: str = "html",
+    cache_key: str | None = None,
 ) -> SectionHtmlResponse:
     ticker = ticker.upper().strip()
     want_html = content_format != "text"
@@ -433,14 +449,21 @@ async def get_section_html(
 
     html: str | None = None
     text: str | None = None
-    cache_key = find_cache_key(ticker, fiscal_year)
+    resolved_cache_key = cache_key or find_cache_key(ticker, fiscal_year)
 
     if want_html:
-        html = find_section_html(ticker, section_id, fiscal_year)
+        html = _section_html_from_parsed_cache(resolved_cache_key, section_id)
+        if html is None:
+            html = find_section_html(ticker, section_id, fiscal_year)
 
     if (want_html and html is None) or want_text:
-        extracted_html, extracted_text, cache_key = await _extract_and_cache_section(
-            ticker, section_id, fiscal_year, cache_key, want_html=want_html, want_text=want_text
+        extracted_html, extracted_text, resolved_cache_key = await _extract_and_cache_section(
+            ticker,
+            section_id,
+            fiscal_year,
+            resolved_cache_key,
+            want_html=want_html,
+            want_text=want_text,
         )
         if html is None:
             html = extracted_html
@@ -461,7 +484,7 @@ async def get_section_html(
         section_id=section_id,
         html=html or "",
         text=text or "",
-        cache_key=cache_key,
+        cache_key=resolved_cache_key,
     )
 
 

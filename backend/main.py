@@ -304,12 +304,15 @@ async def parse_section_endpoint(
     section_id: str = Query(..., min_length=1, max_length=64),
     fiscal_year: int | None = Query(None),
     period: str | None = Query(None),
+    cache_key: str | None = Query(None, max_length=128),
     format: Literal["html", "text"] = Query("html", alias="format"),
 ):
     check_parse_access(auth, 1)
     await check_free_period_access(auth, [ticker], fiscal_year, period)
     try:
-        return await get_section_html(ticker, section_id, fiscal_year, content_format=format)
+        return await get_section_html(
+            ticker, section_id, fiscal_year, content_format=format, cache_key=cache_key
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
