@@ -6,6 +6,7 @@ import pytest
 
 from sec.xbrl_client import (
     _extract_ix_text_block,
+    _format_xbrl_disclosure_fragment,
     extract_note_disclosures,
 )
 
@@ -17,6 +18,19 @@ Fair value intro
 <ix:continuation id="c1">Fair value table detail</ix:continuation>
 <ix:nonNumeric name="us-gaap:RevenueFromContractWithCustomerTextBlock">
 Revenue policy narrative
+</ix:nonNumeric>
+</body></html>
+"""
+
+SAMPLE_TABLE_HTML = """
+<html><body>
+<ix:nonNumeric name="us-gaap:InvestmentsInDebtAndEquitySecuritiesTextBlock">
+<p>Investments summary</p>
+<table>
+<tr><td align="left">Issuance of shares related to business acquisitions</td><td align="right">238,468</td></tr>
+<tr><td align="left">Net income and comprehensive income for the year</td><td align="right">( 10 )</td></tr>
+<tr><td align="left">No activity</td><td align="right">—</td></tr>
+</table>
 </ix:nonNumeric>
 </body></html>
 """
@@ -49,6 +63,30 @@ def test_extract_ix_text_block_with_continuation():
     assert text is not None
     assert "Fair value intro" in text
     assert "Fair value table detail" in text
+
+
+def test_format_xbrl_disclosure_fragment_preserves_tables():
+    fragment = """
+    <p>Rollforward</p>
+    <table>
+    <tr><td align="left">Issuance of shares</td><td align="right">238,468</td></tr>
+    <tr><td align="left">Net income</td><td align="right">( 10 )</td></tr>
+    </table>
+    """
+    formatted = _format_xbrl_disclosure_fragment(fragment)
+    assert "<table" in formatted
+    assert "filing-table-wrap" in formatted
+    assert "238,468" in formatted
+    assert "( 10 )" in formatted
+    assert "Issuance of shares" in formatted
+
+
+def test_extract_ix_text_block_preserves_investment_table():
+    text = _extract_ix_text_block(SAMPLE_TABLE_HTML, "InvestmentsInDebtAndEquitySecuritiesTextBlock")
+    assert text is not None
+    assert "<table" in text
+    assert "238,468" in text
+    assert "Issuance of shares related to business acquisitions" in text
 
 
 def test_extract_note_disclosures_includes_html_blocks():

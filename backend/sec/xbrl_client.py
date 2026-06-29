@@ -1218,6 +1218,9 @@ NOTE_SECTION_TEXT_BLOCKS: dict[str, list[dict[str, Any]]] = {
 }
 
 
+_TABLE_FRAGMENT_RE = re.compile(r"<\s*(table|tr)\b", re.I)
+
+
 def _strip_xbrl_html(html_fragment: str) -> str:
     """Convert inline XBRL HTML fragments to plain prose for display."""
     text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html_fragment, flags=re.I | re.S)
@@ -1231,6 +1234,17 @@ def _strip_xbrl_html(html_fragment: str) -> str:
     text = re.sub(r" *\n *", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def _format_xbrl_disclosure_fragment(html_fragment: str) -> str:
+    """Preserve SEC disclosure tables; strip other inline XBRL markup to prose."""
+    if not html_fragment or not html_fragment.strip():
+        return ""
+    if _TABLE_FRAGMENT_RE.search(html_fragment):
+        from sec.section_extractor import _normalize_excerpt_html
+
+        return _normalize_excerpt_html(html_fragment)
+    return _strip_xbrl_html(html_fragment)
 
 
 def _extract_ix_text_block(html: str, concept: str) -> str | None:
@@ -1248,7 +1262,7 @@ def _extract_ix_text_block(html: str, concept: str) -> str | None:
     close = re.search(r"</ix:nonNumeric>", html[match.end() :], re.I)
     if close:
         inner = html[match.end() : match.end() + close.start()]
-        heading = _strip_xbrl_html(inner)
+        heading = _format_xbrl_disclosure_fragment(inner)
         if heading:
             parts.append(heading)
 
@@ -1264,7 +1278,7 @@ def _extract_ix_text_block(html: str, concept: str) -> str | None:
         cont_match = cont_pat.search(html)
         if not cont_match:
             break
-        body = _strip_xbrl_html(cont_match.group(1))
+        body = _format_xbrl_disclosure_fragment(cont_match.group(1))
         if body:
             parts.append(body)
         cont_tag = cont_match.group(0)

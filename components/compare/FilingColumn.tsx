@@ -75,6 +75,8 @@ interface FilingColumnProps {
   deltaFlagCount?: number;
   foreignFilerTooltip?: string | null;
   sectionScrollRequest?: number;
+  /** When true, another column is centering on a metric row — skip window scroll reset. */
+  metricFocusActive?: boolean;
   focusRowKey?: string | null;
 }
 
@@ -412,6 +414,44 @@ function splitDisclosureParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
+function disclosureLooksLikeHtml(text: string): boolean {
+  return /<\s*(table|tr|div[^>]*\bfiling-table-wrap\b)/i.test(text);
+}
+
+function XbrlDisclosureBody({ text }: { text: string }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const isHtml = useMemo(() => disclosureLooksLikeHtml(text), [text]);
+  const safeHtml = useMemo(
+    () => (isHtml ? sanitizeExcerptHtml(text) : ""),
+    [isHtml, text]
+  );
+
+  useEffect(() => {
+    if (!isHtml) return;
+    return attachFilingTableWheelForwarding(contentRef.current);
+  }, [isHtml, safeHtml]);
+
+  if (isHtml) {
+    return (
+      <div
+        ref={contentRef}
+        className="xbrl-disclosure-content filing-content mt-2 min-w-0 max-w-full text-xs leading-snug text-slate-800"
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      />
+    );
+  }
+
+  return (
+    <div className="narrative-content narrative-content--disclosure mt-2">
+      {splitDisclosureParagraphs(text).map((paragraph, i) => (
+        <p key={i} className={i > 0 ? "mt-2" : undefined}>
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function XbrlDisclosuresPanel({ disclosures }: { disclosures: XbrlDisclosure[] }) {
   if (disclosures.length === 0) return null;
 
@@ -420,18 +460,12 @@ function XbrlDisclosuresPanel({ disclosures }: { disclosures: XbrlDisclosure[] }
       <p className="mb-3 font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         XBRL disclosure text
       </p>
-      <div className="space-y-5">
+      <div className="space-y-4">
         {disclosures.map((block) => (
           <section key={`${block.key}-${block.concept}`}>
             <h3 className="font-sans text-sm font-semibold text-slate-900">{block.label}</h3>
             <p className="mt-0.5 font-mono text-[10px] text-slate-400">{block.concept}</p>
-            <div className="narrative-content mt-2">
-              {splitDisclosureParagraphs(block.text).map((paragraph, i) => (
-                <p key={i} className={i > 0 ? "mt-3" : undefined}>
-                  {paragraph}
-                </p>
-              ))}
-            </div>
+            <XbrlDisclosureBody text={block.text} />
           </section>
         ))}
       </div>
@@ -536,6 +570,7 @@ function FilingColumn({
   deltaFlagCount = 0,
   foreignFilerTooltip = null,
   sectionScrollRequest = 0,
+  metricFocusActive = false,
   focusRowKey = null,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
@@ -565,6 +600,7 @@ function FilingColumn({
   activeSectionRef.current = activeSection;
   const scrollResetActiveRef = useRef(false);
   const metricScrollGenerationRef = useRef(getScrollGeneration());
+  const resetWindowOnColumnScroll = !metricFocusActive && !focusRowKey;
   const columnContentKey = `${activeSection ?? "none"}:${sectionScrollRequest}`;
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
   const [loadingHtml, setLoadingHtml] = useState(false);
@@ -747,10 +783,10 @@ function FilingColumn({
       scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 24, generation);
       return;
     }
-    resetWindowScroll();
+    if (resetWindowOnColumnScroll) resetWindowScroll();
     scrollFilingColumnToTop(scrollRef.current);
     scrollResetActiveRef.current = true;
-  }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
+  }, [activeSection, ticker, sectionScrollRequest, focusRowKey, resetWindowOnColumnScroll]);
 
   useLayoutEffect(() => {
     if (!activeSection) return;
@@ -761,7 +797,7 @@ function FilingColumn({
       scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 24, generation);
       return;
     }
-    resetWindowScroll();
+    if (resetWindowOnColumnScroll) resetWindowScroll();
     scrollFilingColumnToTop(scrollRef.current);
     scrollResetActiveRef.current = true;
   }, [
@@ -775,13 +811,14 @@ function FilingColumn({
     loadingHtml,
     sectionScrollRequest,
     focusRowKey,
+    resetWindowOnColumnScroll,
   ]);
 
   useEffect(() => {
     if (!activeSection) return;
     if (focusRowKey) return;
 
-    resetWindowScroll();
+    if (resetWindowOnColumnScroll) resetWindowScroll();
     scrollFilingColumnToTop(scrollRef.current);
     const t50 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 50);
     const t300 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 300);
@@ -802,6 +839,7 @@ function FilingColumn({
     loadingHtml,
     sectionScrollRequest,
     focusRowKey,
+    resetWindowOnColumnScroll,
   ]);
 
   useEffect(() => {

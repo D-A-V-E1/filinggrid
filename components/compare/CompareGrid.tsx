@@ -65,7 +65,6 @@ import {
   resetCompareViewScroll,
   resetCompareViewScrollWhenReady,
   resetAllFilingColumnScrollsExcept,
-  resetWindowScroll,
 } from "@/lib/filing-column-scroll";
 import { isMetricFocusDeltaFlag } from "@/lib/delta-labels";
 
@@ -163,7 +162,6 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       bumpScrollGeneration();
       const metricFocus = Boolean(rowKey);
       if (metricFocus && focusTicker) {
-        resetWindowScroll();
         resetAllFilingColumnScrollsExcept(focusTicker);
       } else {
         setSectionFocusTicker(null);
@@ -1013,6 +1011,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
                         deltaFlagCount={mainstreamHeat[col.ticker] ?? 0}
                         foreignFilerTooltip={foreignFilerTooltip(col.form ?? formFromPeriodId(period))}
                         sectionScrollRequest={sectionScrollRequest}
+                        metricFocusActive={sectionFocusRowKey != null}
                         focusRowKey={
                           sectionFocusTicker === col.ticker ? sectionFocusRowKey : null
                         }

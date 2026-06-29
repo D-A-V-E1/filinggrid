@@ -379,6 +379,68 @@
     overflow-wrap: anywhere;
   }
 
+  .narrative-content--disclosure {
+    @apply max-w-none whitespace-normal text-xs leading-snug;
+  }
+
+  .xbrl-disclosure-content.filing-content {
+    line-height: 1.35;
+  }
+
+  .xbrl-disclosure-content.filing-content > :not(.filing-table-wrap) {
+    margin-bottom: 0.5rem;
+  }
+
+  .xbrl-disclosure-content.filing-content table {
+    @apply text-[11px];
+    width: 100%;
+    max-width: 100%;
+    table-layout: auto;
+  }
+
+  .xbrl-disclosure-content.filing-content .filing-table-wrap {
+    margin-bottom: 0.5rem;
+  }
+
+  .xbrl-disclosure-content.filing-content .filing-table-wrap > table {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .xbrl-disclosure-content.filing-content td,
+  .xbrl-disclosure-content.filing-content th {
+    @apply px-1.5 py-0.5;
+    vertical-align: top;
+  }
+
+  .xbrl-disclosure-content.filing-content tr td:not(:first-child):not([align="right"]),
+  .xbrl-disclosure-content.filing-content tr th:not(:first-child):not([align="right"]) {
+    min-width: 3rem;
+  }
+
+  .xbrl-disclosure-content.filing-content tr td[align="right"]:not(:first-child),
+  .xbrl-disclosure-content.filing-content tr th[align="right"]:not(:first-child) {
+    min-width: 3rem;
+    white-space: nowrap;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table {
+    table-layout: fixed;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr td:first-child,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr th:first-child {
+    width: 58%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr td[align="right"],
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr th[align="right"] {
+    width: 42%;
+  }
+
   .left-pane-panel {
     display: flex;
     min-height: 0;
