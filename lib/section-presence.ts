@@ -201,6 +201,14 @@ export function columnEligibleForMissingSectionGap(
 ): boolean {
   if (columnParseFailed(col)) return false;
   if (financialsNotesXbrlPending(financials, sectionId)) return false;
+  if (
+    sectionId.startsWith("note-") &&
+    financials?.headline_only === false &&
+    isForeignForm(resolveColumnForm(col)) &&
+    (!financials.notes_xbrl || Object.keys(financials.notes_xbrl).length === 0)
+  ) {
+    return false;
+  }
   return true;
 }
 

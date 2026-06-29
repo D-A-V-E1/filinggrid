@@ -187,6 +187,12 @@ describe("financialsNotesXbrlPending", () => {
       true
     );
   });
+
+  it("excludes foreign filers with empty notes_xbrl after full financials scan", () => {
+    const foreign = col([{ id: "financial-statements", preview: "Statements." }], "20-F");
+    const fullEmptyNotes = { ...headlineFin, headline_only: false as const, notes_xbrl: {} };
+    expect(columnEligibleForMissingSectionGap(foreign, "note-revenue", fullEmptyNotes)).toBe(false);
+  });
 });
 
 describe("columnHasReliableSectionPresence", () => {

@@ -279,6 +279,20 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   );
 
   useEffect(() => {
+    if (loadingFinancials) return;
+    for (const ticker of tickers) {
+      const upper = ticker.toUpperCase();
+      const fin = financialsByTicker[upper];
+      if (!fin) continue;
+      if (fin.headline_only === false) continue;
+      const notes = fin.notes_xbrl;
+      const hasNotes = notes && Object.keys(notes).length > 0;
+      if (hasNotes) continue;
+      upgradeFullFinancials(upper);
+    }
+  }, [tickers, financialsByTicker, loadingFinancials, upgradeFullFinancials]);
+
+  useEffect(() => {
     if (!activeSection?.startsWith("note-")) return;
     for (const ticker of tickers) {
       const upper = ticker.toUpperCase();
