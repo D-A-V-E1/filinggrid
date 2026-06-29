@@ -149,6 +149,24 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     [scrollTickerColumnIntoView]
   );
 
+  const resetFilingColumnScrollPositions = useCallback(() => {
+    const container = columnsScrollRef.current;
+    if (!container) return;
+    container.querySelectorAll<HTMLElement>(".filing-column-scroll").forEach((el) => {
+      el.scrollTop = 0;
+      el.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+  }, []);
+
+  const resetFilingColumnScrollWhenReady = useCallback(
+    (attemptsLeft = 8) => {
+      resetFilingColumnScrollPositions();
+      if (attemptsLeft <= 0) return;
+      requestAnimationFrame(() => resetFilingColumnScrollWhenReady(attemptsLeft - 1));
+    },
+    [resetFilingColumnScrollPositions]
+  );
+
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
 
   const buildPlaceholderColumn = useCallback(
@@ -536,6 +554,9 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const handleSectionSelect = useCallback(
     (sectionId: string, focusTicker?: string, rowKey?: string) => {
+      if (!rowKey) {
+        resetFilingColumnScrollPositions();
+      }
       setActiveSection(sectionId);
       setSectionScrollRequest((n) => n + 1);
       setSectionFocusTicker(focusTicker ?? null);
@@ -543,8 +564,15 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       if (focusTicker) {
         scrollTickerColumnIntoViewWhenReady(focusTicker);
       }
+      if (!rowKey) {
+        requestAnimationFrame(() => resetFilingColumnScrollWhenReady());
+      }
     },
-    [scrollTickerColumnIntoViewWhenReady]
+    [
+      resetFilingColumnScrollPositions,
+      resetFilingColumnScrollWhenReady,
+      scrollTickerColumnIntoViewWhenReady,
+    ]
   );
 
   const deltaScan = useMemo(() => {
@@ -659,7 +687,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ApiHealthBanner healthy={apiHealthy} warming={!apiWarmupDone} />
       <div className="relative z-30 flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
         <TickerSearchBar

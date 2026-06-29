@@ -97,17 +97,6 @@ function scrollMetricRowIntoView(scrollEl: HTMLDivElement | null, rowKey: string
   return true;
 }
 
-function applyColumnScrollFocus(
-  scrollEl: HTMLDivElement | null,
-  focusRowKey?: string | null
-): boolean {
-  if (focusRowKey && scrollMetricRowIntoView(scrollEl, focusRowKey)) {
-    return true;
-  }
-  scrollColumnContentToTop(scrollEl);
-  return false;
-}
-
 function formatColumnError(error: string): string {
   if (/Compressed file ended before the end-of-stream/i.test(error)) {
     return "Filing could not be loaded (corrupted server cache). Use Retry failed columns above.";
@@ -754,8 +743,13 @@ function FilingColumn({
     setSectionHtml(null);
   }, [activeSection, ticker, cacheKey, section?.html]);
 
-  useEffect(() => {
-    scrollResetActiveRef.current = !applyColumnScrollFocus(scrollRef.current, focusRowKey);
+  useLayoutEffect(() => {
+    if (focusRowKey && scrollMetricRowIntoView(scrollRef.current, focusRowKey)) {
+      scrollResetActiveRef.current = false;
+      return;
+    }
+    scrollColumnContentToTop(scrollRef.current);
+    scrollResetActiveRef.current = true;
   }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
 
   useLayoutEffect(() => {
@@ -763,8 +757,12 @@ function FilingColumn({
     if (sectionsPending) return;
     if (notesPending && activeSection.startsWith("note-")) return;
     if (financialsPending && activeSection === "financial-statements") return;
-
-    scrollResetActiveRef.current = !applyColumnScrollFocus(scrollRef.current, focusRowKey);
+    if (focusRowKey && scrollMetricRowIntoView(scrollRef.current, focusRowKey)) {
+      scrollResetActiveRef.current = false;
+      return;
+    }
+    scrollColumnContentToTop(scrollRef.current);
+    scrollResetActiveRef.current = true;
   }, [
     activeSection,
     sectionsPending,
@@ -792,7 +790,7 @@ function FilingColumn({
 
     const stop = window.setTimeout(() => {
       scrollResetActiveRef.current = false;
-    }, 600);
+    }, 1200);
 
     return () => {
       observer.disconnect();
