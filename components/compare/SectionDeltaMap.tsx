@@ -1,10 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { FilingColumn } from "@/lib/api";
-import type { DeltaFlag } from "@/lib/delta-types";
+import type { DeltaFlag, DeltaSeverity } from "@/lib/delta-types";
 import { flagsForSection } from "@/lib/delta-engine";
-import { DELTA_MAP_BADGE_LEGEND, deltaRuleShortLabel } from "@/lib/delta-labels";
+import {
+  cellFlagsTooltip,
+  DELTA_MAP_ALIGNED_LABEL,
+  DELTA_MAP_ALIGNED_TOOLTIP,
+  DELTA_MAP_BADGE_CONFIG,
+  DELTA_MAP_NOT_FILED_LABEL,
+  DELTA_MAP_NOT_FILED_TOOLTIP,
+  deltaRuleBadgeWithIcon,
+} from "@/lib/delta-labels";
 
 interface SectionDeltaMapProps {
   tickers: string[];
@@ -19,6 +28,12 @@ interface SectionDeltaMapProps {
   onExpandedChange?: (expanded: boolean) => void;
 }
 
+const SEVERITY_CELL_TONE: Record<DeltaSeverity, string> = {
+  P1: "border-amber-200 bg-amber-50 text-amber-900",
+  P2: "border-brand-200 bg-brand-50 text-brand-900",
+  P3: "border-slate-200 bg-slate-50 text-slate-700",
+};
+
 function formatSectionRowLabel(label: string): string {
   return label.replace(/^Item \d+[A-Z]? — /, "").replace(/^Note — /, "");
 }
@@ -27,35 +42,83 @@ function cellHasSection(col: FilingColumn | undefined, sectionId: string): boole
   return col?.sections.some((s) => s.id === sectionId) ?? false;
 }
 
-function cellTooltip(cellFlags: DeltaFlag[]): string {
-  if (cellFlags.length === 0) return "";
-  if (cellFlags.length === 1) return cellFlags[0].label;
-  return cellFlags.map((f) => f.label).join("\n");
+function severityTone(severity: DeltaSeverity): string {
+  return SEVERITY_CELL_TONE[severity];
+}
+
+function TooltipContent({ heading, lines }: { heading: string; lines: string[] }) {
+  return (
+    <div className="space-y-1">
+      <p className="font-medium text-slate-800">{heading}</p>
+      {lines.map((line) => (
+        <p key={line} className={line.startsWith("e.g.") ? "text-slate-400 italic" : "text-slate-600"}>
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function DeltaMapTooltip({ tip, children }: { tip: ReactNode; children: ReactNode }) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+
+  const show = (target: EventTarget & HTMLElement) => setAnchor(target.getBoundingClientRect());
+  const hide = () => setAnchor(null);
+
+  return (
+    <span
+      className="inline-flex"
+      onMouseEnter={(e) => show(e.currentTarget)}
+      onMouseLeave={hide}
+      onFocus={(e) => show(e.currentTarget)}
+      onBlur={hide}
+    >
+      {children}
+      {anchor &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="pointer-events-none fixed z-[200] w-max max-w-[280px] -translate-x-1/2 -translate-y-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-left text-[11px] leading-snug text-slate-700 shadow-lg"
+            style={{ left: anchor.left + anchor.width / 2, top: anchor.top - 6 }}
+          >
+            {tip}
+          </div>,
+          document.body,
+        )}
+    </span>
+  );
 }
 
 function DeltaMapLegend() {
   return (
-    <div className="space-y-1 text-[11px] text-slate-500">
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        <span>
-          <span className="font-medium text-amber-900">Missing</span>
-          <span className="text-slate-400"> — </span>
-          peer omits a section others include
-        </span>
-        <span className="hidden sm:inline text-slate-300">|</span>
-        <span>
-          <span className="font-mono text-slate-400">·</span>
-          <span className="text-slate-400"> same across peers</span>
-          <span className="mx-1 text-slate-300">·</span>
-          <span className="font-mono text-slate-400">—</span>
-          <span className="text-slate-400"> not in this filing</span>
-        </span>
-      </p>
-      <p className="leading-snug">
-        <span className="font-medium text-slate-600">Badges</span>
-        <span className="text-slate-400"> — </span>
-        {DELTA_MAP_BADGE_LEGEND}
-        <span className="text-slate-400"> · minor footnote wording not shown</span>
+    <div className="space-y-2 text-[11px]">
+      <p className="font-medium text-slate-600">What the badges mean</p>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {DELTA_MAP_BADGE_CONFIG.map((entry) => (
+          <div key={entry.ruleId} className="flex min-w-0 gap-2">
+            <span
+              className={`shrink-0 whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-medium ${severityTone(entry.severity)}`}
+            >
+              {entry.icon} {entry.badgeLabel}
+            </span>
+            <div className="min-w-0 leading-snug">
+              <p className="text-slate-600">{entry.subtitle}</p>
+              <p className="text-slate-400 italic">e.g. {entry.example}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="border-t border-slate-100 pt-1.5 leading-snug text-slate-500">
+        <span className="font-medium text-slate-600">{DELTA_MAP_ALIGNED_LABEL}</span>
+        {" — "}
+        section matches peers, no material difference
+        <span className="mx-1.5 text-slate-300">·</span>
+        <span className="font-medium text-slate-500">{DELTA_MAP_NOT_FILED_LABEL}</span>
+        {" — "}
+        section absent from this peer&apos;s report
+        <span className="mx-1.5 text-slate-300">·</span>
+        minor footnote wording differences are not shown
       </p>
     </div>
   );
@@ -125,11 +188,11 @@ export default function SectionDeltaMap({
 
       {expanded && (
         <div className="delta-map-overlay absolute inset-x-0 top-full border-b border-slate-200 bg-white shadow-lg">
-          <div className="border-b border-slate-100 px-4 py-1.5">
+          <div className="border-b border-slate-100 px-4 py-2">
             <DeltaMapLegend />
           </div>
           <div className="delta-map-overlay-scroll px-4 py-2">
-            <table className="w-full min-w-[480px] border-collapse text-xs">
+            <table className="w-full min-w-[520px] border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-500">
                   <th className="sticky left-0 z-10 bg-white py-1.5 pr-3 font-semibold">Section</th>
@@ -154,58 +217,75 @@ export default function SectionDeltaMap({
                         const order = { P1: 0, P2: 1, P3: 2 };
                         return order[a.severity] - order[b.severity];
                       })[0];
+                      const tooltip = cellFlagsTooltip(cellFlags);
 
                       if (!present && cellFlags.some((f) => f.ruleId === "missing_section")) {
+                        const missingTip = cellFlagsTooltip(cellFlags);
                         return (
                           <td key={ticker} className="px-2 py-1.5">
-                            <button
-                              type="button"
-                              onClick={() => onCellClick(ticker, row.id, topFlag)}
-                              className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 hover:bg-amber-100"
-                              title={cellTooltip(cellFlags)}
+                            <DeltaMapTooltip
+                              tip={
+                                missingTip ? (
+                                  <TooltipContent heading={missingTip.heading} lines={missingTip.lines} />
+                                ) : null
+                              }
                             >
-                              Missing
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => onCellClick(ticker, row.id, topFlag)}
+                                className="whitespace-nowrap rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 hover:bg-amber-100"
+                              >
+                                ∅ Missing
+                              </button>
+                            </DeltaMapTooltip>
                           </td>
                         );
                       }
 
                       if (topFlag) {
-                        const tone =
-                          topFlag.severity === "P1"
-                            ? "border-amber-200 bg-amber-50 text-amber-900"
-                            : topFlag.severity === "P2"
-                              ? "border-brand-200 bg-brand-50 text-brand-900"
-                              : "border-slate-200 bg-slate-50 text-slate-700";
                         const badgeLabel =
                           cellFlags.length > 1
                             ? `${cellFlags.length} differences`
-                            : deltaRuleShortLabel(topFlag.ruleId);
+                            : deltaRuleBadgeWithIcon(topFlag.ruleId);
                         return (
                           <td key={ticker} className="px-2 py-1.5">
-                            <button
-                              type="button"
-                              onClick={() => onCellClick(ticker, row.id, topFlag)}
-                              className={`max-w-[120px] truncate rounded border px-1.5 py-0.5 text-[10px] font-medium hover:opacity-90 ${tone}`}
-                              title={cellTooltip(cellFlags)}
+                            <DeltaMapTooltip
+                              tip={
+                                tooltip ? (
+                                  <TooltipContent heading={tooltip.heading} lines={tooltip.lines} />
+                                ) : null
+                              }
                             >
-                              {badgeLabel}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => onCellClick(ticker, row.id, topFlag)}
+                                className={`whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-medium hover:opacity-90 ${severityTone(topFlag.severity)}`}
+                              >
+                                {badgeLabel}
+                              </button>
+                            </DeltaMapTooltip>
                           </td>
                         );
                       }
 
                       return (
-                        <td
-                          key={ticker}
-                          className="px-2 py-1.5 text-center text-slate-300"
-                          title={
-                            present
-                              ? "Same across peers — no material difference in this section"
-                              : "Not in this filing — section absent from this peer's report"
-                          }
-                        >
-                          {present ? "·" : "—"}
+                        <td key={ticker} className="px-2 py-1.5 text-center">
+                          <DeltaMapTooltip
+                            tip={
+                              <TooltipContent
+                                heading={present ? DELTA_MAP_ALIGNED_LABEL : DELTA_MAP_NOT_FILED_LABEL}
+                                lines={[present ? DELTA_MAP_ALIGNED_TOOLTIP : DELTA_MAP_NOT_FILED_TOOLTIP]}
+                              />
+                            }
+                          >
+                            <span
+                              className={`inline-block rounded px-1 py-0.5 text-[10px] ${
+                                present ? "text-slate-400" : "text-slate-300"
+                              }`}
+                            >
+                              {present ? DELTA_MAP_ALIGNED_LABEL : DELTA_MAP_NOT_FILED_LABEL}
+                            </span>
+                          </DeltaMapTooltip>
                         </td>
                       );
                     })}
