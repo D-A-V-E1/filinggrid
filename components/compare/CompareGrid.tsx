@@ -39,8 +39,10 @@ import DevTierToggle from "../DevTierToggle";
 import { getCompareColumnLayout, compareGridTemplateColumns } from "@/lib/compare-layout";
 import { scanDeltas, foreignFilerTooltip } from "@/lib/delta-engine";
 import {
+  MAINSTREAM_STRIP_CAP,
   MAINSTREAM_STRIP_TAGLINE,
   countMainstreamFlagsByTicker,
+  countMainstreamStripFlags,
   filterMapWorthyFlags,
   mapWorthyCoverage,
   rankMainstreamStrip,
@@ -527,7 +529,12 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
 
   const stripFlags = useMemo(() => {
     if (!deltaScan) return [];
-    return rankMainstreamStrip(deltaScan.flags, 5);
+    return rankMainstreamStrip(deltaScan.flags, MAINSTREAM_STRIP_CAP);
+  }, [deltaScan]);
+
+  const stripTotalCount = useMemo(() => {
+    if (!deltaScan) return 0;
+    return countMainstreamStripFlags(deltaScan.flags);
   }, [deltaScan]);
 
   const mainstreamHeat = useMemo(() => {
@@ -665,6 +672,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           <DeltaStrip
             flags={stripFlags}
             loading={deltasLoading}
+            stripTotalCount={stripTotalCount}
             totalFlagCount={mapCoverage.flagCount}
             tagline={MAINSTREAM_STRIP_TAGLINE}
             onFlagClick={handleDeltaFlagClick}

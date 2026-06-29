@@ -5,6 +5,9 @@ import type { DeltaFlag } from "@/lib/delta-types";
 interface DeltaStripProps {
   flags: DeltaFlag[];
   loading?: boolean;
+  /** Total mainstream-eligible flags before strip cap. */
+  stripTotalCount?: number;
+  /** Total map-worthy flags (full delta map). */
   totalFlagCount?: number;
   tagline?: string;
   onFlagClick: (flag: DeltaFlag) => void;
@@ -20,12 +23,15 @@ const SEVERITY_STYLES: Record<DeltaFlag["severity"], string> = {
 export default function DeltaStrip({
   flags,
   loading,
+  stripTotalCount,
   totalFlagCount,
   tagline,
   onFlagClick,
   onViewMap,
 }: DeltaStripProps) {
-  const hiddenCount = Math.max(0, (totalFlagCount ?? flags.length) - flags.length);
+  const mainstreamTotal = stripTotalCount ?? flags.length;
+  const stripHiddenCount = Math.max(0, mainstreamTotal - flags.length);
+  const mapHiddenCount = Math.max(0, (totalFlagCount ?? mainstreamTotal) - flags.length);
 
   return (
     <section
@@ -44,7 +50,10 @@ export default function DeltaStrip({
               : "No standout deltas in this group yet."}
           </span>
         )}
-        {!loading && hiddenCount > 0 && onViewMap && totalFlagCount != null && (
+        {!loading && stripHiddenCount > 0 && (
+          <span className="text-xs text-slate-500">+{stripHiddenCount} more</span>
+        )}
+        {!loading && mapHiddenCount > 0 && onViewMap && totalFlagCount != null && (
           <button
             type="button"
             onClick={onViewMap}

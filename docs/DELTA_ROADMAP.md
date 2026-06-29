@@ -680,7 +680,7 @@ All personas use the **same delta engine**, **same Delta detail drawer**, and la
 
 ### Ranking integration (product + engineering)
 
-**Phase 1:** Universal ranker live via [`rankMainstreamStrip`](../lib/delta-surface.ts) + [`rankDeltas`](../lib/delta-rank.ts) (`general` preset, cap 5).
+**Phase 1:** Universal ranker live via [`rankMainstreamStrip`](../lib/delta-surface.ts) + [`rankDeltas`](../lib/delta-rank.ts) (`general` preset, cap 7).
 
 **Phase 2+:** Optional toolbar preset (stored in `localStorage`, not account-required):
 
@@ -878,7 +878,7 @@ PD accelerates **where to look**; it does not replace reading the filing for inv
 
 #### Completeness checklist (ship criteria)
 
-**Phase 1 (shipped):** L0 strip (5 cap, mainstream filter) + L1 map (material hits via [`filterMapWorthyFlags`](../lib/delta-surface.ts)); coverage footer N/M; flag click → grid scroll (no drawer yet).  
+**Phase 1 (shipped):** L0 strip (7 cap, mainstream filter incl. P1/P2 missing_section) + L1 map (material hits via [`filterMapWorthyFlags`](../lib/delta-surface.ts)); coverage footer N/M; flag click → grid scroll (no drawer yet).  
 **Phase 2:** Registers uncapped; scan buttons merge results; drawer on every register row; footer shows scan mode.  
 **Phase 3:** L4 rows in registers; export optional; golden filer doc maintained.  
 **Ongoing:** Quarterly lexicon review; golden set re-run after catalog changes.
@@ -900,7 +900,7 @@ PD accelerates **where to look**; it does not replace reading the filing for inv
 
 | Phase | Completeness deliverables |
 |-------|---------------------------|
-| **Phase 1 (shipped)** | L1 section delta map — material hits via `filterMapWorthyFlags`; coverage footer *"Scanned N sections · M with deltas"*; L0 strip 5-cap mainstream filter; click → grid |
+| **Phase 1 (shipped)** | L1 section delta map — material hits via `filterMapWorthyFlags`; coverage footer *"Scanned N sections · M with deltas"*; L0 strip 7-cap mainstream filter (incl. P1/P2 missing_section); click → grid |
 | **Phase 2** | Persona scoped register/list views ([`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) or persona tabs on [`SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx)); opt-in **Scan all footnotes** + **Scan events & movers**; P1/P2/P3 badges; drawer on all register rows |
 | **Phase 3** | Export disclosure change register (Pro optional CSV/clipboard); L4 PY rows in Reporting + Accounting registers; open-matter resolution rows in Auditor register |
 
@@ -942,8 +942,8 @@ No new paywalls on delta features. L4 prior-period on Free only when prior perio
 
 | Delta type | Detection | UI surface | Notes |
 |------------|-----------|------------|-------|
-| **`missing_section`** | Catalog section present in ≥2 peers, absent in minority | Map + strip (if ranked) | Skips GAAP statement IDs |
-| **`headline_vs_median`** | Active FY **level** >1.5× or <0.5× peer median on revenue, net income, op income, EPS | Strip + map | Not YoY; suppressed when mixed filers / mixed sources |
+| **`missing_section`** | Catalog section present in ≥2 peers, absent in minority | Map + strip (P1/P2 ranked) | Skips GAAP statement IDs |
+| **`headline_vs_median`** | Active FY **level** >1.5× or <0.5× peer median on revenue, net income, op income, EPS (annual); **interim 10-Q/6-K uses 1.35× / 0.65×** | Strip + map | Not YoY; suppressed when mixed filers / mixed sources |
 | **`headline_only_peer`** | Sole negative net income or EPS in group | Strip + map | Magnitude suppressed under mixed filers |
 | **`topic_only_peer`** | Only one peer with material signal on section | Strip + map (mainstream sections only) | See footnote rules below |
 | **`open_staff_comments`** / **`only_peer_open_staff`** | Substantive `unresolved-staff` preview | Strip + map | Governance preview OK |
@@ -966,7 +966,7 @@ During headline-only financials load, `notes_xbrl` is empty — dollar-event not
 
 **Click behavior (Phase 1):** Strip and map cells call `handleSectionSelect(sectionId, ticker)` — scroll grid to section/column. **No drawer yet** (Phase 2).
 
-**Strip vs map:** Strip shows top **5** mainstream flags ([`rankMainstreamStrip`](../lib/delta-surface.ts)); map shows material hits only (excludes `prose_number_gap`, P3 rollups, `metrics_not_comparable`).
+**Strip vs map:** Strip shows top **7** mainstream flags ([`rankMainstreamStrip`](../lib/delta-surface.ts), cap via `MAINSTREAM_STRIP_CAP`); includes P1/P2 `missing_section`; map shows material hits only (excludes `prose_number_gap`, P3 rollups, `metrics_not_comparable`). Strip shows **+N more** when capped; **See all X deltas** opens the full map.
 
 **Exit:** Free tier, 3 peers — marketing screenshot is the delta strip, not the grid alone.
 
@@ -1073,7 +1073,7 @@ During headline-only financials load, `notes_xbrl` is empty — dollar-event not
 | [`lib/delta-detail.ts`](../lib/delta-detail.ts) | `buildDeltaDetail(flag, sessionState)` — tag rows, excerpts, peer contrast, optional PY/CY diff; lazy fetch orchestration (Phase 2+) |
 | [`components/compare/DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) | On-click expand: factual what-changed panel; Jump to grid + EDGAR (Phase 2+) |
 | [`components/compare/DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) | Persona tabbed register — full hit list, scan buttons, export (Phase 2/3) |
-| [`components/compare/DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) | L0 headline entry (5 cap) — click → grid; link to map; drawer in Phase 2 |
+| [`components/compare/DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) | L0 headline entry (7 cap) — click → grid; +N more + link to map; drawer in Phase 2 |
 | [`components/compare/SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) | L1 map (material section deltas) + coverage footer |
 | [`docs/DELTA_REGRESSION_FILERS.md`](../docs/DELTA_REGRESSION_FILERS.md) | Golden compare slugs + expected flags — manual/CI regression *(optional follow-up)* |
 | [`backend/sec/xbrl_client.py`](../backend/sec/xbrl_client.py) | **Detection source only** — unchanged public API |

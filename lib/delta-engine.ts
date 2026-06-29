@@ -495,6 +495,28 @@ function scanProseNumberGap(state: DeltaSessionState, flags: DeltaFlag[]): void 
   }
 }
 
+/** Specific governance rules that subsume topic_only_peer on the same ticker+section. */
+const TOPIC_ONLY_PEER_GOVERNANCE_OVERRIDES: Record<string, DeltaFlag["ruleId"][]> = {
+  disagreements: ["disagreement_reported"],
+  "unresolved-staff": ["open_staff_comments", "only_peer_open_staff"],
+};
+
+function dedupeTopicOnlyPeerGovernanceOverlaps(flags: DeltaFlag[]): void {
+  const overridden = new Set<string>();
+  for (const flag of flags) {
+    const overrides = TOPIC_ONLY_PEER_GOVERNANCE_OVERRIDES[flag.sectionId];
+    if (!overrides?.includes(flag.ruleId)) continue;
+    overridden.add(`${flag.ticker}:${flag.sectionId}`);
+  }
+  if (overridden.size === 0) return;
+
+  for (let i = flags.length - 1; i >= 0; i--) {
+    const flag = flags[i];
+    if (flag.ruleId !== "topic_only_peer") continue;
+    if (overridden.has(`${flag.ticker}:${flag.sectionId}`)) flags.splice(i, 1);
+  }
+}
+
 function promoteL0Rollups(flags: DeltaFlag[]): void {
   const byTicker = new Map<string, number>();
   for (const flag of flags) {
@@ -542,6 +564,7 @@ export function scanDeltas(state: DeltaSessionState): DeltaScanResult {
   scanOpenMattersMetadata(state, flags);
   scanContingencyEmphasis(state, flags);
   scanProseNumberGap(state, flags);
+  dedupeTopicOnlyPeerGovernanceOverlaps(flags);
   promoteL0Rollups(flags);
 
   const sectionsWithDeltas = new Set(flags.map((f) => f.sectionId)).size;

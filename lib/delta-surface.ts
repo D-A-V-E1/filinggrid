@@ -1,11 +1,15 @@
 import type { DeltaFlag, DeltaRuleId } from "@/lib/delta-types";
 import { rankDeltas } from "@/lib/delta-rank";
 
+/** Default L0 strip cap — headline glance, not the full map. */
+export const MAINSTREAM_STRIP_CAP = 7;
+
 /** Headline movers + material one-time / governance signals — default strip only. */
 const MAINSTREAM_STRIP_RULES = new Set<DeltaRuleId>([
   "headline_vs_median",
   "headline_only_peer",
   "topic_only_peer",
+  "missing_section",
   "open_staff_comments",
   "only_peer_open_staff",
   "disagreement_reported",
@@ -25,7 +29,7 @@ const MAINSTREAM_TOPIC_SECTIONS = new Set([
 ]);
 
 export const MAINSTREAM_STRIP_TAGLINE =
-  "Biggest number moves and material one-time disclosures — not every footnote difference.";
+  "Biggest number moves, missing peer disclosures, and material one-time events — not every footnote difference.";
 
 export function isMainstreamStripFlag(flag: DeltaFlag): boolean {
   if (flag.metadata?.rollupCount != null) return false;
@@ -34,6 +38,10 @@ export function isMainstreamStripFlag(flag: DeltaFlag): boolean {
 
   if (flag.ruleId === "topic_only_peer") {
     return MAINSTREAM_TOPIC_SECTIONS.has(flag.sectionId);
+  }
+
+  if (flag.ruleId === "missing_section") {
+    return flag.severity === "P1" || flag.severity === "P2";
   }
 
   if (flag.ruleId === "contingency_open_emphasis") {
@@ -47,9 +55,13 @@ export function filterMainstreamStripFlags(flags: DeltaFlag[]): DeltaFlag[] {
   return flags.filter(isMainstreamStripFlag);
 }
 
-/** Rank material movers/events for the headline strip (default cap 5). */
-export function rankMainstreamStrip(flags: DeltaFlag[], cap = 5): DeltaFlag[] {
+/** Rank material movers/events for the headline strip (default cap 7). */
+export function rankMainstreamStrip(flags: DeltaFlag[], cap = MAINSTREAM_STRIP_CAP): DeltaFlag[] {
   return rankDeltas(filterMainstreamStripFlags(flags), { preset: "general", cap });
+}
+
+export function countMainstreamStripFlags(flags: DeltaFlag[]): number {
+  return filterMainstreamStripFlags(flags).length;
 }
 
 export function countMainstreamFlagsByTicker(flags: DeltaFlag[]): Record<string, number> {

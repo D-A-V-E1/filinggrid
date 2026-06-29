@@ -171,7 +171,7 @@ describe("scanDeltas topic presence", () => {
     expect(flags[0].ticker).toBe("MSFT");
   });
 
-  it("flags governance sections from substantive preview without notes_xbrl", () => {
+  it("suppresses topic_only_peer when open_staff_comments already fired on unresolved-staff", () => {
     const state = baseState({
       columns: [
         column("MSFT", [{ id: "unresolved-staff", preview: LONG_NARRATIVE }]),
@@ -179,8 +179,53 @@ describe("scanDeltas topic presence", () => {
       ],
     });
 
-    expect(flagsByRule(state, "topic_only_peer", "unresolved-staff")).toHaveLength(1);
+    expect(flagsByRule(state, "topic_only_peer", "unresolved-staff")).toHaveLength(0);
     expect(flagsByRule(state, "open_staff_comments", "unresolved-staff")).toHaveLength(1);
+  });
+});
+
+describe("scanDeltas governance dedupe", () => {
+  it("suppresses topic_only_peer when disagreement_reported fired on disagreements", () => {
+    const state = baseState({
+      catalog: [
+        { id: "disagreements", label: "Item 9 — Disagreements with Accountants" },
+        { id: "legal-proceedings", label: "Item 3 — Legal Proceedings" },
+      ],
+      columns: [
+        column("MSFT", [{ id: "disagreements", preview: "None." }]),
+        column("AAPL", [{ id: "disagreements", preview: LONG_NARRATIVE }]),
+      ],
+    });
+
+    expect(flagsByRule(state, "disagreement_reported", "disagreements")).toHaveLength(1);
+    expect(flagsByRule(state, "disagreement_reported", "disagreements")[0].ticker).toBe("AAPL");
+    expect(flagsByRule(state, "topic_only_peer", "disagreements")).toHaveLength(0);
+  });
+
+  it("suppresses topic_only_peer when only_peer_open_staff fired on unresolved-staff", () => {
+    const state = baseState({
+      columns: [
+        column("MSFT", [{ id: "unresolved-staff", preview: LONG_NARRATIVE }]),
+        column("AAPL", [{ id: "unresolved-staff", preview: "None." }]),
+      ],
+    });
+
+    expect(flagsByRule(state, "only_peer_open_staff", "unresolved-staff")).toHaveLength(1);
+    expect(flagsByRule(state, "open_staff_comments", "unresolved-staff")).toHaveLength(1);
+    expect(flagsByRule(state, "topic_only_peer", "unresolved-staff")).toHaveLength(0);
+  });
+
+  it("still flags topic_only_peer on controls when no specific governance rule fired", () => {
+    const state = baseState({
+      catalog: [{ id: "controls", label: "Item 9A — Controls and Procedures" }],
+      columns: [
+        column("MSFT", [{ id: "controls", preview: LONG_NARRATIVE }]),
+        column("AAPL", [{ id: "controls", preview: "None." }]),
+      ],
+    });
+
+    expect(flagsByRule(state, "topic_only_peer", "controls")).toHaveLength(1);
+    expect(flagsByRule(state, "topic_only_peer", "controls")[0].ticker).toBe("MSFT");
   });
 });
 
