@@ -70,7 +70,7 @@ function TooltipContent({ heading, lines }: { heading: string; lines: string[] }
     <div className="space-y-1">
       <p className="font-medium text-slate-800">{heading}</p>
       {lines.map((line) => (
-        <p key={line} className={line.startsWith("e.g.") ? "italic text-slate-400" : "text-slate-600"}>
+        <p key={line} className="text-slate-600">
           {line}
         </p>
       ))}

@@ -65,7 +65,6 @@ export interface DeltaMapBadgeConfig {
   badgeLabel: string;
   icon: string;
   subtitle: string;
-  example: string;
   severity: DeltaSeverity;
 }
 
@@ -76,7 +75,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Missing",
     icon: "∅",
     subtitle: "Peer omits a section others include",
-    example: "MSFT has no Item 1B while AAPL and GOOGL do",
     severity: "P1",
   },
   {
@@ -84,7 +82,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Metric outlier",
     icon: "↕",
     subtitle: "Well above or below peer median",
-    example: "MSFT revenue is 60% above the peer median",
     severity: "P1",
   },
   {
@@ -92,7 +89,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Sole outlier",
     icon: "◎",
     subtitle: "Only this peer differs on a headline metric",
-    example: "Only META shows negative net income in the group",
     severity: "P1",
   },
   {
@@ -100,7 +96,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Only here",
     icon: "★",
     subtitle: "Disclosure topic appears in one peer only",
-    example: "Only AMZN includes a cyber-risk footnote in this group",
     severity: "P2",
   },
   {
@@ -108,7 +103,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "SEC comments",
     icon: "✉",
     subtitle: "Unresolved SEC staff comments disclosed",
-    example: "NVDA — open SEC comment letters still outstanding",
     severity: "P1",
   },
   {
@@ -116,7 +110,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "SEC comments",
     icon: "✉",
     subtitle: "Only peer with open SEC staff comments",
-    example: "Only TSLA has unresolved staff comments in this group",
     severity: "P1",
   },
   {
@@ -124,7 +117,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Disagreement",
     icon: "⚑",
     subtitle: "Accountant disagreement disclosed",
-    example: "XYZ — former auditor disagreement noted in Item 9",
     severity: "P1",
   },
   {
@@ -132,7 +124,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Legal focus",
     icon: "§",
     subtitle: "Heavier litigation or contingency language vs peers",
-    example: "AAPL — unusually detailed loss-contingency discussion",
     severity: "P2",
   },
   {
@@ -140,7 +131,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "No amounts",
     icon: "¶",
     subtitle: "Narrative disclosure without tagged dollar amounts",
-    example: "GOOGL — revenue note has prose only, no XBRL line items",
     severity: "P3",
   },
   {
@@ -148,7 +138,6 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Mixed filers",
     icon: "⊘",
     subtitle: "US and foreign filers — headline metrics not comparable",
-    example: "10-K peers mixed with 20-F filers in this group",
     severity: "P2",
   },
 ];
@@ -188,7 +177,7 @@ export function cellFlagsTooltip(flags: DeltaFlag[]): CellFlagsTooltip | null {
     const config = deltaMapBadgeConfig(flag.ruleId);
     return {
       heading: config?.subtitle ?? "Difference vs peers",
-      lines: [flag.label, config?.example ? `e.g. ${config.example}` : ""].filter(Boolean),
+      lines: flag.label ? [flag.label] : [],
     };
   }
 
