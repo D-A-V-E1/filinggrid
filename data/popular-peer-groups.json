@@ -1,0 +1,129 @@
+{
+  "catalogVersion": 1,
+  "lastCatalogRefresh": "2026-06-29",
+  "sections": [
+    {
+      "id": "technology",
+      "label": "Technology",
+      "groups": [
+        {
+          "id": "mega-cap-tech",
+          "label": "Mega-cap tech",
+          "slug": "aapl-vs-msft-vs-nvda-vs-googl",
+          "tickers": ["AAPL", "MSFT", "NVDA", "GOOGL"],
+          "industryTag": "technology",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "mag7-triad",
+          "label": "Apple vs Microsoft vs NVIDIA",
+          "slug": "aapl-vs-msft-vs-nvda",
+          "tickers": ["AAPL", "MSFT", "NVDA"],
+          "industryTag": "technology",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "mega-cap-duo",
+          "label": "Apple vs Microsoft",
+          "slug": "aapl-vs-msft",
+          "tickers": ["AAPL", "MSFT"],
+          "industryTag": "technology",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "semiconductors",
+          "label": "NVDA vs AMD vs Intel",
+          "slug": "nvda-vs-amd-vs-intc",
+          "tickers": ["NVDA", "AMD", "INTC"],
+          "industryTag": "semiconductors",
+          "sicOrSector": "SIC 3674 Semiconductors",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "semis-global",
+          "label": "Apple vs NVDA vs TSMC",
+          "slug": "aapl-vs-nvda-vs-tsm",
+          "tickers": ["AAPL", "NVDA", "TSM"],
+          "industryTag": "semiconductors",
+          "sicOrSector": "GICS 45 / ADR 20-F",
+          "lastRefreshed": "2026-06-29"
+        },
+        {
+          "id": "social-search",
+          "label": "Alphabet vs Meta",
+          "slug": "goog-vs-meta",
+          "tickers": ["GOOG", "META"],
+          "industryTag": "internet",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29"
+        },
+        {
+          "id": "ecommerce",
+          "label": "Amazon vs Shopify",
+          "slug": "amzn-vs-shop",
+          "tickers": ["AMZN", "SHOP"],
+          "industryTag": "ecommerce",
+          "sicOrSector": "GICS 45 / GICS 25 Consumer Discretionary",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    },
+    {
+      "id": "financials",
+      "label": "Financials",
+      "groups": [
+        {
+          "id": "money-center-banks",
+          "label": "JPM vs Goldman vs Morgan Stanley vs BofA",
+          "slug": "jpm-vs-gs-vs-ms-vs-bac",
+          "tickers": ["JPM", "GS", "MS", "BAC"],
+          "industryTag": "banks",
+          "sicOrSector": "GICS 40 Financials / SIC 6021 National Commercial Banks",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "investment-banks",
+          "label": "JPM vs Goldman vs Morgan Stanley",
+          "slug": "jpm-vs-gs-vs-ms",
+          "tickers": ["JPM", "GS", "MS"],
+          "industryTag": "banks",
+          "sicOrSector": "GICS 40 Financials / SIC 6211 Security Brokers",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    },
+    {
+      "id": "consumer",
+      "label": "Consumer",
+      "groups": [
+        {
+          "id": "autos",
+          "label": "Tesla vs Ford vs GM",
+          "slug": "tsla-vs-f-vs-gm",
+          "tickers": ["TSLA", "F", "GM"],
+          "industryTag": "automotive",
+          "sicOrSector": "GICS 25 Consumer Discretionary / SIC 3711 Motor Vehicles",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "beverages",
+          "label": "Coca-Cola vs PepsiCo",
+          "slug": "ko-vs-pep",
+          "tickers": ["KO", "PEP"],
+          "industryTag": "beverages",
+          "sicOrSector": "GICS 30 Consumer Staples / SIC 2080 Beverages",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    }
+  ]
+}
