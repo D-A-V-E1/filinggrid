@@ -1,4 +1,5 @@
 import { ApiError, fetchSectionHtml } from "./api";
+import { sanitizeExcerptHtml } from "./sanitize-excerpt-html";
 import { loadSectionHtml, saveSectionHtml } from "./parse-cache";
 
 export interface SectionHtmlRequest {
@@ -46,10 +47,11 @@ export function fetchSectionHtmlDeduped(req: SectionHtmlRequest): Promise<string
     req.filingCacheKey
   )
     .then((html) => {
-      if (req.sessionCacheKey && html?.trim()) {
-        saveSectionHtml(req.sessionCacheKey, req.sectionId, html);
+      const safe = sanitizeExcerptHtml(html);
+      if (req.sessionCacheKey && safe?.trim()) {
+        saveSectionHtml(req.sessionCacheKey, req.sectionId, safe);
       }
-      return html;
+      return safe;
     })
     .finally(() => {
       inflight.delete(key);
@@ -59,10 +61,11 @@ export function fetchSectionHtmlDeduped(req: SectionHtmlRequest): Promise<string
   return promise;
 }
 
-/** Background prefetch; ignores paywall, 404, and network errors. */
+/** Background prefetch; ignores paywall, 404, and transient server errors. */
 export function prefetchSectionHtml(req: SectionHtmlRequest): void {
   if (readCachedSectionHtml(req)) return;
   void fetchSectionHtmlDeduped(req).catch((err) => {
     if (err instanceof ApiError && (err.isPaywall || err.status === 404)) return;
+    if (err instanceof ApiError && err.status >= 500) return;
   });
 }

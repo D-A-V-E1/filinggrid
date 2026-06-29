@@ -239,32 +239,29 @@ Frontend uses URL + publishable/anon key for `@supabase/ssr` sign-in.
 
 Supabase sends the only sign-in email today — there is no PeerDisclosures-owned welcome email in code.
 
+**Full checklist:** [SUPABASE_EMAIL_BRANDING.md](./SUPABASE_EMAIL_BRANDING.md)
+
 1. **Authentication → Email Templates → Magic Link**
-2. Suggested **subject:** `Sign in to Peer Disclosures`
-3. Suggested **body** (HTML):
-
-```html
-<h2>Sign in to Peer Disclosures</h2>
-<p>Click the link below to sign in. This link expires in one hour and works once.</p>
-<p><a href="{{ .ConfirmationURL }}">Sign in to Peer Disclosures</a></p>
-<p>If you did not request this email, you can ignore it.</p>
-<p>— Peer Disclosures · support@peerdisclosures.com</p>
-```
-
+2. **Subject:** `Sign in to Peer Disclosures`
+3. **Body:** paste from [`supabase/templates/magic-link.html`](../supabase/templates/magic-link.html)
 4. **Authentication → Settings → Email** — confirm rate limits and link expiry suit your QA
 5. Test: sign in from `/account` → confirm branded email arrives (check spam)
 
-### 2e. Custom SMTP (optional — send from @peerdisclosures.com)
+### 2e. Custom SMTP (required for production sender branding)
 
-Default Supabase SMTP works for dev; production should use your domain.
+Default Supabase SMTP works for dev; **production must use custom SMTP** so the inbox shows **Peer Disclosures** as the sender (not Supabase).
+
+**Full walkthrough:** [RESEND_SETUP.md](./RESEND_SETUP.md) — Resend account, Cloudflare DNS (keep Email Routing MX), API key, and exact Supabase SMTP settings for project `cbqiqbcqzvfozewqzqnl`.
+
+Quick summary:
 
 1. **Project Settings → Authentication → SMTP Settings** → enable custom SMTP
-2. Provider examples: [Resend](https://resend.com), SendGrid, Postmark, Amazon SES
-3. Set **Sender email** e.g. `noreply@peerdisclosures.com`, **Sender name** `Peer Disclosures`
-4. Add DNS records (SPF, DKIM) per provider docs
-5. Re-send magic link and verify `From:` header shows your domain
+2. **Resend** (recommended): host `smtp.resend.com`, port `465`, user `resend`, password = API key
+3. **Sender email** `noreply@peerdisclosures.com`, **Sender name** `Peer Disclosures`
+4. Add Resend SPF/DKIM in Cloudflare — do **not** change MX ([DNS_PEERDISCLOSURES.md](./DNS_PEERDISCLOSURES.md))
+5. Test from `/account` → **From:** `Peer Disclosures <noreply@peerdisclosures.com>`
 
-Without custom SMTP, magic links still work but may show Supabase as sender and land in spam more often.
+Without custom SMTP, magic links still work but often show Supabase as the sender and land in spam more often.
 
 ---
 
@@ -413,6 +410,7 @@ Expected: **21 passed** (tier gates + webhook handler mocks).
 
 ## Related docs
 
+- [RESEND_SETUP.md](./RESEND_SETUP.md) — custom SMTP for magic-link emails (Resend + Cloudflare)
 - [STRIPE_SETUP.md](./STRIPE_SETUP.md) — Stripe product, webhooks, portal detail
 - [GO_LIVE_CHECKLIST.md](./GO_LIVE_CHECKLIST.md) — production launch timeline
 - [TIER_TESTING.md](./TIER_TESTING.md) — test tiers without Stripe (dev toggle)

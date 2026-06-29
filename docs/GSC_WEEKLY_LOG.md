@@ -259,6 +259,97 @@ Not inspected — requires GSC login. After sign-in, check **Indexing → Pages*
 
 ---
 
+## 2026-06-29 — Weekly sitemap + index visibility check
+
+**Date:** 2026-06-29  
+**Environment:** Production (`https://peerdisclosures.com`)  
+**Method:** PowerShell `Invoke-WebRequest` (GET sitemap + HEAD all URLs) + web search `site:peerdisclosures.com` + cursor-ide-browser MCP (GSC URL Inspection)  
+**Operator:** Cursor agent (HTTP automated; GSC attempted — **blocked at Google OAuth**)
+
+### Sitemap fetch
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `GET https://peerdisclosures.com/sitemap.xml` | **200** | 13 URLs; `lastmod` 2026-06-28T21:52:12.515Z; all `<loc>` use `https://peerdisclosures.com` |
+
+Sitemap URLs (from live XML):
+
+1. `https://peerdisclosures.com`
+2. `https://peerdisclosures.com/pricing`
+3. `https://peerdisclosures.com/privacy`
+4. `https://peerdisclosures.com/terms`
+5. `https://peerdisclosures.com/compare/aapl-vs-msft`
+6. `https://peerdisclosures.com/compare/aapl-vs-msft-vs-nvda`
+7. `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc`
+8. `https://peerdisclosures.com/compare/jpm-vs-gs-vs-ms`
+9. `https://peerdisclosures.com/compare/aapl-vs-nvda-vs-tsm`
+10. `https://peerdisclosures.com/compare/goog-vs-meta`
+11. `https://peerdisclosures.com/compare/amzn-vs-shop`
+12. `https://peerdisclosures.com/compare/tsla-vs-f`
+13. `https://peerdisclosures.com/compare/ko-vs-pep`
+
+### HTTP status (all sitemap URLs)
+
+| URL | HTTP status | Index requested |
+|-----|-------------|-----------------|
+| `https://peerdisclosures.com/` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/pricing` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/privacy` | 200 | skip (static legal) |
+| `https://peerdisclosures.com/terms` | 200 | skip (static legal) |
+| `https://peerdisclosures.com/compare/aapl-vs-msft` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/aapl-vs-msft-vs-nvda` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/jpm-vs-gs-vs-ms` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/aapl-vs-nvda-vs-tsm` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/goog-vs-meta` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/amzn-vs-shop` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/tsla-vs-f` | 200 | **blocked (login)** |
+| `https://peerdisclosures.com/compare/ko-vs-pep` | 200 | **blocked (login)** |
+
+**HTTP summary:** 13/13 → **200** · 0 failures
+
+### Google index visibility (`site:` query)
+
+| Check | Result |
+|-------|--------|
+| `site:peerdisclosures.com` (web search, 2026-06-29) | **No results found** — zero indexed pages visible in search (unchanged from 2026-06-27) |
+
+### Google Search Console — URL Inspection
+
+**Result:** **BLOCKED** — browser redirected to Google sign-in (`accounts.google.com/v3/signin/identifier`). OAuth cannot be completed by the agent; **0 indexing requests submitted**.
+
+**Attempt time:** 2026-06-29 (cursor-ide-browser MCP)  
+**GSC entry point used:**  
+`https://search.google.com/search-console/inspect?resource_id=sc-domain%3Apeerdisclosures.com`
+
+#### Priority URLs — indexing status
+
+| # | URL | Index requested | GSC status |
+|---|-----|-----------------|------------|
+| 1 | `https://peerdisclosures.com/` | **blocked (login)** | — |
+| 2 | `https://peerdisclosures.com/pricing` | **blocked (login)** | — |
+| 3 | `https://peerdisclosures.com/compare/aapl-vs-msft` | **blocked (login)** | — |
+| 4 | `https://peerdisclosures.com/compare/nvda-vs-amd-vs-intc` | **blocked (login)** | — |
+| 5 | `https://peerdisclosures.com/compare/jpm-vs-gs-vs-ms` | **blocked (login)** | — |
+| 6 | `https://peerdisclosures.com/compare/goog-vs-meta` | **blocked (login)** | — |
+| 7 | `https://peerdisclosures.com/compare/ko-vs-pep` | **blocked (login)** | — |
+| 8 | `https://peerdisclosures.com/compare/aapl-vs-msft-vs-nvda` | **blocked (login)** | — |
+| 9 | `https://peerdisclosures.com/compare/aapl-vs-nvda-vs-tsm` | **blocked (login)** | — |
+| 10 | `https://peerdisclosures.com/compare/amzn-vs-shop` | **blocked (login)** | — |
+| 11 | `https://peerdisclosures.com/compare/tsla-vs-f` | **blocked (login)** | — |
+
+**Indexing summary:** 0 requested · 11 blocked (login) · 2 skipped (legal pages: `/privacy`, `/terms`)
+
+#### Owner action (GSC dashboard)
+
+1. Sign in at [Google Search Console](https://search.google.com/search-console) with the verified property owner account (browser tab left on sign-in page).
+2. Confirm property: **peerdisclosures.com** (domain or URL prefix).
+3. Open **URL Inspection** (direct link above) and **Request indexing** for each URL in the table.
+4. Check **Indexing → Pages** for compare URLs “Discovered – currently not indexed” or crawl errors.
+5. After completing requests, update the **Index requested** column above to `Y` and note GSC status text.
+
+---
+
 ## Log template (future weeks)
 
 Copy the section above; update date, HTTP table, and GSC index status.

@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from parse_cache import (
+    clear_filing_structure,
     find_cache_key,
     find_section_html,
     get_filing_structure,
@@ -133,6 +134,13 @@ def _column_meta_payload(column: ColumnResult) -> ColumnResult:
     return ColumnResult(**data)
 
 
+def _format_parse_error(exc: Exception) -> str:
+    msg = str(exc)
+    if "Compressed file ended before the end-of-stream" in msg:
+        return "Filing cache was corrupted; retrying from SEC failed. Refresh to try again."
+    return msg
+
+
 async def _resolve_column_filing(
     ticker: str,
     ticker_map: dict[str, dict[str, Any]],
@@ -249,7 +257,7 @@ async def _resolve_column_filing(
             ticker=ticker,
             company_name=ticker,
             cik="",
-            error=str(exc),
+            error=_format_parse_error(exc),
         )
 
 
@@ -257,19 +265,23 @@ async def _build_section_index(resolved: _ResolvedFiling) -> tuple[ColumnResult,
     if resolved.sections is not None:
         return resolved.column, resolved.sections, resolved.from_cache
 
-    html_bytes = await fetch_filing_report_html(resolved.resolved["cik"], resolved.filing)
+    try:
+        html_bytes = await fetch_filing_report_html(resolved.resolved["cik"], resolved.filing)
 
-    def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        structure = _prepare_filing_structure(html_bytes)
-        sections = _sections_from_structure(structure, include_html=False)
-        return sections, structure
+        def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+            structure = _prepare_filing_structure(html_bytes)
+            sections = _sections_from_structure(structure, include_html=False)
+            return sections, structure
 
-    sections, structure = await asyncio.to_thread(_build_section_index_sync)
-    store_filing_structure(resolved.cache_key, structure)
-    del html_bytes
+        sections, structure = await asyncio.to_thread(_build_section_index_sync)
+        store_filing_structure(resolved.cache_key, structure)
+        del html_bytes
 
-    column = resolved.column.model_copy(update={"sections": sections})
-    return column, sections, False
+        column = resolved.column.model_copy(update={"sections": sections})
+        return column, sections, False
+    except Exception as exc:
+        column = resolved.column.model_copy(update={"error": _format_parse_error(exc), "sections": []})
+        return column, [], False
 
 
 async def _parse_single_ticker(
@@ -547,6 +559,7 @@ async def _extract_and_cache_section(
     from filing_store import load_filing_html, load_filing_report_html
 
     html_bytes = load_filing_report_html(cik, accession) or load_filing_html(cik, accession)
+    html_from_disk = html_bytes is not None
     if not html_bytes:
         ticker_map = await fetch_ticker_map()
         resolved = await resolve_ticker(ticker, ticker_map)
@@ -555,8 +568,10 @@ async def _extract_and_cache_section(
         if not filing:
             return None, None, cache_key
         html_bytes = await fetch_filing_report_html(resolved["cik"], filing)
+        if cache_key:
+            clear_filing_structure(cache_key)
 
-    structure = get_filing_structure(cache_key) if cache_key else None
+    structure = get_filing_structure(cache_key) if cache_key and html_from_disk else None
     if structure is None:
         structure = await asyncio.to_thread(_prepare_filing_structure, html_bytes)
         if cache_key:
@@ -568,7 +583,9 @@ async def _extract_and_cache_section(
     if want_html:
         html = await asyncio.to_thread(extract_section_html, html_bytes, section_id, structure)
         if html and cache_key:
-            store_section_html(cache_key, section_id, html)
+            from sec.section_extractor import _normalize_excerpt_html
+
+            store_section_html(cache_key, section_id, _normalize_excerpt_html(html))
 
     if want_text:
         text = await asyncio.to_thread(extract_section_text, html_bytes, section_id, structure)

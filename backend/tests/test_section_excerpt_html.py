@@ -153,6 +153,29 @@ def test_strips_page_number_and_toc_noise_rows():
     assert "See accompanying notes" not in normalized
 
 
+def test_strips_embedded_resource_tags():
+    html = (
+        '<base href="/api/backend/parse/">'
+        '<link href="s_00005086326000079">'
+        '<img src="s_00005086326000079">'
+        "<p>Related party disclosure</p>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert "Related party disclosure" in normalized
+    assert "s_00005086326000079" not in normalized
+    assert "<base" not in normalized.lower()
+    assert "<link" not in normalized.lower()
+    assert "<img" not in normalized.lower()
+
+
+def test_unwraps_anchor_hrefs():
+    html = '<a href="s_00005086326000079">Cross reference</a>'
+    normalized = _normalize_excerpt_html(html)
+    assert "Cross reference" in normalized
+    assert "<a" not in normalized.lower()
+    assert "s_00005086326000079" not in normalized
+
+
 def test_preserves_narrative_paragraphs_with_see_accompanying_phrase():
     html = (
         "<div>"

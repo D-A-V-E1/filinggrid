@@ -315,6 +315,22 @@ async def parse_section_endpoint(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Filing cache was corrupted; please retry in a moment.",
+        ) from exc
+    except Exception as exc:
+        msg = str(exc)
+        if "Compressed file ended before the end-of-stream" in msg or isinstance(exc, EOFError):
+            raise HTTPException(
+                status_code=503,
+                detail="Filing cache was corrupted; please retry in a moment.",
+            ) from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Could not load section excerpt. Please try again.",
+        ) from exc
 
 
 @app.get("/peer-groups", response_model=list[SavedPeerGroupResponse])

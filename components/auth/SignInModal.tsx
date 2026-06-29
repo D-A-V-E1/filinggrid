@@ -70,8 +70,8 @@ export default function SignInModal({ open, returnPath, onClose, onSignedIn }: S
         ) : (
           <>
             <p className="mt-2 text-sm text-slate-600">
-              First time on this device? We&apos;ll email a one-time magic link. After you sign out,
-              signing back in with the same email here won&apos;t send another email.
+              First time on this device? Peer Disclosures will email a one-time sign-in link. After
+              you sign out, signing back in with the same email here won&apos;t send another email.
             </p>
             <div className="mt-6">
               <MagicLinkForm

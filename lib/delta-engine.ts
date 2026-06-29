@@ -1,7 +1,9 @@
 import type { FilingColumn, FinancialsXbrl, NoteSectionXbrl } from "@/lib/api";
 import {
   catalogSectionPreview,
+  columnHasReliableSectionPresence,
   columnHasSectionPresence,
+  columnParseFailed,
   isDomesticForm,
   isForeignForm,
   resolveColumnForm,
@@ -70,6 +72,10 @@ function resolveForm(col: FilingColumn, period?: string): string | null {
 
 function columnHasSection(col: FilingColumn, sectionId: string, state: DeltaSessionState): boolean {
   return columnHasSectionPresence(col, sectionId, state.financialsByTicker[col.ticker]);
+}
+
+function columnReliablyHasSection(col: FilingColumn, sectionId: string, state: DeltaSessionState): boolean {
+  return columnHasReliableSectionPresence(col, sectionId, state.financialsByTicker[col.ticker]);
 }
 
 function detectMixedFilers(columns: FilingColumn[], period?: string): {
@@ -252,14 +258,15 @@ function scanMissingSections(
   catalogOrder: string[]
 ): void {
   const labelById = new Map(state.catalog.map((s) => [s.id, s.label]));
+  const comparableColumns = state.columns.filter((c) => !columnParseFailed(c));
   for (const sectionId of catalogOrder) {
     if (GAAP_STATEMENT_SECTION_IDS.has(sectionId)) continue;
 
-    const peersWith = state.columns.filter((c) => columnHasSection(c, sectionId, state));
+    const peersWith = comparableColumns.filter((c) => columnReliablyHasSection(c, sectionId, state));
     // Single-peer presence is topic_only_peer territory — not a catalog gap.
     if (peersWith.length < 2) continue;
 
-    const peersWithout = state.columns.filter((c) => !columnHasSection(c, sectionId, state));
+    const peersWithout = comparableColumns.filter((c) => !columnReliablyHasSection(c, sectionId, state));
     if (peersWithout.length === 0) continue;
     // Only flag when the missing peer(s) are a minority vs peers who have the section.
     if (peersWithout.length >= peersWith.length) continue;
@@ -271,7 +278,7 @@ function scanMissingSections(
         id: flagId("missing_section", col.ticker, sectionId),
         ruleId: "missing_section",
         level: "L1",
-        severity: peersWith.length >= state.columns.length - 1 ? "P1" : "P2",
+        severity: peersWith.length >= comparableColumns.length - 1 ? "P1" : "P2",
         ticker: col.ticker,
         sectionId,
         label: missingSectionLabel(col.ticker, label),

@@ -36,6 +36,7 @@ import {
 } from "@/lib/filingColumnView";
 import { findCatalogSection, sectionsHaveCatalogSection } from "@/lib/section-presence";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
+import { sanitizeExcerptHtml } from "@/lib/sanitize-excerpt-html";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
 import { forwardVerticalWheelFromHorizontalScrollContainer, attachFilingTableWheelForwarding } from "@/lib/forward-vertical-wheel";
@@ -105,6 +106,16 @@ function applyColumnScrollFocus(
   }
   scrollColumnContentToTop(scrollEl);
   return false;
+}
+
+function formatColumnError(error: string): string {
+  if (/Compressed file ended before the end-of-stream/i.test(error)) {
+    return "Filing could not be loaded (corrupted cache). Refresh the page to retry.";
+  }
+  if (/Filing cache was corrupted/i.test(error)) {
+    return error;
+  }
+  return error;
 }
 
 function formatSectionLabel(label: string): string {
@@ -479,10 +490,11 @@ function ExcerptToggleButton({
 
 function HtmlExcerpt({ html, compact = false }: { html: string; compact?: boolean }) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const safeHtml = useMemo(() => sanitizeExcerptHtml(html), [html]);
 
   useEffect(() => {
     return attachFilingTableWheelForwarding(contentRef.current);
-  }, [html]);
+  }, [safeHtml]);
 
   return (
     <article
@@ -493,7 +505,7 @@ function HtmlExcerpt({ html, compact = false }: { html: string; compact?: boolea
       <div
         ref={contentRef}
         className="filing-content w-full min-w-0 max-w-full font-serif text-sm text-slate-800"
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     </article>
   );
@@ -726,15 +738,16 @@ function FilingColumn({
 
     const inline = section?.html?.trim();
     if (inline) {
-      setSectionHtml(inline);
-      if (cacheKey) saveSectionHtml(cacheKey, activeSection, inline);
+      const safe = sanitizeExcerptHtml(inline);
+      setSectionHtml(safe);
+      if (cacheKey) saveSectionHtml(cacheKey, activeSection, safe);
       return;
     }
 
     if (cacheKey) {
       const cached = loadSectionHtml(cacheKey, activeSection);
       if (cached) {
-        setSectionHtml(cached);
+        setSectionHtml(sanitizeExcerptHtml(cached));
         return;
       }
     }
@@ -743,26 +756,6 @@ function FilingColumn({
   }, [activeSection, ticker, cacheKey, section?.html]);
 
   useEffect(() => {
-    if (!sectionHtmlRequest || sectionHtml) return;
-    if (readCachedSectionHtml(sectionHtmlRequest)) return;
-
-    let cancelled = false;
-    void fetchSectionHtmlDeduped(sectionHtmlRequest)
-      .then((html) => {
-        if (cancelled || !html?.trim()) return;
-        setSectionHtml(html);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && (err.isPaywall || err.status === 404)) return;
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sectionHtmlRequest, sectionHtml]);
-
-  useLayoutEffect(() => {
     scrollResetActiveRef.current = !applyColumnScrollFocus(scrollRef.current, focusRowKey);
   }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
 
@@ -870,7 +863,7 @@ function FilingColumn({
 
     const cached = readCachedSectionHtml(sectionHtmlRequest);
     if (cached) {
-      setSectionHtml(cached);
+      setSectionHtml(sanitizeExcerptHtml(cached));
       setShowHtmlExcerpt(true);
       scrollColumnContentToTop(scrollRef.current);
       return;
@@ -910,7 +903,16 @@ function FilingColumn({
           setShowHtmlExcerpt(false);
           return;
         }
-        setSectionError(err instanceof Error ? err.message : "Failed to load excerpt");
+        if (err instanceof ApiError && err.status >= 500) {
+          setSectionError(
+            formatApiError(err, "Could not load the SEC filing excerpt. Please try again in a moment.")
+          );
+          setShowHtmlExcerpt(false);
+          return;
+        }
+        setSectionError(
+          formatApiError(err, "Could not load the SEC filing excerpt. Please try again.")
+        );
         setShowHtmlExcerpt(false);
       })
       .finally(() => setLoadingHtml(false));
@@ -932,8 +934,9 @@ function FilingColumn({
     return (
       <div className="compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-white">
         <ColumnHeader ticker={ticker} companyName={companyName} form={null} filingDate={null} fiscalYear={null} />
-        <div className="flex flex-1 items-center justify-center p-6">
-          <p className="text-center text-sm text-red-600">{error}</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6">
+          <p className="text-center text-sm font-medium text-red-700">Could not load filing</p>
+          <p className="text-center text-sm text-red-600">{formatColumnError(error)}</p>
         </div>
       </div>
     );

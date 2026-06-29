@@ -816,3 +816,99 @@ describe("mega-cap note-eps presence (parse index vs XBRL disclosures)", () => {
     expect(flagsByRule(state, "missing_section", "note-eps").map((f) => f.ticker)).toEqual(["NVDA"]);
   });
 });
+
+describe("parse-failed columns excluded from missing_section", () => {
+  const CATALOG = [
+    { id: "note-leases", label: "Note — Leases" },
+    { id: "controls", label: "Item 9A — Controls & Procedures" },
+  ];
+
+  it("does not flag missing_section for a column that failed to parse", () => {
+    const failed: FilingColumn = {
+      ...column("AMD", []),
+      error: "Compressed file ended before the end-of-stream marker was reached.",
+      sections: [],
+    };
+    const state = baseState({
+      tickers: ["NVDA", "AMD", "INTC"],
+      catalog: CATALOG,
+      columns: [
+        column("NVDA", [{ id: "note-leases", preview: LONG_NARRATIVE }]),
+        failed,
+        column("INTC", [{ id: "note-leases", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section")).toHaveLength(0);
+  });
+});
+
+describe("scanDeltas missing_section reliability", () => {
+  const LEASES_CATALOG = [{ id: "note-leases", label: "Note — Leases" }];
+
+  it("flags a peer with empty parse stub when two peers have substantive note-leases", () => {
+    const state = baseState({
+      tickers: ["NVDA", "AMD", "INTC"],
+      catalog: LEASES_CATALOG,
+      columns: [
+        column("NVDA", [{ id: "note-leases", preview: LONG_NARRATIVE }]),
+        column("AMD", [{ id: "note-leases", preview: "" }]),
+        column("INTC", [{ id: "note-leases", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section", "note-leases").map((f) => f.ticker)).toEqual(["AMD"]);
+  });
+
+  it("does not emit missing_section when only one comparable column is loaded", () => {
+    const state = baseState({
+      tickers: ["NVDA"],
+      catalog: LEASES_CATALOG,
+      columns: [column("NVDA", [{ id: "note-leases", preview: LONG_NARRATIVE }])],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section")).toHaveLength(0);
+  });
+
+  it("suppresses missing_section for interim-optional business on 10-Q compare", () => {
+    const state = baseState({
+      catalog: [
+        { id: "business", label: "Item 1 — Business" },
+        { id: "mda", label: "Item 2 — MD&A" },
+      ],
+      period: "interim-2025-Q2-10-Q",
+      fiscalYear: 2025,
+      columns: [
+        column("MSFT", [{ id: "business", preview: LONG_NARRATIVE }, { id: "mda", preview: LONG_NARRATIVE }], "10-Q"),
+        column("AAPL", [{ id: "mda", preview: LONG_NARRATIVE }], "10-Q"),
+      ],
+    });
+
+    expect(flagsByRule(state, "missing_section", "business")).toHaveLength(0);
+  });
+
+  it("assigns P1 when all but one comparable peer reliably has the section", () => {
+    const state = baseState({
+      tickers: ["NVDA", "AMD", "INTC"],
+      catalog: LEASES_CATALOG,
+      columns: [
+        column("NVDA", [{ id: "note-leases", preview: LONG_NARRATIVE }]),
+        column("AMD", [{ id: "financial-statements", preview: LONG_NARRATIVE }]),
+        column("INTC", [{ id: "note-leases", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    const flags = flagsByRule(state, "missing_section", "note-leases");
+    expect(flags).toHaveLength(1);
+    expect(flags[0].ticker).toBe("AMD");
+    expect(flags[0].severity).toBe("P1");
+  });
+});

@@ -346,6 +346,8 @@ Stripe Dashboard → Settings → Billing → Customer portal → Enable.
    - Site URL: `http://localhost:3000`
    - Redirect URLs: `http://localhost:3000/auth/callback`
 4. Copy Project URL, anon key, and JWT secret to `.env`
+5. Brand sign-in emails as **Peer Disclosures** — [docs/SUPABASE_EMAIL_BRANDING.md](docs/SUPABASE_EMAIL_BRANDING.md)
+6. Production sender (`noreply@peerdisclosures.com`) via Resend custom SMTP — [docs/RESEND_SETUP.md](docs/RESEND_SETUP.md)
 
 ---
 

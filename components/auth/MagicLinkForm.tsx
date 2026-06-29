@@ -28,9 +28,9 @@ function isEmailRateLimitError(err: unknown): boolean {
 
 function formatAuthError(err: unknown): string {
   if (isEmailRateLimitError(err)) {
-    return "Too many sign-in emails were sent for this address. Supabase limits magic links (often ~4 per hour on free tier). Wait about an hour, try a different email, or use an existing magic link from your inbox.";
+    return "Too many sign-in emails were sent for this address (about 4 per hour). Wait an hour, try a different email, or use an existing sign-in link from your inbox.";
   }
-  return err instanceof Error ? err.message : "Failed to send magic link";
+  return err instanceof Error ? err.message : "Failed to send sign-in link";
 }
 
 export type MagicLinkStep = "email" | "sent" | "verifying" | "verify_failed" | "done";
@@ -264,13 +264,14 @@ export default function MagicLinkForm({
           <p className="mt-1">
             {linkJustSent ? (
               <>
-                We sent a sign-in link to <span className="font-medium">{email}</span>. Click it in
-                this browser — you&apos;ll return here automatically.
+                We sent a sign-in link to <span className="font-medium">{email}</span> from Peer
+                Disclosures. Click it in this browser — you&apos;ll return here automatically.
               </>
             ) : (
               <>
-                A sign-in link was recently sent to <span className="font-medium">{email}</span>.
-                Check your inbox (including spam) — another email was not sent.
+                A sign-in link was recently sent to <span className="font-medium">{email}</span>{" "}
+                from Peer Disclosures. Check your inbox (including spam) — another email was not
+                sent.
               </>
             )}
           </p>
@@ -302,8 +303,8 @@ export default function MagicLinkForm({
         </p>
       ) : (
         <p className="text-xs leading-relaxed text-slate-500">
-          First time on this device? We&apos;ll email a one-time magic link. After that, signing
-          back in with the same email on this browser won&apos;t send another email.
+          First time on this device? Peer Disclosures will email a one-time sign-in link. After that,
+          signing back in with the same email on this browser won&apos;t send another email.
         </p>
       )}
       <input

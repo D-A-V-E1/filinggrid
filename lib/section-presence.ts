@@ -127,6 +127,17 @@ export function noteSectionHasXbrlContent(note: NoteSectionXbrl | undefined): bo
   );
 }
 
+const NONE_PREVIEW_PATTERNS =
+  /^(none\.?|not applicable\.?|n\/a\.?|no unresolved|there are no|not required)/i;
+
+/** Non-empty parse preview — excludes indexer stubs and boilerplate "none" filings. */
+export function isSubstantiveSectionPreview(text: string, minLen = 25): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < minLen) return false;
+  if (NONE_PREVIEW_PATTERNS.test(trimmed)) return false;
+  return true;
+}
+
 /** True when companyfacts expose a catalog note or financial-statements headline data. */
 export function financialsHaveCatalogSection(
   financials: FinancialsXbrl | undefined,
@@ -151,6 +162,20 @@ export function columnHasSectionPresence(
   return columnHasCatalogSection(col, sectionId) || financialsHaveCatalogSection(financials, sectionId);
 }
 
+/**
+ * Material section presence for peer gap rules — XBRL-backed or parse index with substantive preview.
+ * Empty indexer stubs do not count as "peer has section".
+ */
+export function columnHasReliableSectionPresence(
+  col: FilingColumn,
+  sectionId: string,
+  financials?: FinancialsXbrl
+): boolean {
+  if (financialsHaveCatalogSection(financials, sectionId)) return true;
+  if (!columnHasCatalogSection(col, sectionId)) return false;
+  return isSubstantiveSectionPreview(catalogSectionPreview(col, sectionId));
+}
+
 /** Preview text for a catalog section — direct id or alias / full-document fallback. */
 export function catalogSectionPreview(col: FilingColumn, sectionId: string): string {
   const direct = col.sections.find((s) => s.id === sectionId)?.text_preview?.trim();
@@ -165,12 +190,18 @@ export function columnHasSparseSectionIndex(col: FilingColumn): boolean {
   return col.sections[0]?.id === "full-document";
 }
 
+/** True when the column failed to parse — exclude from peer gap comparisons. */
+export function columnParseFailed(col: FilingColumn): boolean {
+  return Boolean(col.error);
+}
+
 /** Skip missing_section when foreign/interim form norms explain the gap vs domestic peers. */
 export function shouldSuppressMissingSection(
   col: FilingColumn,
   sectionId: string,
   period?: string
 ): boolean {
+  if (columnParseFailed(col)) return true;
   const form = resolveColumnForm(col, period);
   if (isForeignForm(form) && FOREIGN_OPTIONAL_SECTION_IDS.has(sectionId)) return true;
   if (isInterimPeriod(period) && INTERIM_OPTIONAL_SECTION_IDS.has(sectionId)) return true;

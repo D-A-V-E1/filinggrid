@@ -429,9 +429,36 @@ def _find_headings(blocks: list[Tag], block_index: dict[int, int]) -> list[tuple
     return [(h[0], h[1], h[2], h[3]) for h in headings]
 
 
+_EMBEDDED_RESOURCE_TAGS = (
+    "script",
+    "style",
+    "noscript",
+    "meta",
+    "link",
+    "svg",
+    "iframe",
+    "img",
+    "object",
+    "embed",
+    "base",
+    "picture",
+    "source",
+    "video",
+    "audio",
+)
+
+
 def _strip_heavy_markup(soup: BeautifulSoup) -> None:
-    for tag in soup(["script", "style", "noscript", "meta", "link", "svg", "iframe"]):
+    for tag in soup(_EMBEDDED_RESOURCE_TAGS):
         tag.decompose()
+
+
+def _strip_embedded_resources(soup: BeautifulSoup) -> None:
+    """Remove tags that trigger sub-resource fetches when excerpt HTML is injected in the app."""
+    for tag in soup(_EMBEDDED_RESOURCE_TAGS):
+        tag.decompose()
+    for anchor in soup.find_all("a"):
+        anchor.unwrap()
 
 
 def _table_row_ancestor(tag: Tag) -> Tag | None:
@@ -869,6 +896,7 @@ def _normalize_excerpt_html(html: str) -> str:
         html = f"<table>{stripped}</table>"
 
     soup = BeautifulSoup(html, "html.parser")
+    _strip_embedded_resources(soup)
     _unwrap_presentation_tags(soup)
     _wrap_orphan_table_rows(soup)
 

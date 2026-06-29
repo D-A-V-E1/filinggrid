@@ -3,10 +3,14 @@ import type { FilingColumn } from "@/lib/api";
 import {
   catalogSectionPreview,
   columnHasCatalogSection,
+  columnHasReliableSectionPresence,
   columnHasSectionPresence,
+  columnParseFailed,
   financialsHaveCatalogSection,
+  isSubstantiveSectionPreview,
   noteSectionHasXbrlContent,
   sectionsHaveCatalogSection,
+  shouldSuppressMissingSection,
 } from "@/lib/section-presence";
 
 function col(
@@ -127,5 +131,45 @@ describe("columnHasSectionPresence xbrl fallback", () => {
     expect(noteSectionHasXbrlContent(epsDisclosureFinancials.notes_xbrl?.["note-eps"])).toBe(true);
     expect(financialsHaveCatalogSection(epsDisclosureFinancials, "note-eps")).toBe(true);
     expect(columnHasSectionPresence(epsColumn, "note-eps", epsDisclosureFinancials)).toBe(true);
+    expect(columnHasReliableSectionPresence(epsColumn, "note-eps", epsDisclosureFinancials)).toBe(true);
+  });
+});
+
+describe("columnHasReliableSectionPresence", () => {
+  it("treats empty parse-index stubs as absent even when section id is indexed", () => {
+    const stubColumn = col([{ id: "note-leases", preview: "" }], "10-K");
+    expect(columnHasSectionPresence(stubColumn, "note-leases")).toBe(true);
+    expect(columnHasReliableSectionPresence(stubColumn, "note-leases")).toBe(false);
+  });
+
+  it("requires substantive preview for parse-index hits", () => {
+    const long =
+      "Operating lease liabilities and right-of-use assets are recognized for leases with terms greater than twelve months.";
+    const column = col([{ id: "note-leases", preview: long }], "10-K");
+    expect(isSubstantiveSectionPreview(long)).toBe(true);
+    expect(columnHasReliableSectionPresence(column, "note-leases")).toBe(true);
+  });
+});
+
+describe("shouldSuppressMissingSection", () => {
+  it("suppresses parse-failed columns", () => {
+    const failed = { ...col([]), error: "parse failed" };
+    expect(columnParseFailed(failed)).toBe(true);
+    expect(shouldSuppressMissingSection(failed, "note-leases")).toBe(true);
+  });
+
+  it("suppresses foreign optional sections on 20-F", () => {
+    expect(shouldSuppressMissingSection(col([], "20-F"), "unresolved-staff")).toBe(true);
+  });
+
+  it("suppresses interim-optional sections on 10-Q compare", () => {
+    expect(
+      shouldSuppressMissingSection(col([], "10-Q"), "business", "interim-2025-Q2-10-Q")
+    ).toBe(true);
+  });
+
+  it("treats amended 10-K/A as domestic annual form", () => {
+    expect(shouldSuppressMissingSection(col([], "10-K/A"), "business", "annual-2024")).toBe(false);
+    expect(shouldSuppressMissingSection(col([], "20-F/A"), "controls")).toBe(true);
   });
 });
