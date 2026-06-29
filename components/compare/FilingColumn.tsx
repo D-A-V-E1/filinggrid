@@ -58,6 +58,7 @@ interface FilingColumnProps {
   deltaFlagCount?: number;
   foreignFilerTooltip?: string | null;
   sectionScrollRequest?: number;
+  focusRowKey?: string | null;
 }
 
 function scrollColumnContentToTop(scrollEl: HTMLDivElement | null): void {
@@ -71,6 +72,30 @@ function scrollColumnContentToTop(scrollEl: HTMLDivElement | null): void {
     apply();
     requestAnimationFrame(apply);
   });
+}
+
+function scrollMetricRowIntoView(scrollEl: HTMLDivElement | null, rowKey: string): boolean {
+  if (!scrollEl) return false;
+  const row = scrollEl.querySelector<HTMLElement>(`[data-metric-row="${rowKey}"]`);
+  if (!row) return false;
+
+  const scrollRect = scrollEl.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const targetTop =
+    rowRect.top - scrollRect.top + scrollEl.scrollTop - scrollRect.height / 2 + rowRect.height / 2;
+  scrollEl.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+  return true;
+}
+
+function applyColumnScrollFocus(
+  scrollEl: HTMLDivElement | null,
+  focusRowKey?: string | null
+): boolean {
+  if (focusRowKey && scrollMetricRowIntoView(scrollEl, focusRowKey)) {
+    return true;
+  }
+  scrollColumnContentToTop(scrollEl);
+  return false;
 }
 
 function formatSectionLabel(label: string): string {
@@ -137,6 +162,7 @@ interface XbrlPanelProps {
   fiscalYearFilter?: number | null;
   maxFyColumns?: number;
   tableFit?: boolean;
+  highlightRowKey?: string | null;
 }
 
 /** Fewer FY columns when the compare grid is wider so tables stay readable. */
@@ -185,6 +211,7 @@ function XbrlMetricsPanel({
   fiscalYearFilter,
   maxFyColumns = 4,
   tableFit = false,
+  highlightRowKey = null,
 }: XbrlPanelProps) {
   const tableRows = pickAnnualRows(annualSummary, fiscalYearFilter, maxFyColumns);
   if (tableRows.length === 0) return null;
@@ -230,7 +257,13 @@ function XbrlMetricsPanel({
           </thead>
           <tbody>
             {visibleRows.map(({ key, label, unit }) => (
-              <tr key={key} className="border-b border-brand-100/80 last:border-0">
+              <tr
+                key={key}
+                data-metric-row={key}
+                className={`border-b border-brand-100/80 last:border-0${
+                  highlightRowKey === key ? " bg-amber-100/90 ring-1 ring-inset ring-amber-300" : ""
+                }`}
+              >
                 <td className="xbrl-metric-line py-1.5 pr-2 text-slate-600">{label}</td>
                 {tableRows.map((r) => {
                   const val = r[key];
@@ -495,6 +528,7 @@ function FilingColumn({
   deltaFlagCount = 0,
   foreignFilerTooltip = null,
   sectionScrollRequest = 0,
+  focusRowKey = null,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const isCompact = columnLayout?.density === "compact";
@@ -597,6 +631,7 @@ function FilingColumn({
           fiscalYearFilter={resolvedFiscalYear}
           maxFyColumns={maxFyColumns}
           tableFit={tableFit}
+          highlightRowKey={focusRowKey}
         />
       );
     }
@@ -631,7 +666,7 @@ function FilingColumn({
         {metricsPanel}
       </>
     );
-  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows, xbrlMetricsSubtitle]);
+  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows, xbrlMetricsSubtitle, focusRowKey]);
 
   useEffect(() => {
     setShowHtmlExcerpt(false);
@@ -641,9 +676,8 @@ function FilingColumn({
   }, [activeSection, ticker]);
 
   useLayoutEffect(() => {
-    scrollResetActiveRef.current = true;
-    scrollColumnContentToTop(scrollRef.current);
-  }, [activeSection, ticker, sectionScrollRequest]);
+    scrollResetActiveRef.current = !applyColumnScrollFocus(scrollRef.current, focusRowKey);
+  }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
 
   useLayoutEffect(() => {
     if (!activeSection) return;
@@ -651,7 +685,7 @@ function FilingColumn({
     if (notesPending && activeSection.startsWith("note-")) return;
     if (financialsPending && activeSection === "financial-statements") return;
 
-    scrollColumnContentToTop(scrollRef.current);
+    scrollResetActiveRef.current = !applyColumnScrollFocus(scrollRef.current, focusRowKey);
   }, [
     activeSection,
     sectionsPending,
@@ -662,6 +696,7 @@ function FilingColumn({
     showHtmlExcerpt,
     loadingHtml,
     sectionScrollRequest,
+    focusRowKey,
   ]);
 
   useEffect(() => {
@@ -684,7 +719,7 @@ function FilingColumn({
       observer.disconnect();
       window.clearTimeout(stop);
     };
-  }, [activeSection, ticker, sectionScrollRequest]);
+  }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
 
   useEffect(() => {
     setFullStatements(null);
