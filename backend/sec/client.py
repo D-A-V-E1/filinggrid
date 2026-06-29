@@ -22,6 +22,33 @@ ANNUAL_COMPARABLE_FORMS: tuple[str, ...] = ("10-K", "10-K/A", "20-F", "20-F/A")
 INTERIM_COMPARABLE_FORMS: tuple[str, ...] = ("10-Q", "10-Q/A", "6-K")
 COMPARABLE_FORM_TYPES: list[str] = list(ANNUAL_COMPARABLE_FORMS) + list(INTERIM_COMPARABLE_FORMS)
 
+# Company-name tokens sometimes sent instead of SEC symbols (e.g. TESLA → TSLA).
+TICKER_ALIASES: dict[str, str] = {
+    "TESLA": "TSLA",
+    "GOOGLE": "GOOGL",
+    "ALPHABET": "GOOGL",
+    "FACEBOOK": "META",
+    "AMAZON": "AMZN",
+    "APPLE": "AAPL",
+    "MICROSOFT": "MSFT",
+    "NVIDIA": "NVDA",
+    "INTEL": "INTC",
+    "FORD": "F",
+    "CHEVRON": "CVX",
+    "EXXON": "XOM",
+    "DISNEY": "DIS",
+    "WALMART": "WMT",
+    "BERKSHIRE": "BRK-B",
+    "COCACOLA": "KO",
+    "COCA-COLA": "KO",
+    "PEPSI": "PEP",
+    "PEPSICO": "PEP",
+    "NETFLIX": "NFLX",
+    "SALESFORCE": "CRM",
+    "SERVICENOW": "NOW",
+    "SHOPIFY": "SHOP",
+}
+
 _next_request_time = 0.0
 _request_locks: dict[int, asyncio.Lock] = {}
 MIN_INTERVAL = 0.11  # ~9 req/sec to stay under SEC 10 req/sec limit
@@ -144,6 +171,7 @@ async def fetch_ticker_map() -> dict[str, dict[str, Any]]:
 
 async def resolve_ticker(ticker: str, ticker_map: dict | None = None) -> dict[str, Any]:
     ticker = ticker.upper().strip()
+    ticker = TICKER_ALIASES.get(ticker, ticker)
     if not ticker_map:
         ticker_map = await fetch_ticker_map()
     if ticker not in ticker_map:

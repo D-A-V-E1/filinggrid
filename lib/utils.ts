@@ -1,5 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { comparePathWithPeriod, resolveComparePeriod } from "@/lib/filing-period";
+import { resolveSlugTicker } from "@/lib/ticker-aliases";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -8,12 +10,31 @@ export function cn(...inputs: ClassValue[]) {
 export function parsePeerSlug(slug: string): string[] {
   return slug
     .split("-vs-")
-    .map((t) => t.trim().toUpperCase())
+    .map((segment) => resolveSlugTicker(segment))
     .filter(Boolean);
 }
 
 export function buildPeerSlug(tickers: string[]): string {
   return tickers.map((t) => t.toLowerCase()).join("-vs-");
+}
+
+export function canonicalPeerSlug(slug: string): string {
+  return buildPeerSlug(parsePeerSlug(slug));
+}
+
+export function isCanonicalPeerSlug(slug: string): boolean {
+  return slug.toLowerCase() === canonicalPeerSlug(slug);
+}
+
+/** Canonical compare path, preserving year/period query params when present. */
+export function canonicalComparePath(
+  slug: string,
+  year?: string,
+  period?: string
+): string {
+  const canonical = canonicalPeerSlug(slug);
+  const comparePeriod = resolveComparePeriod(year, period);
+  return comparePathWithPeriod(canonical, comparePeriod);
 }
 
 export function normalizePeerSlug(tickers: string[]): string {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import CompareDeltaReport from "@/components/compare/CompareDeltaReport";
-import { parsePeerSlug, validateCompareTickers } from "@/lib/utils";
+import { canonicalComparePath, isCanonicalPeerSlug, parsePeerSlug, validateCompareTickers } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ peer_slug: string }>;
@@ -22,6 +23,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function DeltaReportPage({ params, searchParams }: Props) {
   const { peer_slug } = await params;
   const { year, period } = await searchParams;
+  if (!isCanonicalPeerSlug(peer_slug)) {
+    redirect(`${canonicalComparePath(peer_slug, year, period)}/deltas`);
+  }
   const tickers = parsePeerSlug(peer_slug);
   const fiscalYear = year ? parseInt(year, 10) : undefined;
   const slugError = validateCompareTickers(tickers);
