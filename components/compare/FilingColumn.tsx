@@ -1,6 +1,15 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   fetchFinancialStatements,
   ApiError,
@@ -48,6 +57,19 @@ interface FilingColumnProps {
   onPaywall?: (reason: string, message: string) => void;
   deltaFlagCount?: number;
   foreignFilerTooltip?: string | null;
+  sectionScrollRequest?: number;
+}
+
+function scrollColumnContentToTop(scrollEl: HTMLDivElement | null): void {
+  if (!scrollEl) return;
+  const apply = () => {
+    scrollEl.scrollTop = 0;
+  };
+  apply();
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
 }
 
 function formatSectionLabel(label: string): string {
@@ -467,6 +489,7 @@ function FilingColumn({
   onPaywall,
   deltaFlagCount = 0,
   foreignFilerTooltip = null,
+  sectionScrollRequest = 0,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const isCompact = columnLayout?.density === "compact";
@@ -603,12 +626,33 @@ function FilingColumn({
   }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows, xbrlMetricsSubtitle]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
     setShowHtmlExcerpt(false);
     setSectionHtml(null);
     setSectionError("");
     setLoadingHtml(false);
   }, [activeSection, ticker]);
+
+  useLayoutEffect(() => {
+    scrollColumnContentToTop(scrollRef.current);
+  }, [activeSection, ticker, sectionScrollRequest]);
+
+  useLayoutEffect(() => {
+    if (!activeSection) return;
+    if (sectionsPending) return;
+    if (notesPending && activeSection.startsWith("note-")) return;
+    if (financialsPending && activeSection === "financial-statements") return;
+
+    scrollColumnContentToTop(scrollRef.current);
+  }, [
+    activeSection,
+    sectionsPending,
+    notesPending,
+    financialsPending,
+    xbrlPanel,
+    sectionHtml,
+    showHtmlExcerpt,
+    sectionScrollRequest,
+  ]);
 
   useEffect(() => {
     setFullStatements(null);

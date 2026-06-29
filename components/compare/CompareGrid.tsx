@@ -41,6 +41,8 @@ import { scanDeltas, foreignFilerTooltip } from "@/lib/delta-engine";
 import {
   MAINSTREAM_STRIP_TAGLINE,
   countMainstreamFlagsByTicker,
+  filterMapWorthyFlags,
+  mapWorthyCoverage,
   rankMainstreamStrip,
 } from "@/lib/delta-surface";
 import type { DeltaFlag } from "@/lib/delta-types";
@@ -92,7 +94,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
   const [deltaMapExpanded, setDeltaMapExpanded] = useState(false);
-  const deltaMapRef = useRef<HTMLDivElement>(null);
+  const [sectionScrollRequest, setSectionScrollRequest] = useState(0);
 
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
 
@@ -462,6 +464,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
 
   const handleSectionSelect = useCallback((sectionId: string) => {
     setActiveSection(sectionId);
+    setSectionScrollRequest((n) => n + 1);
   }, []);
 
   const deltaScan = useMemo(() => {
@@ -497,6 +500,16 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     return countMainstreamFlagsByTicker(deltaScan.flags);
   }, [deltaScan]);
 
+  const mapFlags = useMemo(() => {
+    if (!deltaScan) return [];
+    return filterMapWorthyFlags(deltaScan.flags);
+  }, [deltaScan]);
+
+  const mapCoverage = useMemo(() => {
+    if (!deltaScan) return { flagCount: 0, sectionsWithDeltas: 0 };
+    return mapWorthyCoverage(deltaScan.flags);
+  }, [deltaScan]);
+
   const handleDeltaFlagClick = useCallback(
     (flag: DeltaFlag) => {
       handleSectionSelect(flag.sectionId);
@@ -504,9 +517,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     [handleSectionSelect]
   );
 
-  const scrollToDeltaMap = useCallback(() => {
+  const openDeltaMap = useCallback(() => {
     setDeltaMapExpanded(true);
-    deltaMapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
   const deltasLoading = loadingFinancials || loadingSections;
@@ -602,7 +614,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       </div>
 
       {canShowCompare && !columnLimitExceeded && (
-        <>
+        <div className="relative z-20 shrink-0">
           {deltaScan?.mixedFilerBanner && !mixedFilerBannerDismissed && (
             <div className="flex shrink-0 items-start gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
               <p className="flex-1">{deltaScan.mixedFilerBanner}</p>
@@ -618,27 +630,28 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           <DeltaStrip
             flags={stripFlags}
             loading={deltasLoading}
-            totalFlagCount={deltaScan?.flags.length}
+            totalFlagCount={mapCoverage.flagCount}
             tagline={MAINSTREAM_STRIP_TAGLINE}
             onFlagClick={handleDeltaFlagClick}
-            onViewMap={deltaScan && deltaScan.flags.length > 0 ? scrollToDeltaMap : undefined}
+            onViewMap={mapFlags.length > 0 ? openDeltaMap : undefined}
           />
-          {deltaScan && deltaScan.flags.length > 0 && (
-            <div ref={deltaMapRef}>
-              <SectionDeltaMap
-                tickers={tickers}
-                catalog={navigableCatalog}
-                columns={data?.columns ?? []}
-                flags={deltaScan.flags}
-                scannedCount={deltaScan.coverage.scannedSections}
-                sectionsWithDeltas={deltaScan.coverage.sectionsWithDeltas}
-                expanded={deltaMapExpanded}
-                onExpandedChange={setDeltaMapExpanded}
-                onCellClick={(ticker, sectionId) => handleSectionSelect(sectionId)}
-              />
-            </div>
+          {mapFlags.length > 0 && (
+            <SectionDeltaMap
+              tickers={tickers}
+              catalog={navigableCatalog}
+              columns={data?.columns ?? []}
+              flags={mapFlags}
+              scannedCount={deltaScan?.coverage.scannedSections ?? 0}
+              sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
+              expanded={deltaMapExpanded}
+              onExpandedChange={setDeltaMapExpanded}
+              onCellClick={(_ticker, sectionId) => {
+                handleSectionSelect(sectionId);
+                setDeltaMapExpanded(false);
+              }}
+            />
           )}
-        </>
+        </div>
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -715,7 +728,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               <button
                 type="button"
                 onClick={() => setNavOpen(true)}
-                className="absolute bottom-4 left-4 z-10 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-md md:hidden"
+                className="absolute bottom-4 left-4 z-50 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-md md:hidden"
               >
                 Sections
               </button>
@@ -779,6 +792,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         onPaywall={handlePaywall}
                         deltaFlagCount={mainstreamHeat[col.ticker] ?? 0}
                         foreignFilerTooltip={foreignFilerTooltip(col.form ?? formFromPeriodId(period))}
+                        sectionScrollRequest={sectionScrollRequest}
                       />
                     );
                   })}

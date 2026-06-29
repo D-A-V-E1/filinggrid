@@ -1,6 +1,6 @@
-import type { FilingColumn, FinancialsXbrl } from "@/lib/api";
+import type { FilingColumn, FinancialsXbrl, NoteSectionXbrl } from "@/lib/api";
 import { formFromPeriodId } from "@/lib/filing-period";
-import { getCatalogOrder } from "@/lib/sections";
+import { GAAP_STATEMENT_SECTION_IDS, getCatalogOrder } from "@/lib/sections";
 import {
   contingencyEmphasisLabel,
   disagreementReportedLabel,
@@ -137,6 +137,44 @@ function isSubstantivePreview(text: string, minLen = 40): boolean {
   return true;
 }
 
+function pickNoteFyRow(
+  note: NoteSectionXbrl,
+  fiscalYear: number | null
+): Record<string, number | string | undefined> | null {
+  if (!note.annual_summary?.length) return null;
+  if (fiscalYear != null) {
+    return note.annual_summary.find((r) => r.fy === fiscalYear) ?? null;
+  }
+  return [...note.annual_summary].sort((a, b) => b.fy - a.fy)[0] ?? null;
+}
+
+/** Non-zero tagged amounts for the active FY — not mere tag presence or historical zeros. */
+function hasNonZeroNoteMetricsForFy(note: NoteSectionXbrl, fiscalYear: number | null): boolean {
+  const row = pickNoteFyRow(note, fiscalYear);
+  if (!row) return false;
+  for (const key of Object.keys(note.metrics)) {
+    const val = row[key];
+    if (typeof val === "number" && Number.isFinite(val) && val !== 0) return true;
+  }
+  return false;
+}
+
+/** Material topic signal for strip eligibility — not catalog section presence alone. */
+function columnHasTopicPresenceSignal(
+  col: FilingColumn,
+  sectionId: string,
+  state: DeltaSessionState
+): boolean {
+  const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
+  if (note?.has_data) {
+    if (note.annual_summary?.length) {
+      return hasNonZeroNoteMetricsForFy(note, state.fiscalYear);
+    }
+    if (note.disclosures?.length) return true;
+  }
+  return isSubstantivePreview(sectionPreview(col, sectionId));
+}
+
 function keywordHits(text: string, keywords: string[]): number {
   const lower = text.toLowerCase();
   return keywords.filter((kw) => lower.includes(kw)).length;
@@ -153,10 +191,16 @@ function scanMissingSections(
 ): void {
   const labelById = new Map(state.catalog.map((s) => [s.id, s.label]));
   for (const sectionId of catalogOrder) {
+    if (GAAP_STATEMENT_SECTION_IDS.has(sectionId)) continue;
+
     const peersWith = state.columns.filter((c) => columnHasSection(c, sectionId));
-    if (peersWith.length === 0) continue;
+    // Single-peer presence is topic_only_peer territory — not a catalog gap.
+    if (peersWith.length < 2) continue;
+
     const peersWithout = state.columns.filter((c) => !columnHasSection(c, sectionId));
     if (peersWithout.length === 0) continue;
+    // Only flag when the missing peer(s) are a minority vs peers who have the section.
+    if (peersWithout.length >= peersWith.length) continue;
 
     const label = sectionLabel(state.catalog, sectionId);
     for (const col of peersWithout) {
@@ -176,7 +220,9 @@ function scanMissingSections(
 
 function scanTopicPresence(state: DeltaSessionState, flags: DeltaFlag[]): void {
   for (const sectionId of TOPIC_PRESENCE_SECTIONS) {
-    const withSection = state.columns.filter((c) => columnHasSection(c, sectionId));
+    const withSection = state.columns.filter(
+      (c) => columnHasSection(c, sectionId) && columnHasTopicPresenceSignal(c, sectionId, state)
+    );
     if (withSection.length === 0 || withSection.length === state.columns.length) continue;
 
     const label = sectionLabel(state.catalog, sectionId);

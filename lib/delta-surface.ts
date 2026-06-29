@@ -59,3 +59,31 @@ export function countMainstreamFlagsByTicker(flags: DeltaFlag[]): Record<string,
   }
   return counts;
 }
+
+/** Material cells for the section delta map — not exhaustive footnote noise. */
+export function isMapWorthyFlag(flag: DeltaFlag): boolean {
+  if (flag.metadata?.rollupCount != null) return false;
+  if (flag.ruleId === "metrics_not_comparable_mixed_filers") return false;
+  if (flag.ruleId === "prose_number_gap") return false;
+  if (flag.severity === "P3") return false;
+
+  if (isMainstreamStripFlag(flag)) return true;
+  if (flag.ruleId === "missing_section") return true;
+
+  return false;
+}
+
+export function filterMapWorthyFlags(flags: DeltaFlag[]): DeltaFlag[] {
+  return flags.filter(isMapWorthyFlag);
+}
+
+export function mapWorthyCoverage(flags: DeltaFlag[]): {
+  flagCount: number;
+  sectionsWithDeltas: number;
+} {
+  const worthy = filterMapWorthyFlags(flags);
+  return {
+    flagCount: worthy.length,
+    sectionsWithDeltas: new Set(worthy.map((f) => f.sectionId)).size,
+  };
+}

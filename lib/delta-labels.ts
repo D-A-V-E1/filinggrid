@@ -32,7 +32,7 @@ export function missingSectionLabel(ticker: string, sectionLabel: string): strin
 }
 
 export function topicOnlyPeerLabel(ticker: string, sectionLabel: string): string {
-  return `Only ${ticker} has ${sectionLabel}`;
+  return `Only ${ticker} includes ${sectionLabel.toLowerCase()} note`;
 }
 
 export function openStaffCommentsLabel(ticker: string): string {
@@ -56,3 +56,30 @@ export const MIXED_FILER_BANNER =
 
 export const METRICS_NOT_COMPARABLE_LABEL =
   "US and foreign filers in group — metric comparisons limited";
+
+/** Short badge text for delta-map grid cells (tooltip carries full label). */
+export function deltaRuleShortLabel(ruleId: string): string {
+  switch (ruleId) {
+    case "missing_section":
+      return "Missing";
+    case "headline_vs_median":
+      return "Metric";
+    case "headline_only_peer":
+      return "Outlier";
+    case "topic_only_peer":
+      return "Unique";
+    case "open_staff_comments":
+    case "only_peer_open_staff":
+      return "Staff";
+    case "disagreement_reported":
+      return "Auditor";
+    case "contingency_open_emphasis":
+      return "Legal";
+    case "prose_number_gap":
+      return "Narrative";
+    case "metrics_not_comparable_mixed_filers":
+      return "Mixed";
+    default:
+      return "Delta";
+  }
+}
