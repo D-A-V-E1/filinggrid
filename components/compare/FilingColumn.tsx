@@ -430,11 +430,15 @@ function ExcerptToggleButton({
   );
 }
 
-function HtmlExcerpt({ html }: { html: string }) {
+function HtmlExcerpt({ html, compact = false }: { html: string; compact?: boolean }) {
   return (
-    <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+    <article
+      className={`min-w-0 w-full rounded-lg border border-slate-200 bg-white shadow-sm ${
+        compact ? "px-3 py-3" : "px-5 py-5"
+      }`}
+    >
       <div
-        className="filing-content max-w-none font-serif text-sm text-slate-800"
+        className="filing-content w-full min-w-0 max-w-none font-serif text-sm text-slate-800"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </article>
@@ -961,7 +965,7 @@ function FilingColumn({
                   <p className="mb-3 font-sans text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                     SEC filing excerpt
                   </p>
-                  <HtmlExcerpt html={sectionHtml} />
+                  <HtmlExcerpt html={sectionHtml} compact={isCompact} />
                   {isNarrativeSection(activeSection) && sectionFilingUrl && (
                     <EdgarSectionLink filingUrl={sectionFilingUrl} />
                   )}

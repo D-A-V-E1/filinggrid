@@ -195,26 +195,56 @@
   }
 
   .filing-content {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    line-height: 1.625;
+    overflow-wrap: break-word;
+  }
+
+  .filing-content > :not(.filing-table-wrap) {
+    margin-bottom: 0.75rem;
+  }
+
+  .filing-content > :last-child {
+    margin-bottom: 0;
+  }
+
+  .filing-content div:not(.filing-table-wrap) {
+    white-space: pre-line;
+  }
+
+  .filing-content br {
+    display: block;
+    margin-bottom: 0.625rem;
+    content: "";
+    line-height: 0;
   }
 
   .filing-table-wrap {
     overflow-x: auto;
     margin-bottom: 1rem;
     max-width: 100%;
+    min-width: 0;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .compare-column--compact .filing-table-wrap {
+    overflow-x: auto;
   }
 
   .filing-content table {
     @apply border-collapse text-xs;
     display: table !important;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
     table-layout: auto;
   }
 
   .filing-table-wrap > table {
+    width: max-content;
+    min-width: 100%;
     margin-bottom: 0;
   }
 
@@ -236,9 +266,9 @@
 
   .filing-content td,
   .filing-content th {
-    @apply border border-slate-200 px-2 py-1 align-top;
+    @apply border border-slate-200 px-2.5 py-1.5 align-top;
     display: table-cell !important;
-    overflow-wrap: normal;
+    overflow-wrap: break-word;
     word-break: normal;
   }
 
@@ -246,6 +276,7 @@
   .filing-content th[align="right"] {
     text-align: right;
     white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   .filing-content td[align="center"],
@@ -258,9 +289,27 @@
     text-align: left;
   }
 
+  /* Keep index/label columns compact so description columns get space */
   .filing-content tr td:first-child,
   .filing-content tr th:first-child {
-    min-width: 8rem;
+    width: 1%;
+    min-width: 3.5rem;
+    max-width: 7rem;
+  }
+
+  .filing-content tr td:first-child {
+    white-space: nowrap;
+  }
+
+  .filing-content tr th:first-child {
+    white-space: normal;
+  }
+
+  .filing-content tr td:not(:first-child):not([align="right"]),
+  .filing-content tr th:not(:first-child):not([align="right"]) {
+    min-width: 12rem;
+    width: auto;
+    white-space: normal;
   }
 
   .filing-content p {
