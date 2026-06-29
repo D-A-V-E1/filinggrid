@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { FilingColumn } from "@/lib/api";
 import type { DeltaFlag, DeltaSeverity } from "@/lib/delta-types";
@@ -181,6 +181,25 @@ export default function SectionDeltaMap({
   const [expandedInternal, setExpandedInternal] = useState(defaultExpanded);
   const expanded = expandedProp ?? expandedInternal;
   const setExpanded = onExpandedChange ?? setExpandedInternal;
+  const sectionRef = useRef<HTMLElement>(null);
+  const [panelTop, setPanelTop] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!expanded) return;
+
+    const syncPanelTop = () => {
+      const bottom = sectionRef.current?.getBoundingClientRect().bottom;
+      if (bottom != null) setPanelTop(bottom);
+    };
+
+    syncPanelTop();
+    window.addEventListener("resize", syncPanelTop);
+    window.addEventListener("scroll", syncPanelTop, true);
+    return () => {
+      window.removeEventListener("resize", syncPanelTop);
+      window.removeEventListener("scroll", syncPanelTop, true);
+    };
+  }, [expanded]);
 
   const columnByTicker = useMemo(() => {
     const map = new Map<string, FilingColumn>();
@@ -219,22 +238,174 @@ export default function SectionDeltaMap({
   const cellButtonClass =
     "whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-semibold transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1";
 
+  const expandedPanel = expanded ? (
+    <div
+      className="delta-map-panel"
+      style={{ top: panelTop, ["--delta-map-panel-top" as string]: `${panelTop}px` }}
+      role="dialog"
+      aria-label="Section delta map grid"
+    >
+      <div className="sticky top-0 z-30 shrink-0 border-b border-slate-100 bg-white px-4 py-2.5">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-900">{headline}</p>
+          <p className="text-[11px] text-slate-500">{coverageText}</p>
+        </div>
+        <DeltaMapLegend />
+      </div>
+
+      <div className="delta-map-overlay-scroll min-h-0 flex-1 px-4 py-2">
+        <table className="w-full min-w-[520px] border-collapse text-xs">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+              <th className="sticky left-0 z-20 bg-white py-2 pr-3 font-semibold">Section</th>
+              {tickers.map((ticker) => (
+                <th key={ticker} className="px-2 py-2 text-center font-mono font-semibold">
+                  {ticker}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {groupedSections.map(([groupLabel, rows]) => {
+              const groupFlagCount = rows.reduce((n, r) => n + r.flags.length, 0);
+              return (
+                <Fragment key={groupLabel}>
+                  <tr className="bg-slate-50/90">
+                    <td
+                      colSpan={tickers.length + 1}
+                      className="sticky left-0 z-10 border-y border-slate-100 px-0 py-1.5 pl-1"
+                    >
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                        {groupLabel}
+                      </span>
+                      <span className="ml-2 text-[10px] font-normal normal-case text-slate-400">
+                        {rows.length} section{rows.length === 1 ? "" : "s"} · {groupFlagCount} difference
+                        {groupFlagCount === 1 ? "" : "s"}
+                      </span>
+                    </td>
+                  </tr>
+                  {rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className={`border-b border-slate-100/80 transition-colors hover:bg-slate-50/60 ${rowHeatTone(row.flags)}`}
+                    >
+                      <td className="sticky left-0 z-10 max-w-[200px] bg-white py-2 pr-3">
+                        <p className="truncate font-semibold text-slate-800">
+                          {formatSectionRowLabel(row.label)}
+                        </p>
+                        <p className="truncate text-[10px] text-slate-500">
+                          {deltaMapRowSummary(row.label, row.flags)}
+                        </p>
+                      </td>
+                      {tickers.map((ticker) => {
+                        const col = columnByTicker.get(ticker);
+                        const present = cellHasSection(col, row.id);
+                        const cellFlags = row.flags.filter((f) => f.ticker === ticker);
+                        const topFlag = topFlagForCell(cellFlags);
+                        const tooltip = cellFlagsTooltip(cellFlags);
+
+                        if (!present && cellFlags.some((f) => f.ruleId === "missing_section")) {
+                          const missingTip = cellFlagsTooltip(cellFlags);
+                          return (
+                            <td key={ticker} className="px-2 py-2 text-center">
+                              <DeltaMapTooltip
+                                tip={
+                                  missingTip ? (
+                                    <TooltipContent heading={missingTip.heading} lines={missingTip.lines} />
+                                  ) : null
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => onCellClick(ticker, row.id, topFlag)}
+                                  className={`${cellButtonClass} border-amber-300/80 bg-amber-50 text-amber-950 shadow-sm shadow-amber-100/50`}
+                                >
+                                  ∅ Missing
+                                </button>
+                              </DeltaMapTooltip>
+                            </td>
+                          );
+                        }
+
+                        if (topFlag) {
+                          const badgeLabel =
+                            cellFlags.length > 1
+                              ? `${cellFlags.length} differences`
+                              : deltaRuleBadgeWithIcon(topFlag.ruleId);
+                          return (
+                            <td key={ticker} className="px-2 py-2 text-center">
+                              <DeltaMapTooltip
+                                tip={
+                                  tooltip ? (
+                                    <TooltipContent heading={tooltip.heading} lines={tooltip.lines} />
+                                  ) : null
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => onCellClick(ticker, row.id, topFlag)}
+                                  className={`${cellButtonClass} ${severityTone(topFlag.severity)}`}
+                                >
+                                  {badgeLabel}
+                                </button>
+                              </DeltaMapTooltip>
+                            </td>
+                          );
+                        }
+
+                        return (
+                          <td key={ticker} className="px-2 py-2 text-center">
+                            <DeltaMapTooltip
+                              tip={
+                                <TooltipContent
+                                  heading={present ? DELTA_MAP_ALIGNED_LABEL : DELTA_MAP_NOT_FILED_LABEL}
+                                  lines={[present ? DELTA_MAP_ALIGNED_TOOLTIP : DELTA_MAP_NOT_FILED_TOOLTIP]}
+                                />
+                              }
+                            >
+                              {present ? <AlignedCell /> : <NotFiledCell />}
+                            </DeltaMapTooltip>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="shrink-0 border-t border-slate-100 bg-slate-50/50 px-4 py-2 text-[11px] text-slate-600">
+        <span className="font-medium text-slate-700">{headline}</span>
+        <span className="text-slate-400"> · </span>
+        {coverageText}
+        <span className="text-slate-400"> · Click any badge to jump to that disclosure</span>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       {expanded &&
         typeof document !== "undefined" &&
         createPortal(
-          <button
-            type="button"
-            className="delta-map-backdrop"
-            aria-label="Close delta map"
-            onClick={() => setExpanded(false)}
-          />,
+          <>
+            <button
+              type="button"
+              className="delta-map-backdrop"
+              aria-label="Close delta map"
+              onClick={() => setExpanded(false)}
+            />
+            {expandedPanel}
+          </>,
           document.body,
         )}
 
       <section
-        className={`relative shrink-0 border-b border-slate-200 ${expanded ? "z-50 bg-white" : ""}`}
+        ref={sectionRef}
+        className="relative shrink-0 border-b border-slate-200"
         aria-label="Section delta map"
       >
         <button
@@ -242,7 +413,7 @@ export default function SectionDeltaMap({
           onClick={() => setExpanded(!expanded)}
           className={`group flex w-full flex-col gap-1.5 px-4 py-3 text-left transition-colors sm:flex-row sm:items-center sm:gap-3 ${
             expanded
-              ? "border-b border-slate-100 bg-white"
+              ? "relative z-[45] border-b border-slate-100 bg-white"
               : "border-l-4 border-l-brand-600 bg-gradient-to-r from-brand-50/80 via-white to-slate-50/40 hover:from-brand-50 delta-map-trigger-pulse"
           }`}
           aria-expanded={expanded}
@@ -276,154 +447,6 @@ export default function SectionDeltaMap({
             </span>
           </span>
         </button>
-
-        {expanded && (
-          <div className="delta-map-overlay absolute inset-x-0 top-full z-50 border-b border-slate-200 bg-white">
-            <div className="sticky top-0 z-30 border-b border-slate-100 bg-white/95 px-4 py-2.5 backdrop-blur-sm">
-              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900">{headline}</p>
-                <p className="text-[11px] text-slate-500">{coverageText}</p>
-              </div>
-              <DeltaMapLegend />
-            </div>
-
-            <div className="delta-map-overlay-scroll px-4 py-2">
-              <table className="w-full min-w-[520px] border-collapse text-xs">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                    <th className="sticky left-0 z-20 bg-white py-2 pr-3 font-semibold">Section</th>
-                    {tickers.map((ticker) => (
-                      <th key={ticker} className="px-2 py-2 text-center font-mono font-semibold">
-                        {ticker}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedSections.map(([groupLabel, rows]) => {
-                    const groupFlagCount = rows.reduce((n, r) => n + r.flags.length, 0);
-                    return (
-                      <Fragment key={groupLabel}>
-                        <tr className="bg-slate-50/90">
-                          <td
-                            colSpan={tickers.length + 1}
-                            className="sticky left-0 z-10 border-y border-slate-100 px-0 py-1.5 pl-1"
-                          >
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                              {groupLabel}
-                            </span>
-                            <span className="ml-2 text-[10px] font-normal normal-case text-slate-400">
-                              {rows.length} section{rows.length === 1 ? "" : "s"} · {groupFlagCount} difference
-                              {groupFlagCount === 1 ? "" : "s"}
-                            </span>
-                          </td>
-                        </tr>
-                        {rows.map((row) => (
-                          <tr
-                            key={row.id}
-                            className={`border-b border-slate-100/80 transition-colors hover:bg-slate-50/60 ${rowHeatTone(row.flags)}`}
-                          >
-                            <td className="sticky left-0 z-10 max-w-[200px] bg-white/95 py-2 pr-3 backdrop-blur-sm">
-                              <p className="truncate font-semibold text-slate-800">
-                                {formatSectionRowLabel(row.label)}
-                              </p>
-                              <p className="truncate text-[10px] text-slate-500">
-                                {deltaMapRowSummary(row.label, row.flags)}
-                              </p>
-                            </td>
-                            {tickers.map((ticker) => {
-                              const col = columnByTicker.get(ticker);
-                              const present = cellHasSection(col, row.id);
-                              const cellFlags = row.flags.filter((f) => f.ticker === ticker);
-                              const topFlag = topFlagForCell(cellFlags);
-                              const tooltip = cellFlagsTooltip(cellFlags);
-
-                              if (!present && cellFlags.some((f) => f.ruleId === "missing_section")) {
-                                const missingTip = cellFlagsTooltip(cellFlags);
-                                return (
-                                  <td key={ticker} className="px-2 py-2 text-center">
-                                    <DeltaMapTooltip
-                                      tip={
-                                        missingTip ? (
-                                          <TooltipContent
-                                            heading={missingTip.heading}
-                                            lines={missingTip.lines}
-                                          />
-                                        ) : null
-                                      }
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => onCellClick(ticker, row.id, topFlag)}
-                                        className={`${cellButtonClass} border-amber-300/80 bg-amber-50 text-amber-950 shadow-sm shadow-amber-100/50`}
-                                      >
-                                        ∅ Missing
-                                      </button>
-                                    </DeltaMapTooltip>
-                                  </td>
-                                );
-                              }
-
-                              if (topFlag) {
-                                const badgeLabel =
-                                  cellFlags.length > 1
-                                    ? `${cellFlags.length} differences`
-                                    : deltaRuleBadgeWithIcon(topFlag.ruleId);
-                                return (
-                                  <td key={ticker} className="px-2 py-2 text-center">
-                                    <DeltaMapTooltip
-                                      tip={
-                                        tooltip ? (
-                                          <TooltipContent heading={tooltip.heading} lines={tooltip.lines} />
-                                        ) : null
-                                      }
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => onCellClick(ticker, row.id, topFlag)}
-                                        className={`${cellButtonClass} ${severityTone(topFlag.severity)}`}
-                                      >
-                                        {badgeLabel}
-                                      </button>
-                                    </DeltaMapTooltip>
-                                  </td>
-                                );
-                              }
-
-                              return (
-                                <td key={ticker} className="px-2 py-2 text-center">
-                                  <DeltaMapTooltip
-                                    tip={
-                                      <TooltipContent
-                                        heading={present ? DELTA_MAP_ALIGNED_LABEL : DELTA_MAP_NOT_FILED_LABEL}
-                                        lines={[
-                                          present ? DELTA_MAP_ALIGNED_TOOLTIP : DELTA_MAP_NOT_FILED_TOOLTIP,
-                                        ]}
-                                      />
-                                    }
-                                  >
-                                    {present ? <AlignedCell /> : <NotFiledCell />}
-                                  </DeltaMapTooltip>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-2 text-[11px] text-slate-600">
-              <span className="font-medium text-slate-700">{headline}</span>
-              <span className="text-slate-400"> · </span>
-              {coverageText}
-              <span className="text-slate-400"> · Click any badge to jump to that disclosure</span>
-            </div>
-          </div>
-        )}
       </section>
     </>
   );

@@ -689,7 +689,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
       </div>
 
       {canShowCompare && !columnLimitExceeded && (
-        <div className="relative z-20 shrink-0">
+        <div className={`relative shrink-0 ${deltaMapExpanded ? "z-[45]" : "z-20"}`}>
           {deltaScan?.mixedFilerBanner && !mixedFilerBannerDismissed && (
             <div className="flex shrink-0 items-start gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
               <p className="flex-1">{deltaScan.mixedFilerBanner}</p>

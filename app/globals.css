@@ -341,12 +341,24 @@
   .delta-map-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 30;
-    background: rgb(15 23 42 / 0.18);
+    z-index: 40;
+    border: none;
+    padding: 0;
+    background: rgb(15 23 42 / 0.22);
     backdrop-filter: blur(2px);
+    cursor: default;
   }
 
-  .delta-map-overlay {
+  .delta-map-panel {
+    position: fixed;
+    inset-inline: 0;
+    z-index: 50;
+    display: flex;
+    max-height: min(32rem, calc(100vh - var(--delta-map-panel-top, 0px)));
+    flex-direction: column;
+    overflow: hidden;
+    border-bottom: 1px solid rgb(226 232 240);
+    background: rgb(255 255 255);
     box-shadow:
       0 4px 6px -1px rgb(0 0 0 / 0.06),
       0 20px 40px -8px rgb(0 0 0 / 0.14);
