@@ -966,7 +966,7 @@ During headline-only financials load, `notes_xbrl` is empty — dollar-event not
 
 **Click behavior (Phase 1):** Strip and map cells call `handleSectionSelect(sectionId, ticker)` — scroll grid to section/column. **No drawer yet** (Phase 2).
 
-**Strip vs map:** Strip shows top **7** mainstream flags ([`rankMainstreamStrip`](../lib/delta-surface.ts), cap via `MAINSTREAM_STRIP_CAP`); includes P1/P2 `missing_section`; map shows material hits only (excludes `prose_number_gap`, P3 rollups, `metrics_not_comparable`). Strip shows **+N more** when capped; **See all X deltas** opens the full map.
+**Strip vs map:** Strip shows top **7** mainstream flags ([`rankMainstreamStrip`](../lib/delta-surface.ts), cap via `MAINSTREAM_STRIP_CAP`); includes P1/P2 `missing_section`; map shows key hits only (excludes `prose_number_gap`, P3 rollups, `metrics_not_comparable`). Strip shows **+N more** when capped; **See all X deltas** opens the full map.
 
 **Exit:** Free tier, 3 peers — marketing screenshot is the delta strip, not the grid alone.
 
