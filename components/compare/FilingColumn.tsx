@@ -42,6 +42,7 @@ import type { CompareColumnLayout } from "@/lib/compare-layout";
 import { forwardVerticalWheelFromHorizontalScrollContainer, attachFilingTableWheelForwarding } from "@/lib/forward-vertical-wheel";
 import {
   scrollFilingColumnToTop,
+  scrollMetricRowIntoViewWhenReady,
 } from "@/lib/filing-column-scroll";
 import FilingViewer from "./FilingViewer";
 
@@ -72,19 +73,6 @@ interface FilingColumnProps {
   foreignFilerTooltip?: string | null;
   sectionScrollRequest?: number;
   focusRowKey?: string | null;
-}
-
-function scrollMetricRowIntoView(scrollEl: HTMLDivElement | null, rowKey: string): boolean {
-  if (!scrollEl) return false;
-  const row = scrollEl.querySelector<HTMLElement>(`[data-metric-row="${rowKey}"]`);
-  if (!row) return false;
-
-  const scrollRect = scrollEl.getBoundingClientRect();
-  const rowRect = row.getBoundingClientRect();
-  const targetTop =
-    rowRect.top - scrollRect.top + scrollEl.scrollTop - scrollRect.height / 2 + rowRect.height / 2;
-  scrollEl.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
-  return true;
 }
 
 function formatColumnError(error: string): string {
@@ -736,8 +724,9 @@ function FilingColumn({
   }, [activeSection, ticker, cacheKey, section?.html]);
 
   useLayoutEffect(() => {
-    if (focusRowKey && scrollMetricRowIntoView(scrollRef.current, focusRowKey)) {
+    if (focusRowKey) {
       scrollResetActiveRef.current = false;
+      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey);
       return;
     }
     scrollFilingColumnToTop(scrollRef.current);
@@ -746,8 +735,9 @@ function FilingColumn({
 
   useLayoutEffect(() => {
     if (!activeSection) return;
-    if (focusRowKey && scrollMetricRowIntoView(scrollRef.current, focusRowKey)) {
+    if (focusRowKey) {
       scrollResetActiveRef.current = false;
+      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey);
       return;
     }
     scrollFilingColumnToTop(scrollRef.current);
@@ -792,6 +782,10 @@ function FilingColumn({
   ]);
 
   useEffect(() => {
+    if (focusRowKey) {
+      scrollResetActiveRef.current = false;
+      return;
+    }
     scrollResetActiveRef.current = true;
     const scrollEl = scrollRef.current;
     const bodyEl = bodyTopRef.current;

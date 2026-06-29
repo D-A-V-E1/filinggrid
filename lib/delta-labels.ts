@@ -1,4 +1,11 @@
 import type { DeltaFlag, DeltaRuleId, DeltaSeverity } from "@/lib/delta-types";
+
+const METRIC_FOCUS_RULE_IDS = new Set<DeltaRuleId>(["headline_vs_median", "headline_only_peer"]);
+
+/** Delta flags that should center the filing column on a highlighted metric row. */
+export function isMetricFocusDeltaFlag(flag: DeltaFlag): boolean {
+  return Boolean(flag.rowKey) && METRIC_FOCUS_RULE_IDS.has(flag.ruleId);
+}
 import { rankMainstreamStrip } from "@/lib/delta-surface";
 
 const METRIC_LABELS: Record<string, string> = {
@@ -216,6 +223,8 @@ export function sectionGroupLabel(catalogLabel: string): string {
   if (itemMatch) return `Item ${itemMatch[1]}`;
   return "Disclosures";
 }
+
+export const DELTA_MAP_HEADLINE_SCANNING = "Scanning for key differences…";
 
 /** Marketing headline for collapsed delta map trigger. */
 export function deltaMapHeadline(flagCount: number, sectionsWithDeltas: number): string {

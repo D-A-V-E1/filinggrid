@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { deltaMapHeadline, deltaMapInsightTeaser } from "@/lib/delta-labels";
+import { useEffect, useState } from "react";
+import DeltaCountBadge from "@/components/compare/DeltaCountBadge";
+import {
+  DELTA_MAP_HEADLINE_SCANNING,
+  deltaMapHeadline,
+  deltaMapInsightTeaser,
+} from "@/lib/delta-labels";
 import type { ComparePeriod } from "@/lib/filing-period";
 import { deltaReportPath } from "@/lib/delta-report";
 import type { DeltaFlag } from "@/lib/delta-types";
@@ -13,7 +19,8 @@ interface DeltaReportLinkBarProps {
   flags: DeltaFlag[];
   scannedCount: number;
   sectionsWithDeltas: number;
-  loading?: boolean;
+  /** True while parse, financials, or note upgrades are still in flight. */
+  settling?: boolean;
 }
 
 export default function DeltaReportLinkBar({
@@ -23,12 +30,26 @@ export default function DeltaReportLinkBar({
   flags,
   scannedCount,
   sectionsWithDeltas,
-  loading = false,
+  settling = false,
 }: DeltaReportLinkBarProps) {
-  const headline = deltaMapHeadline(flags.length, sectionsWithDeltas);
-  const insightTeaser = deltaMapInsightTeaser(flags);
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    if (settling) {
+      setRevealed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setRevealed(true), 300);
+    return () => window.clearTimeout(timer);
+  }, [settling, flags.length, sectionsWithDeltas]);
+
+  const spinning = settling || !revealed;
+  const headline = spinning
+    ? DELTA_MAP_HEADLINE_SCANNING
+    : deltaMapHeadline(flags.length, sectionsWithDeltas);
+  const insightTeaser = spinning ? null : deltaMapInsightTeaser(flags);
   const reportHref = deltaReportPath(peerSlug, period);
-  const hasFlags = flags.length > 0;
+  const hasFlags = !spinning && flags.length > 0;
 
   return (
     <section
@@ -41,16 +62,7 @@ export default function DeltaReportLinkBar({
     >
       <div className="flex w-full flex-col gap-1.5 px-4 py-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
-          <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-bold shadow-sm ${
-              hasFlags
-                ? "bg-brand-600 text-white shadow-brand-600/25"
-                : "bg-slate-200 text-slate-600 shadow-slate-200/50"
-            }`}
-            aria-hidden
-          >
-            {loading ? "…" : flags.length}
-          </span>
+          <DeltaCountBadge count={flags.length} spinning={spinning} hasFlags={flags.length > 0} />
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">
               Section delta map
@@ -60,7 +72,7 @@ export default function DeltaReportLinkBar({
               <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{insightTeaser}</p>
             )}
             <p className="mt-0.5 text-[11px] text-slate-500">
-              {loading
+              {spinning
                 ? "Scanning sections for differences…"
                 : `Scanned ${scannedCount} section${scannedCount === 1 ? "" : "s"} across ${tickers.length} peers`}
             </p>

@@ -62,7 +62,10 @@ import { deltaReportPath } from "@/lib/delta-report";
 import {
   resetCompareViewScroll,
   resetCompareViewScrollWhenReady,
+  resetAllFilingColumnScrollsExcept,
+  resetWindowScroll,
 } from "@/lib/filing-column-scroll";
+import { isMetricFocusDeltaFlag } from "@/lib/delta-labels";
 
 interface CompareGridProps {
   peerSlug: string;
@@ -155,7 +158,13 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const handleSectionSelect = useCallback(
     (sectionId: string, focusTicker?: string, rowKey?: string) => {
-      resetCompareViewScroll();
+      const metricFocus = Boolean(rowKey);
+      if (metricFocus && focusTicker) {
+        resetWindowScroll();
+        resetAllFilingColumnScrollsExcept(focusTicker);
+      } else {
+        resetCompareViewScroll();
+      }
       setActiveSection(sectionId);
       setSectionScrollRequest((n) => n + 1);
       setSectionFocusTicker(focusTicker ?? null);
@@ -163,7 +172,9 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       if (focusTicker) {
         scrollTickerColumnIntoViewWhenReady(focusTicker);
       }
-      requestAnimationFrame(() => resetCompareViewScrollWhenReady());
+      if (!metricFocus) {
+        requestAnimationFrame(() => resetCompareViewScrollWhenReady());
+      }
     },
     [scrollTickerColumnIntoViewWhenReady]
   );
@@ -633,7 +644,8 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const handleDeltaFlagClick = useCallback(
     (flag: DeltaFlag) => {
-      handleSectionSelect(flag.sectionId, flag.ticker, flag.rowKey);
+      const rowKey = isMetricFocusDeltaFlag(flag) ? flag.rowKey : undefined;
+      handleSectionSelect(flag.sectionId, flag.ticker, rowKey);
     },
     [handleSectionSelect]
   );
@@ -642,7 +654,30 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     router.push(deltaReportPath(peerSlug, comparePeriod));
   }, [router, peerSlug, comparePeriod]);
 
-  const deltasLoading = loadingFinancials || loadingSections;
+  const deltasSettling = useMemo(() => {
+    if (!data || loadingSections || loadingFinancials) return true;
+    for (const ticker of tickers) {
+      const upper = ticker.toUpperCase();
+      if (upgradingNotesTickers.has(upper)) return true;
+      if (financialsErrors[upper]) continue;
+      const fin = financialsByTicker[upper];
+      if (!fin) return true;
+      if (fin.headline_only !== false) {
+        const notes = fin.notes_xbrl;
+        const hasNotes = notes && Object.keys(notes).length > 0;
+        if (!hasNotes) return true;
+      }
+    }
+    return false;
+  }, [
+    data,
+    loadingSections,
+    loadingFinancials,
+    tickers,
+    financialsByTicker,
+    upgradingNotesTickers,
+    financialsErrors,
+  ]);
 
   useEffect(() => {
     if (focusHandledRef.current || !data || availableSectionIds.size === 0) return;
@@ -765,7 +800,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
             flags={mapFlags}
             scannedCount={deltaScan?.coverage.scannedSections ?? 0}
             sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
-            loading={deltasLoading}
+            settling={deltasSettling}
           />
         </div>
       )}
@@ -854,7 +889,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
               mobileOpen={navOpen}
               onMobileClose={() => setNavOpen(false)}
               stripFlags={stripFlags}
-              deltasLoading={deltasLoading}
+              deltasLoading={deltasSettling}
               stripTotalCount={stripTotalCount}
               totalFlagCount={mapCoverage.flagCount}
               tagline={MAINSTREAM_STRIP_TAGLINE}

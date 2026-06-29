@@ -22,6 +22,17 @@ const config: Config = {
           700: "#047857",
         },
       },
+      keyframes: {
+        "delta-digit-tick": {
+          "0%": { transform: "translateY(100%)", opacity: "0" },
+          "25%": { transform: "translateY(0)", opacity: "1" },
+          "75%": { transform: "translateY(0)", opacity: "1" },
+          "100%": { transform: "translateY(-100%)", opacity: "0" },
+        },
+      },
+      animation: {
+        "delta-digit-tick": "delta-digit-tick 0.065s ease-out",
+      },
     },
   },
   plugins: [],
