@@ -27,7 +27,6 @@ import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from 
 import { resolveFilingColumnContentMode } from "@/lib/filingColumnView";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
-import { agentDebugLog } from "@/lib/debug-log";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
 import { forwardVerticalWheelFromHorizontalScrollContainer } from "@/lib/forward-vertical-wheel";
 import FilingViewer from "./FilingViewer";
@@ -796,22 +795,6 @@ function FilingColumn({
       period,
       compareFiscalYear
     );
-    // #region agent log
-    agentDebugLog(
-      "FilingColumn.tsx:loadHtmlExcerpt",
-      "section html request",
-      {
-        ticker,
-        activeSection,
-        columnFy: fiscalYear,
-        compareFiscalYear,
-        comparePeriod: period ?? null,
-        requestFy,
-        requestPeriod,
-      },
-      "H1"
-    );
-    // #endregion
 
     fetchSectionHtml(ticker, activeSection, requestFy, requestPeriod)
       .then((html) => {

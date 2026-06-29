@@ -601,39 +601,8 @@ export async function fetchSectionHtml(
   if (period?.trim()) params.set("period", period.trim());
 
   const url = `/parse/section?${params}`;
-  const started = Date.now();
-  try {
-    const result = await apiFetch<SectionHtmlResponse>(url);
-    // #region agent log
-    agentDebugLog(
-      "lib/api.ts:fetchSectionHtml",
-      "section html ok",
-      { ticker, fiscalYear, period: period ?? null, ms: Date.now() - started },
-      "H3"
-    );
-    // #endregion
-    return result.html;
-  } catch (err) {
-    // #region agent log
-    agentDebugLog(
-      "lib/api.ts:fetchSectionHtml",
-      "section html failed",
-      {
-        ticker,
-        fiscalYear,
-        period: period ?? null,
-        ms: Date.now() - started,
-        status: err instanceof ApiError ? err.status : null,
-        reason:
-          err instanceof ApiError && typeof err.detail === "object" && err.detail && "reason" in err.detail
-            ? String((err.detail as { reason?: string }).reason)
-            : null,
-      },
-      err instanceof ApiError && err.status === 402 ? "H1" : "H2"
-    );
-    // #endregion
-    throw err;
-  }
+  const result = await apiFetch<SectionHtmlResponse>(url);
+  return result.html;
 }
 
 export async function fetchSectionText(

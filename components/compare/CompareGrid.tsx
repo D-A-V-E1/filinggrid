@@ -95,6 +95,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const notesRetriedAfterParseRef = useRef(new Set<string>());
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
+  const [headlineBatchDone, setHeadlineBatchDone] = useState(false);
   const [deltaMapExpanded, setDeltaMapExpanded] = useState(false);
   const [sectionScrollRequest, setSectionScrollRequest] = useState(0);
   const [sectionFocusTicker, setSectionFocusTicker] = useState<string | null>(null);
@@ -231,6 +232,35 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   );
 
   useEffect(() => {
+    if (!headlineBatchDone || tickers.length === 0) return;
+
+    let cancelled = false;
+    const upgradeAllForDeltaScan = () => {
+      if (cancelled) return;
+      for (const ticker of tickers) {
+        upgradeFullFinancials(ticker);
+      }
+    };
+
+    let idleHandle: number | undefined;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleHandle = window.requestIdleCallback(upgradeAllForDeltaScan, { timeout: 3000 });
+    } else {
+      timeoutHandle = setTimeout(upgradeAllForDeltaScan, 50);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleHandle != null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle != null) clearTimeout(timeoutHandle);
+    };
+  }, [headlineBatchDone, tickers, upgradeFullFinancials]);
+
+  useEffect(() => {
     if (!activeSection?.startsWith("note-")) return;
     for (const ticker of tickers) {
       const upper = ticker.toUpperCase();
@@ -273,6 +303,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     notesRetriedAfterParseRef.current = new Set();
     setUpgradingNotesTickers(new Set());
     setMixedFilerBannerDismissed(false);
+    setHeadlineBatchDone(false);
     setDeltaMapExpanded(false);
     setSectionFocusTicker(null);
     setSectionFocusRowKey(null);
@@ -333,7 +364,9 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
           setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
         },
         onDone: () => {
-          if (loadId === loadIdRef.current) setLoadingFinancials(false);
+          if (loadId !== loadIdRef.current) return;
+          setLoadingFinancials(false);
+          setHeadlineBatchDone(true);
         },
       }).catch((err) => {
         if (loadId !== loadIdRef.current) return;

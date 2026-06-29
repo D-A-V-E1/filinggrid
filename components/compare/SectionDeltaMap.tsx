@@ -95,7 +95,7 @@ export default function SectionDeltaMap({
 
   if (sectionRows.length === 0) return null;
 
-  const summaryText = `${sectionsWithDeltas} section${sectionsWithDeltas === 1 ? "" : "s"} differ across peers`;
+  const coverageText = `Scanned ${scannedCount} section${scannedCount === 1 ? "" : "s"} · ${sectionsWithDeltas} with delta${sectionsWithDeltas === 1 ? "" : "s"}`;
 
   return (
     <section
@@ -111,7 +111,7 @@ export default function SectionDeltaMap({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
           Delta map
         </span>
-        <span className="text-xs text-slate-500">{summaryText}</span>
+        <span className="text-xs text-slate-500">{coverageText}</span>
         <span className="ml-auto text-xs font-medium text-brand-700">
           {expanded ? "Collapse" : "Expand grid"}
         </span>
@@ -213,6 +213,9 @@ export default function SectionDeltaMap({
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="border-t border-slate-100 px-4 py-1.5 text-[11px] text-slate-500">
+            {coverageText}
           </div>
         </div>
       )}
