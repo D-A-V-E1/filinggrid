@@ -21,6 +21,8 @@ interface DeltaReportLinkBarProps {
   sectionsWithDeltas: number;
   /** True while parse, financials, or note upgrades are still in flight. */
   settling?: boolean;
+  /** Monotonic count floor from session store — survives remounts. */
+  countFloor?: number;
 }
 
 export default function DeltaReportLinkBar({
@@ -31,11 +33,12 @@ export default function DeltaReportLinkBar({
   scannedCount,
   sectionsWithDeltas,
   settling = false,
+  countFloor = 0,
 }: DeltaReportLinkBarProps) {
-  const headline =
-    settling && flags.length === 0
-      ? DELTA_MAP_HEADLINE_SCANNING
-      : deltaMapHeadline(flags.length, sectionsWithDeltas);
+  const displayFlagCount = Math.max(flags.length, countFloor);
+  const headline = settling
+    ? DELTA_MAP_HEADLINE_SCANNING
+    : deltaMapHeadline(displayFlagCount, sectionsWithDeltas);
   const insightTeaser = settling ? null : deltaMapInsightTeaser(flags);
   const reportHref = deltaReportPath(peerSlug, period);
   const hasFlags = flags.length > 0;
@@ -51,7 +54,12 @@ export default function DeltaReportLinkBar({
     >
       <div className="flex w-full flex-col gap-1.5 px-4 py-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
-          <DeltaCountBadge count={flags.length} loading={settling} hasFlags={flags.length > 0} />
+          <DeltaCountBadge
+            count={flags.length}
+            loading={settling}
+            hasFlags={flags.length > 0}
+            countFloor={countFloor}
+          />
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">
               Section delta map

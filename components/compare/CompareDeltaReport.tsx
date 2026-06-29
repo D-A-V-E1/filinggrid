@@ -73,10 +73,10 @@ export default function CompareDeltaReport({
     generatedAt,
   ]);
 
-  const headline =
-    session.deltasSettling && session.mapFlags.length === 0
-      ? DELTA_MAP_HEADLINE_SCANNING
-      : deltaMapHeadline(session.mapFlags.length, session.mapCoverage.sectionsWithDeltas);
+  const displayFlagCount = Math.max(session.mapFlags.length, session.mapFlagCountFloor);
+  const headline = session.deltasSettling
+    ? DELTA_MAP_HEADLINE_SCANNING
+    : deltaMapHeadline(displayFlagCount, session.mapCoverage.sectionsWithDeltas);
   const insightTeaser = session.deltasSettling ? null : deltaMapInsightTeaser(session.mapFlags);
   const scannedCount = session.deltaScan?.coverage.scannedSections ?? 0;
   const compareHref = comparePath(peerSlug, session.comparePeriod);
@@ -122,6 +122,7 @@ export default function CompareDeltaReport({
               count={session.mapFlags.length}
               loading={session.deltasSettling}
               hasFlags={session.mapFlags.length > 0}
+              countFloor={session.mapFlagCountFloor}
             />
             <div className="min-w-0 flex-1 space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">

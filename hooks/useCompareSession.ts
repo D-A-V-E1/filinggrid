@@ -20,6 +20,13 @@ import {
   FINANCIALS_BOOTSTRAP_CATALOG,
 } from "@/lib/sections";
 import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta, saveParseMetaDraft } from "@/lib/parse-cache";
+import {
+  bumpMapFlagCountFloor,
+  peekCompareSession,
+  saveCompareSession,
+  setActiveCompareLoadKey,
+  shouldSkipCompareReload,
+} from "@/lib/compare-session-store";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import { compareUrlLimitMessage } from "@/lib/tier-limits";
@@ -42,15 +49,20 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     [period, fiscalYear]
   );
   const cacheKey = useMemo(() => parseMetaCacheKey(tickers, comparePeriod), [tickers, comparePeriod]);
+  const warmSession = useMemo(() => peekCompareSession(cacheKey), [cacheKey]);
 
-  const [data, setData] = useState<ParseResponse | null>(null);
+  const [data, setData] = useState<ParseResponse | null>(() => warmSession?.data ?? null);
   const [loadingFinancials, setLoadingFinancials] = useState(false);
   const [loadingTickers, setLoadingTickers] = useState<string[]>([]);
   const [loadingSections, setLoadingSections] = useState(false);
-  const [error, setError] = useState("");
-  const [sectionsParseError, setSectionsParseError] = useState("");
-  const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>({});
-  const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState(() => warmSession?.error ?? "");
+  const [sectionsParseError, setSectionsParseError] = useState(() => warmSession?.sectionsParseError ?? "");
+  const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>(
+    () => warmSession?.financialsByTicker ?? {}
+  );
+  const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>(
+    () => warmSession?.financialsErrors ?? {}
+  );
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [apiWarmupDone, setApiWarmupDone] = useState(false);
   const [paywall, setPaywall] = useState<{ open: boolean; reason: string; message: string }>({
@@ -62,7 +74,8 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
 
   const loadIdRef = useRef(0);
   const compareLoadKeyRef = useRef<string | null>(null);
-  const upgradedFullFinancialsRef = useRef(new Set<string>());
+  const upgradedFullFinancialsRef = useRef(new Set<string>(warmSession?.upgradedTickers ?? []));
+  const notesRetriedAfterParseRef = useRef(new Set<string>());
   const isProRef = useRef(false);
 
   const { auth, loading: authLoading, isSignedIn, configured } = useAuth();
@@ -124,7 +137,23 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
 
   const deferredFinancialsByTicker = useDeferredValue(financialsByTicker);
 
-  const loadFilings = useCallback(() => {
+  const loadFilings = useCallback((options?: { force?: boolean }) => {
+    const warm = peekCompareSession(cacheKey);
+    if (
+      !options?.force &&
+      warm?.data &&
+      hasSectionIndex(warm.data) &&
+      Object.keys(warm.financialsByTicker).length > 0
+    ) {
+      setData(warm.data);
+      setFinancialsByTicker(warm.financialsByTicker);
+      setFinancialsErrors(warm.financialsErrors);
+      setError(warm.error);
+      setSectionsParseError(warm.sectionsParseError);
+      upgradedFullFinancialsRef.current = new Set(warm.upgradedTickers);
+      return;
+    }
+
     const loadId = ++loadIdRef.current;
     upgradedFullFinancialsRef.current = new Set();
     setUpgradingNotesTickers(new Set());
@@ -169,7 +198,6 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
         };
       });
       setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
-      setLoadingFinancials(false);
     };
 
     const startHeadlineFinancials = () => {
@@ -313,11 +341,13 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     if (!apiWarmupDone) return;
     if (slugError) {
       compareLoadKeyRef.current = null;
+      setActiveCompareLoadKey(null);
       return;
     }
     if (authLoading && !canLoadBeforeAuth) return;
     if (columnLimitExceeded) {
       compareLoadKeyRef.current = null;
+      setActiveCompareLoadKey(null);
       const message = compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length);
       if (!isPro) {
         setPaywall({ open: true, reason: "column_limit", message });
@@ -330,7 +360,13 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
       return;
     }
     if (compareLoadKeyRef.current === cacheKey) return;
+    if (shouldSkipCompareReload(cacheKey)) {
+      compareLoadKeyRef.current = cacheKey;
+      loadFilings();
+      return;
+    }
     compareLoadKeyRef.current = cacheKey;
+    setActiveCompareLoadKey(cacheKey);
     loadFilings();
   }, [
     loadFilings,
@@ -392,6 +428,25 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     }
   }, [tickers, financialsByTicker, loadingFinancials, upgradeFullFinancials]);
 
+  useEffect(() => {
+    if (loadingSections) return;
+    for (const ticker of tickers) {
+      const upper = ticker.toUpperCase();
+      if (notesRetriedAfterParseRef.current.has(upper)) continue;
+      const fin = financialsByTicker[upper];
+      const notes = fin?.notes_xbrl;
+      if (!notes || Object.keys(notes).length === 0) continue;
+      const disclosureCount = Object.values(notes).reduce(
+        (count, note) => count + (note.disclosures?.length ?? 0),
+        0
+      );
+      if (disclosureCount > 0) continue;
+      notesRetriedAfterParseRef.current.add(upper);
+      upgradedFullFinancialsRef.current.delete(upper);
+      upgradeFullFinancials(upper);
+    }
+  }, [loadingSections, tickers, financialsByTicker, upgradeFullFinancials]);
+
   const deltaScan = useMemo(() => {
     if (!data || tickers.length === 0) return null;
     return scanDeltas({
@@ -420,6 +475,8 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     return filterMapWorthyFlags(deltaScan.flags);
   }, [deltaScan]);
 
+  const mapFlagCountFloor = useMemo(() => bumpMapFlagCountFloor(cacheKey, mapFlags.length), [cacheKey, mapFlags.length]);
+
   const mapCoverage = useMemo(() => {
     if (!deltaScan) return { flagCount: 0, sectionsWithDeltas: 0 };
     return mapWorthyCoverage(deltaScan.flags);
@@ -427,9 +484,12 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
 
   const canShowCompare = Boolean(data && data.columns.length > 0);
   const loading = loadingFinancials || loadingSections || !apiWarmupDone;
+  const financialsDeferredPending = financialsByTicker !== deferredFinancialsByTicker;
 
   const deltasSettling = useMemo(() => {
+    if (financialsDeferredPending) return true;
     if (!data || loadingSections || loadingFinancials) return true;
+    if (loadingTickers.length > 0) return true;
     for (const ticker of tickers) {
       const upper = ticker.toUpperCase();
       if (upgradingNotesTickers.has(upper)) return true;
@@ -444,13 +504,38 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     }
     return false;
   }, [
+    financialsDeferredPending,
     data,
     loadingSections,
     loadingFinancials,
+    loadingTickers.length,
     tickers,
     financialsByTicker,
     upgradingNotesTickers,
     financialsErrors,
+  ]);
+
+  useEffect(() => {
+    if (!data) return;
+    saveCompareSession(cacheKey, {
+      data,
+      financialsByTicker,
+      financialsErrors,
+      error,
+      sectionsParseError,
+      upgradedTickers: [...upgradedFullFinancialsRef.current],
+      mapFlagCountFloor,
+      settled: !deltasSettling,
+    });
+  }, [
+    cacheKey,
+    data,
+    financialsByTicker,
+    financialsErrors,
+    error,
+    sectionsParseError,
+    mapFlagCountFloor,
+    deltasSettling,
   ]);
 
   const handlePaywall = useCallback(
@@ -464,6 +549,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
   return {
     comparePeriod,
     resolvedFiscalYear,
+    cacheKey,
     data,
     loading,
     loadingFinancials,
@@ -476,6 +562,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     navigableCatalog,
     deltaScan,
     mapFlags,
+    mapFlagCountFloor,
     mapCoverage,
     deltasSettling,
     canShowCompare,

@@ -31,6 +31,14 @@ import {
   saveParseMeta,
   saveParseMetaDraft,
 } from "@/lib/parse-cache";
+import {
+  bumpMapFlagCountFloor,
+  clearCompareSession,
+  peekCompareSession,
+  saveCompareSession,
+  setActiveCompareLoadKey,
+  shouldSkipCompareReload,
+} from "@/lib/compare-session-store";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
@@ -91,11 +99,11 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     () => parseMetaCacheKey(tickers, comparePeriod),
     [tickers, comparePeriod]
   );
-  const [data, setData] = useState<ParseResponse | null>(null);
+  const [data, setData] = useState<ParseResponse | null>(() => peekCompareSession(cacheKey)?.data ?? null);
   const [loadingFinancials, setLoadingFinancials] = useState(false);
   const [loadingTickers, setLoadingTickers] = useState<string[]>([]);
   const [loadingSections, setLoadingSections] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => peekCompareSession(cacheKey)?.error ?? "");
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [paywall, setPaywall] = useState<{ open: boolean; reason: string; message: string }>({
     open: false,
@@ -107,14 +115,22 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
   const [apiWarmupDone, setApiWarmupDone] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-  const [sectionsParseError, setSectionsParseError] = useState("");
-  const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>({});
-  const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>({});
+  const [sectionsParseError, setSectionsParseError] = useState(
+    () => peekCompareSession(cacheKey)?.sectionsParseError ?? ""
+  );
+  const [financialsByTicker, setFinancialsByTicker] = useState<Record<string, FinancialsXbrl>>(
+    () => peekCompareSession(cacheKey)?.financialsByTicker ?? {}
+  );
+  const [financialsErrors, setFinancialsErrors] = useState<Record<string, string>>(
+    () => peekCompareSession(cacheKey)?.financialsErrors ?? {}
+  );
   const loadIdRef = useRef(0);
   const compareLoadKeyRef = useRef<string | null>(null);
   const isProRef = useRef(false);
   isProRef.current = isPro;
-  const upgradedFullFinancialsRef = useRef(new Set<string>());
+  const upgradedFullFinancialsRef = useRef(
+    new Set<string>(peekCompareSession(cacheKey)?.upgradedTickers ?? [])
+  );
   const notesRetriedAfterParseRef = useRef(new Set<string>());
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
@@ -348,7 +364,25 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     upgradeFullFinancials,
   ]);
 
-  const loadFilings = useCallback((options?: { refreshTickers?: string[] }) => {
+  const loadFilings = useCallback((options?: { refreshTickers?: string[]; force?: boolean }) => {
+    const warm = peekCompareSession(cacheKey);
+    if (
+      !options?.force &&
+      !options?.refreshTickers?.length &&
+      warm?.data &&
+      hasSectionIndex(warm.data) &&
+      Object.keys(warm.financialsByTicker).length > 0
+    ) {
+      setData(warm.data);
+      setFinancialsByTicker(warm.financialsByTicker);
+      setFinancialsErrors(warm.financialsErrors);
+      setError(warm.error);
+      setSectionsParseError(warm.sectionsParseError);
+      upgradedFullFinancialsRef.current = new Set(warm.upgradedTickers);
+      setActiveSection(resolveDefaultActiveSection(getComparableSectionIds(warm.data.columns)));
+      return;
+    }
+
     const loadId = ++loadIdRef.current;
     upgradedFullFinancialsRef.current = new Set();
     notesRetriedAfterParseRef.current = new Set();
@@ -399,7 +433,6 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
         };
       });
       setLoadingTickers((pending) => pending.filter((t) => t !== ticker));
-      setLoadingFinancials(false);
     };
 
     const startHeadlineFinancials = () => {
@@ -554,11 +587,13 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     if (!apiWarmupDone) return;
     if (slugError) {
       compareLoadKeyRef.current = null;
+      setActiveCompareLoadKey(null);
       return;
     }
     if (authLoading && !canLoadBeforeAuth) return;
     if (columnLimitExceeded) {
       compareLoadKeyRef.current = null;
+      setActiveCompareLoadKey(null);
       const message = compareUrlLimitMessage(tier, maxColumnsResolved, tickers.length);
       if (!isPro) {
         setPaywall({ open: true, reason: "column_limit", message });
@@ -570,9 +605,14 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       setLoadingTickers([]);
       return;
     }
-    // Avoid restarting parse/financials when auth resolves after an early ≤3-column load.
     if (compareLoadKeyRef.current === cacheKey) return;
+    if (shouldSkipCompareReload(cacheKey)) {
+      compareLoadKeyRef.current = cacheKey;
+      loadFilings();
+      return;
+    }
     compareLoadKeyRef.current = cacheKey;
+    setActiveCompareLoadKey(cacheKey);
     loadFilings();
   }, [
     loadFilings,
@@ -623,14 +663,16 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const retryFailedColumns = useCallback(() => {
     clearParseMeta(cacheKey);
+    clearCompareSession(cacheKey);
     columnParseErrors.forEach((c) => {
       if (c.cache_key) clearColumnSectionCaches(c.cache_key);
     });
     compareLoadKeyRef.current = null;
+    setActiveCompareLoadKey(null);
     const refreshTickers = columnParseErrors
       .filter((c) => isRetriableParseError(c.error))
       .map((c) => c.ticker);
-    loadFilings({ refreshTickers });
+    loadFilings({ refreshTickers, force: true });
   }, [cacheKey, columnParseErrors, loadFilings]);
 
   const stripFlags = useMemo(() => {
@@ -653,6 +695,11 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     return filterMapWorthyFlags(deltaScan.flags);
   }, [deltaScan]);
 
+  const mapFlagCountFloor = useMemo(
+    () => bumpMapFlagCountFloor(cacheKey, mapFlags.length),
+    [cacheKey, mapFlags.length]
+  );
+
   const mapCoverage = useMemo(() => {
     if (!deltaScan) return { flagCount: 0, sectionsWithDeltas: 0 };
     return mapWorthyCoverage(deltaScan.flags);
@@ -670,8 +717,12 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     router.push(deltaReportPath(peerSlug, comparePeriod));
   }, [router, peerSlug, comparePeriod]);
 
+  const financialsDeferredPending = financialsByTicker !== deferredFinancialsByTicker;
+
   const deltasSettling = useMemo(() => {
+    if (financialsDeferredPending) return true;
     if (!data || loadingSections || loadingFinancials) return true;
+    if (loadingTickers.length > 0) return true;
     for (const ticker of tickers) {
       const upper = ticker.toUpperCase();
       if (upgradingNotesTickers.has(upper)) return true;
@@ -686,13 +737,38 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     }
     return false;
   }, [
+    financialsDeferredPending,
     data,
     loadingSections,
     loadingFinancials,
+    loadingTickers.length,
     tickers,
     financialsByTicker,
     upgradingNotesTickers,
     financialsErrors,
+  ]);
+
+  useEffect(() => {
+    if (!data) return;
+    saveCompareSession(cacheKey, {
+      data,
+      financialsByTicker,
+      financialsErrors,
+      error,
+      sectionsParseError,
+      upgradedTickers: [...upgradedFullFinancialsRef.current],
+      mapFlagCountFloor,
+      settled: !deltasSettling,
+    });
+  }, [
+    cacheKey,
+    data,
+    financialsByTicker,
+    financialsErrors,
+    error,
+    sectionsParseError,
+    mapFlagCountFloor,
+    deltasSettling,
   ]);
 
   useEffect(() => {
@@ -817,6 +893,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
             scannedCount={deltaScan?.coverage.scannedSections ?? 0}
             sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
             settling={deltasSettling}
+            countFloor={mapFlagCountFloor}
           />
         </div>
       )}
