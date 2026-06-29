@@ -1,5 +1,6 @@
 "use client";
 
+import { DeltaScanningTitle } from "@/components/compare/DeltaScanningAffordance";
 import type { DeltaFlag } from "@/lib/delta-types";
 
 export type DeltaStripLayout = "rail" | "strip" | "nav";
@@ -65,16 +66,13 @@ export default function DeltaStrip({
                       compact ? "text-[10px]" : "text-[11px]"
                     }`}
                   >
-                    Key deltas
+                    <DeltaScanningTitle scanning={!!loading} iconClassName={compact ? "h-2.5 w-2.5" : undefined}>
+                      Key deltas
+                    </DeltaScanningTitle>
                   </h2>
                   {flags.length > 0 && (
                     <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
                       {flags.length}
-                    </span>
-                  )}
-                  {loading && (
-                    <span className={`text-slate-400 ${compact ? "text-[10px]" : "text-xs"}`}>
-                      Scanning…
                     </span>
                   )}
                 </div>
@@ -155,9 +153,8 @@ export default function DeltaStrip({
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-          Key deltas
+          <DeltaScanningTitle scanning={!!loading}>Key deltas</DeltaScanningTitle>
         </h2>
-        {loading && <span className="text-xs text-slate-400">Scanning…</span>}
         {!loading && flags.length === 0 && (
           <span className="text-xs text-slate-500">
             {totalFlagCount && totalFlagCount > 0

@@ -3,7 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { deltaMapHeadline } from "@/lib/delta-labels";
+import {
+  DELTA_MAP_HEADLINE_SCANNING,
+  deltaMapHeadline,
+  deltaMapInsightTeaser,
+} from "@/lib/delta-labels";
 import {
   buildDeltaReportSnapshot,
   compareFocusPath,
@@ -16,6 +20,8 @@ import { useCompareSession } from "@/hooks/useCompareSession";
 import { apiUnreachableHint, isLocalDevHost } from "@/lib/api-environment";
 import ApiHealthBanner from "../ApiHealthBanner";
 import PaywallModal from "../billing/PaywallModal";
+import DeltaCountBadge from "./DeltaCountBadge";
+import { DeltaScanningTitle } from "./DeltaScanningAffordance";
 import SectionDeltaMapGrid from "./SectionDeltaMapGrid";
 
 interface CompareDeltaReportProps {
@@ -67,7 +73,12 @@ export default function CompareDeltaReport({
     generatedAt,
   ]);
 
-  const headline = deltaMapHeadline(session.mapFlags.length, session.mapCoverage.sectionsWithDeltas);
+  const headline =
+    session.deltasSettling && session.mapFlags.length === 0
+      ? DELTA_MAP_HEADLINE_SCANNING
+      : deltaMapHeadline(session.mapFlags.length, session.mapCoverage.sectionsWithDeltas);
+  const insightTeaser = session.deltasSettling ? null : deltaMapInsightTeaser(session.mapFlags);
+  const scannedCount = session.deltaScan?.coverage.scannedSections ?? 0;
   const compareHref = comparePath(peerSlug, session.comparePeriod);
 
   const handleCellClick = useCallback(
@@ -106,28 +117,40 @@ export default function CompareDeltaReport({
 
       <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">
-              Delta report
-            </p>
-            <h1 className="text-lg font-semibold text-slate-900">{headline}</h1>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-              <span>
-                <span className="font-medium text-slate-500">Peers</span>{" "}
-                <span className="font-mono font-semibold text-slate-800">{tickers.join(" · ")}</span>
-              </span>
-              <span>
-                <span className="font-medium text-slate-500">Period</span>{" "}
-                <span className="font-semibold text-slate-800">{periodLabel}</span>
-              </span>
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+            <DeltaCountBadge
+              count={session.mapFlags.length}
+              loading={session.deltasSettling}
+              hasFlags={session.mapFlags.length > 0}
+            />
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">
+                Delta report
+              </p>
+              <h1 className="text-lg font-semibold text-slate-900">
+                <DeltaScanningTitle scanning={session.deltasSettling}>{headline}</DeltaScanningTitle>
+              </h1>
+              {insightTeaser && (
+                <p className="line-clamp-1 text-xs text-slate-500">{insightTeaser}</p>
+              )}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                <span>
+                  <span className="font-medium text-slate-500">Peers</span>{" "}
+                  <span className="font-mono font-semibold text-slate-800">{tickers.join(" · ")}</span>
+                </span>
+                <span>
+                  <span className="font-medium text-slate-500">Period</span>{" "}
+                  <span className="font-semibold text-slate-800">{periodLabel}</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                {session.deltasSettling
+                  ? "Scanning sections for differences…"
+                  : `Scanned ${scannedCount} section${scannedCount === 1 ? "" : "s"} across ${tickers.length} peers`}
+                <span className="text-slate-400"> · </span>
+                Generated {new Date(generatedAt).toLocaleString()}
+              </p>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Scanned {session.deltaScan?.coverage.scannedSections ?? 0} section
-              {(session.deltaScan?.coverage.scannedSections ?? 0) === 1 ? "" : "s"} across{" "}
-              {tickers.length} peers
-              <span className="text-slate-400"> · </span>
-              Generated {new Date(generatedAt).toLocaleString()}
-            </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Link
@@ -190,7 +213,17 @@ export default function CompareDeltaReport({
           </div>
         )}
 
-        {session.canShowCompare && session.mapFlags.length === 0 && !session.loading && (
+        {session.canShowCompare &&
+          session.deltasSettling &&
+          session.mapFlags.length === 0 && (
+            <div className="flex flex-1 items-center justify-center p-8">
+              <p className="text-sm text-slate-500">Scanning sections for differences…</p>
+            </div>
+          )}
+
+        {session.canShowCompare &&
+          !session.deltasSettling &&
+          session.mapFlags.length === 0 && (
           <div className="flex flex-1 items-center justify-center p-8">
             <div className="max-w-md text-center">
               <p className="text-sm font-medium text-slate-700">No section deltas to report</p>
@@ -223,7 +256,9 @@ export default function CompareDeltaReport({
               onCellClick={handleCellClick}
             />
             <footer className="shrink-0 border-t border-slate-100 bg-slate-50/50 px-4 py-2 text-[11px] text-slate-600">
-              <span className="font-medium text-slate-700">{headline}</span>
+              <span className="font-medium text-slate-700">
+                <DeltaScanningTitle scanning={session.deltasSettling}>{headline}</DeltaScanningTitle>
+              </span>
               <span className="text-slate-400"> · </span>
               Click any badge to jump to that disclosure in compare view
             </footer>

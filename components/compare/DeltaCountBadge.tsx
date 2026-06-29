@@ -25,10 +25,10 @@ export default function DeltaCountBadge({ count, hasFlags, loading = false }: De
     emphasized
       ? "bg-brand-600 text-white shadow-brand-600/25"
       : "bg-slate-200 text-slate-600 shadow-slate-200/50"
-  }`;
+  } ${loading ? "ring-2 ring-brand-300/50 ring-offset-1 animate-pulse" : ""}`;
 
   return (
-    <span className={boxClass} aria-live="polite" aria-busy={loading && displayCount === 0}>
+    <span className={boxClass} aria-live="polite" aria-busy={loading}>
       {displayCount}
     </span>
   );

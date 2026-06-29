@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import DeltaCountBadge from "@/components/compare/DeltaCountBadge";
+import { DeltaScanningTitle } from "@/components/compare/DeltaScanningAffordance";
 import {
   DELTA_MAP_HEADLINE_SCANNING,
   deltaMapHeadline,
@@ -55,7 +56,9 @@ export default function DeltaReportLinkBar({
             <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">
               Section delta map
             </p>
-            <p className="truncate text-sm font-semibold text-slate-900">{headline}</p>
+            <p className="truncate text-sm font-semibold text-slate-900">
+              <DeltaScanningTitle scanning={settling}>{headline}</DeltaScanningTitle>
+            </p>
             {insightTeaser && (
               <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{insightTeaser}</p>
             )}

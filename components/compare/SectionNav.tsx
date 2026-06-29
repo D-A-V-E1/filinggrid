@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getNavGroups } from "@/lib/sections";
 import type { DeltaFlag } from "@/lib/delta-types";
+import { DeltaScanningTitle } from "@/components/compare/DeltaScanningAffordance";
 import DeltaStrip from "./DeltaStrip";
 
 type LeftPaneView = "sections" | "deltas";
@@ -109,7 +110,9 @@ export default function SectionNav({
             : "border-b-2 border-transparent text-slate-500 hover:bg-white/60 hover:text-slate-700"
         }`}
       >
-        Deltas
+        <DeltaScanningTitle scanning={deltasLoading} iconClassName="h-2.5 w-2.5">
+          Deltas
+        </DeltaScanningTitle>
       </button>
     </div>
   ) : (

@@ -58,6 +58,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     reason: "",
     message: "",
   });
+  const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
 
   const loadIdRef = useRef(0);
   const compareLoadKeyRef = useRef<string | null>(null);
@@ -126,6 +127,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
   const loadFilings = useCallback(() => {
     const loadId = ++loadIdRef.current;
     upgradedFullFinancialsRef.current = new Set();
+    setUpgradingNotesTickers(new Set());
     setError("");
     setSectionsParseError("");
     setFinancialsByTicker({});
@@ -349,6 +351,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
       const upper = ticker.toUpperCase();
       if (upgradedFullFinancialsRef.current.has(upper)) return;
       upgradedFullFinancialsRef.current.add(upper);
+      setUpgradingNotesTickers((prev) => new Set(prev).add(upper));
       void fetchFinancials(ticker, resolvedFiscalYear, { headlineOnly: false, period })
         .then((full) => {
           setFinancialsByTicker((prev) => ({ ...prev, [upper]: full }));
@@ -363,6 +366,13 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
           upgradedFullFinancialsRef.current.delete(upper);
           const message = err instanceof Error ? err.message : "Failed to load financials";
           setFinancialsErrors((prev) => ({ ...prev, [upper]: message }));
+        })
+        .finally(() => {
+          setUpgradingNotesTickers((prev) => {
+            const next = new Set(prev);
+            next.delete(upper);
+            return next;
+          });
         });
     },
     [resolvedFiscalYear, period]
@@ -418,6 +428,31 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
   const canShowCompare = Boolean(data && data.columns.length > 0);
   const loading = loadingFinancials || loadingSections || !apiWarmupDone;
 
+  const deltasSettling = useMemo(() => {
+    if (!data || loadingSections || loadingFinancials) return true;
+    for (const ticker of tickers) {
+      const upper = ticker.toUpperCase();
+      if (upgradingNotesTickers.has(upper)) return true;
+      if (financialsErrors[upper]) continue;
+      const fin = financialsByTicker[upper];
+      if (!fin) return true;
+      if (fin.headline_only !== false) {
+        const notes = fin.notes_xbrl;
+        const hasNotes = notes && Object.keys(notes).length > 0;
+        if (!hasNotes) return true;
+      }
+    }
+    return false;
+  }, [
+    data,
+    loadingSections,
+    loadingFinancials,
+    tickers,
+    financialsByTicker,
+    upgradingNotesTickers,
+    financialsErrors,
+  ]);
+
   const handlePaywall = useCallback(
     (reason: string, message: string) => {
       if (isPro) return;
@@ -442,6 +477,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     deltaScan,
     mapFlags,
     mapCoverage,
+    deltasSettling,
     canShowCompare,
     columnLimitExceeded,
     apiHealthy,
