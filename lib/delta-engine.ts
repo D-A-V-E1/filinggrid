@@ -18,19 +18,22 @@ import type { DeltaFlag, DeltaScanResult, DeltaSessionState } from "@/lib/delta-
 const HEADLINE_METRICS = ["revenue", "net_income", "operating_income", "eps_diluted"] as const;
 
 /** Dollar-event footnotes — require non-zero tagged FY amounts, not narrative alone. */
-const DOLLAR_EVENT_NOTE_SECTIONS = new Set([
+const DOLLAR_EVENT_NOTE_SECTIONS = [
   "note-impairment",
   "note-contingencies",
   "note-restructuring",
   "note-acquisitions",
-]);
+] as const;
 
 /** Governance / open-matter sections — substantive preview is sufficient. */
-const GOVERNANCE_TOPIC_SECTIONS = new Set([
+const GOVERNANCE_TOPIC_SECTIONS = [
   "unresolved-staff",
   "controls",
   "disagreements",
-]);
+] as const;
+
+const DOLLAR_EVENT_NOTE_SECTION_SET = new Set<string>(DOLLAR_EVENT_NOTE_SECTIONS);
+const GOVERNANCE_TOPIC_SECTION_SET = new Set<string>(GOVERNANCE_TOPIC_SECTIONS);
 
 const TOPIC_PRESENCE_SECTIONS = [
   "legal-proceedings",
@@ -175,7 +178,7 @@ function hasNonZeroNoteMetricsForFy(note: NoteSectionXbrl, fiscalYear: number | 
 }
 
 function isDollarEventNoteSection(sectionId: string): boolean {
-  return DOLLAR_EVENT_NOTE_SECTIONS.has(sectionId);
+  return DOLLAR_EVENT_NOTE_SECTION_SET.has(sectionId);
 }
 
 /** Material topic signal for strip eligibility — not catalog section presence alone. */
@@ -190,7 +193,7 @@ function columnHasTopicPresenceSignal(
     return hasNonZeroNoteMetricsForFy(note, state.fiscalYear);
   }
 
-  if (GOVERNANCE_TOPIC_SECTIONS.has(sectionId)) {
+  if (GOVERNANCE_TOPIC_SECTION_SET.has(sectionId)) {
     return isSubstantivePreview(sectionPreview(col, sectionId));
   }
 
