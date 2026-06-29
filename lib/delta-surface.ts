@@ -4,6 +4,14 @@ import { rankDeltas } from "@/lib/delta-rank";
 /** Default L0 strip cap — headline glance, not the full map. */
 export const MAINSTREAM_STRIP_CAP = 7;
 
+/** Always surface top headline movers when present — not crowded out by disclosure P1s. */
+export const HEADLINE_STRIP_RESERVE = 2;
+
+/** Cap missing-section pills so one peer's catalog gaps do not fill the strip. */
+export const MISSING_SECTION_STRIP_CAP = 3;
+
+const HEADLINE_STRIP_RULES = new Set<DeltaRuleId>(["headline_vs_median", "headline_only_peer"]);
+
 /** Headline movers + material one-time / governance signals — default strip only. */
 const MAINSTREAM_STRIP_RULES = new Set<DeltaRuleId>([
   "headline_vs_median",
@@ -55,9 +63,38 @@ export function filterMainstreamStripFlags(flags: DeltaFlag[]): DeltaFlag[] {
   return flags.filter(isMainstreamStripFlag);
 }
 
-/** Rank material movers/events for the headline strip (default cap 7). */
+/**
+ * Rank material movers/events for the headline strip (default cap 7).
+ * Reserves slots for headline metrics, caps missing-section pills, then fills the rest by score.
+ */
 export function rankMainstreamStrip(flags: DeltaFlag[], cap = MAINSTREAM_STRIP_CAP): DeltaFlag[] {
-  return rankDeltas(filterMainstreamStripFlags(flags), { preset: "general", cap });
+  const pool = filterMainstreamStripFlags(flags);
+  if (pool.length === 0) return [];
+
+  const headlineSlots = rankDeltas(
+    pool.filter((f) => HEADLINE_STRIP_RULES.has(f.ruleId)),
+    { preset: "general", cap: Math.min(HEADLINE_STRIP_RESERVE, cap) }
+  );
+  const taken = new Set(headlineSlots.map((f) => f.id));
+  let remainderCap = Math.max(0, cap - headlineSlots.length);
+
+  const remainderPool = pool.filter((f) => !taken.has(f.id));
+  const missingSlots = rankDeltas(
+    remainderPool.filter((f) => f.ruleId === "missing_section"),
+    { preset: "general", cap: Math.min(MISSING_SECTION_STRIP_CAP, remainderCap) }
+  );
+  for (const f of missingSlots) taken.add(f.id);
+  remainderCap = Math.max(0, remainderCap - missingSlots.length);
+
+  const otherSlots =
+    remainderCap > 0
+      ? rankDeltas(
+          remainderPool.filter((f) => !taken.has(f.id) && f.ruleId !== "missing_section"),
+          { preset: "general", cap: remainderCap }
+        )
+      : [];
+
+  return [...headlineSlots, ...missingSlots, ...otherSlots];
 }
 
 export function countMainstreamStripFlags(flags: DeltaFlag[]): number {

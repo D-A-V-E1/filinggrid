@@ -1,4 +1,5 @@
 import type { DeltaFlag, DeltaRuleId, DeltaSeverity } from "@/lib/delta-types";
+import { rankMainstreamStrip } from "@/lib/delta-surface";
 
 const METRIC_LABELS: Record<string, string> = {
   revenue: "Revenue",
@@ -242,10 +243,7 @@ export function deltaMapRowSummary(catalogLabel: string, flags: { ticker: string
   return `${peerCount} peers differ on ${short}`;
 }
 
-/** One-line teaser for collapsed map — highest-severity flag label. */
+/** One-line teaser for collapsed map — top mainstream-ranked insight (matches strip priority). */
 export function deltaMapInsightTeaser(flags: DeltaFlag[]): string | null {
-  if (flags.length === 0) return null;
-  const order = { P1: 0, P2: 1, P3: 2 };
-  const top = [...flags].sort((a, b) => order[a.severity] - order[b.severity])[0];
-  return top?.label ?? null;
+  return rankMainstreamStrip(flags, 1)[0]?.label ?? null;
 }
