@@ -523,7 +523,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
       financialsErrors,
       error,
       sectionsParseError,
-      upgradedTickers: [...upgradedFullFinancialsRef.current],
+      upgradedTickers: Array.from(upgradedFullFinancialsRef.current),
       mapFlagCountFloor,
       settled: !deltasSettling,
     });

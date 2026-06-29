@@ -756,7 +756,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       financialsErrors,
       error,
       sectionsParseError,
-      upgradedTickers: [...upgradedFullFinancialsRef.current],
+      upgradedTickers: Array.from(upgradedFullFinancialsRef.current),
       mapFlagCountFloor,
       settled: !deltasSettling,
     });
