@@ -63,23 +63,27 @@ export function deltaRuleShortLabel(ruleId: string): string {
     case "missing_section":
       return "Missing";
     case "headline_vs_median":
-      return "Metric";
+      return "Off median";
     case "headline_only_peer":
-      return "Outlier";
+      return "Peer outlier";
     case "topic_only_peer":
-      return "Unique";
+      return "Only peer";
     case "open_staff_comments":
     case "only_peer_open_staff":
-      return "Staff";
+      return "Staff comments";
     case "disagreement_reported":
-      return "Auditor";
+      return "Disagreement";
     case "contingency_open_emphasis":
-      return "Legal";
+      return "Legal emphasis";
     case "prose_number_gap":
-      return "Narrative";
+      return "Narrative only";
     case "metrics_not_comparable_mixed_filers":
-      return "Mixed";
+      return "Mixed filers";
     default:
-      return "Delta";
+      return "Difference";
   }
 }
+
+/** Badge types shown on the section delta map (matches deltaRuleShortLabel). */
+export const DELTA_MAP_BADGE_LEGEND =
+  "Off median · Peer outlier · Only peer · Staff comments · Disagreement · Legal emphasis";

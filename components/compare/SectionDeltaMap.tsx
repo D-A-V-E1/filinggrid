@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { FilingColumn } from "@/lib/api";
 import type { DeltaFlag } from "@/lib/delta-types";
 import { flagsForSection } from "@/lib/delta-engine";
-import { deltaRuleShortLabel } from "@/lib/delta-labels";
+import { DELTA_MAP_BADGE_LEGEND, deltaRuleShortLabel } from "@/lib/delta-labels";
 
 interface SectionDeltaMapProps {
   tickers: string[];
@@ -35,25 +35,29 @@ function cellTooltip(cellFlags: DeltaFlag[]): string {
 
 function DeltaMapLegend() {
   return (
-    <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
-      <span>
-        <span className="font-medium text-amber-900">Missing</span>
+    <div className="space-y-1 text-[11px] text-slate-500">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+        <span>
+          <span className="font-medium text-amber-900">Missing</span>
+          <span className="text-slate-400"> — </span>
+          peer omits a section others include
+        </span>
+        <span className="hidden sm:inline text-slate-300">|</span>
+        <span>
+          <span className="font-mono text-slate-400">·</span>
+          <span className="text-slate-400"> same across peers</span>
+          <span className="mx-1 text-slate-300">·</span>
+          <span className="font-mono text-slate-400">—</span>
+          <span className="text-slate-400"> not in this filing</span>
+        </span>
+      </p>
+      <p className="leading-snug">
+        <span className="font-medium text-slate-600">Badges</span>
         <span className="text-slate-400"> — </span>
-        peer lacks a section others have
-      </span>
-      <span className="hidden sm:inline text-slate-300">|</span>
-      <span>
-        <span className="font-medium text-brand-900">Delta</span>
-        <span className="text-slate-400"> — </span>
-        change detected in that section
-      </span>
-      <span className="hidden md:inline text-slate-300">|</span>
-      <span className="hidden md:inline text-slate-400">· no delta · — not in filing</span>
-      <span className="hidden lg:inline text-slate-300">|</span>
-      <span className="hidden lg:inline text-slate-400">
-        narrative-only footnotes (P3) omitted
-      </span>
-    </p>
+        {DELTA_MAP_BADGE_LEGEND}
+        <span className="text-slate-400"> · minor footnote wording not shown</span>
+      </p>
+    </div>
   );
 }
 
@@ -91,7 +95,7 @@ export default function SectionDeltaMap({
 
   if (sectionRows.length === 0) return null;
 
-  const summaryText = `${sectionsWithDeltas} section${sectionsWithDeltas === 1 ? "" : "s"} with deltas`;
+  const summaryText = `${sectionsWithDeltas} section${sectionsWithDeltas === 1 ? "" : "s"} differ across peers`;
 
   return (
     <section
@@ -175,7 +179,7 @@ export default function SectionDeltaMap({
                               : "border-slate-200 bg-slate-50 text-slate-700";
                         const badgeLabel =
                           cellFlags.length > 1
-                            ? `${cellFlags.length} deltas`
+                            ? `${cellFlags.length} differences`
                             : deltaRuleShortLabel(topFlag.ruleId);
                         return (
                           <td key={ticker} className="px-2 py-1.5">
@@ -195,7 +199,11 @@ export default function SectionDeltaMap({
                         <td
                           key={ticker}
                           className="px-2 py-1.5 text-center text-slate-300"
-                          title={present ? "No delta in this section" : "Section not in filing"}
+                          title={
+                            present
+                              ? "Same across peers — no material difference in this section"
+                              : "Not in this filing — section absent from this peer's report"
+                          }
                         >
                           {present ? "·" : "—"}
                         </td>
