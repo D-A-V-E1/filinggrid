@@ -806,6 +806,11 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               isPro={isPro}
               mobileOpen={navOpen}
               onMobileClose={() => setNavOpen(false)}
+              onOpenKeyDeltas={
+                stripFlags.length > 0 || deltasLoading ? openKeyDeltas : undefined
+              }
+              keyDeltaCount={stripFlags.length}
+              keyDeltasLoading={deltasLoading}
             />
             <DeltaLeftDrawer
               open={deltaPanelOpen}

@@ -388,22 +388,6 @@
     }
   }
 
-  .delta-left-drawer-tab {
-    left: 0;
-  }
-
-  @media (min-width: 768px) {
-    .delta-left-drawer-tab {
-      left: 15rem;
-    }
-  }
-
-  .delta-left-drawer-tab-label {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    letter-spacing: 0.08em;
-  }
-
   .delta-map-backdrop {
     position: fixed;
     inset: 0;
