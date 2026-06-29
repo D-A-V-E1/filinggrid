@@ -36,7 +36,7 @@ export default function DeltaStrip({
   return (
     <section
       className="shrink-0 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-brand-50/30 px-4 py-3"
-      aria-label="Peer deltas"
+      aria-label="Key deltas"
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">

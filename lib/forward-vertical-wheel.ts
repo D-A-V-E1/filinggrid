@@ -23,6 +23,41 @@ function canScrollHorizontally(el: HTMLElement, scrollDelta: number): boolean {
 }
 
 /**
+ * Attach wheel forwarding to filing excerpt table scroll wrappers (rendered via innerHTML).
+ */
+export function attachFilingTableWheelForwarding(root: HTMLElement | null): () => void {
+  if (!root) return () => {};
+
+  const wraps = root.querySelectorAll<HTMLElement>(".filing-table-wrap");
+  const cleanups: Array<() => void> = [];
+
+  wraps.forEach((wrap) => {
+    const handler = (e: WheelEvent) => {
+      const reactLike = {
+        currentTarget: wrap,
+        deltaX: e.deltaX,
+        deltaY: e.deltaY,
+        shiftKey: e.shiftKey,
+        preventDefault: () => e.preventDefault(),
+      } as Parameters<typeof forwardVerticalWheelFromHorizontalScrollContainer>[0];
+
+      const before = wrap.scrollLeft;
+      forwardVerticalWheelFromHorizontalScrollContainer(reactLike);
+      if (wrap.scrollLeft !== before) {
+        e.preventDefault();
+      }
+    };
+
+    wrap.addEventListener("wheel", handler, { passive: false });
+    cleanups.push(() => wrap.removeEventListener("wheel", handler));
+  });
+
+  return () => {
+    cleanups.forEach((cleanup) => cleanup());
+  };
+}
+
+/**
  * Nested overflow-x containers capture wheel events even when they cannot scroll
  * vertically, which blocks touchpad/mouse vertical scroll in compare columns.
  * Forward dominant vertical wheel deltas to the column scroll parent while

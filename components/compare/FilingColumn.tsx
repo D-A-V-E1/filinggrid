@@ -28,7 +28,7 @@ import { resolveFilingColumnContentMode } from "@/lib/filingColumnView";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
-import { forwardVerticalWheelFromHorizontalScrollContainer } from "@/lib/forward-vertical-wheel";
+import { forwardVerticalWheelFromHorizontalScrollContainer, attachFilingTableWheelForwarding } from "@/lib/forward-vertical-wheel";
 import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
@@ -464,14 +464,21 @@ function ExcerptToggleButton({
 }
 
 function HtmlExcerpt({ html, compact = false }: { html: string; compact?: boolean }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return attachFilingTableWheelForwarding(contentRef.current);
+  }, [html]);
+
   return (
     <article
-      className={`min-w-0 w-full rounded-lg border border-slate-200 bg-white shadow-sm ${
+      className={`min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ${
         compact ? "px-3 py-3" : "px-5 py-5"
       }`}
     >
       <div
-        className="filing-content w-full min-w-0 max-w-none font-serif text-sm text-slate-800"
+        ref={contentRef}
+        className="filing-content w-full min-w-0 max-w-full font-serif text-sm text-slate-800"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </article>

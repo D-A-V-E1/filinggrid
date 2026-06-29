@@ -198,9 +198,10 @@
   .filing-content {
     width: 100%;
     min-width: 0;
-    max-width: none;
+    max-width: 100%;
     line-height: 1.625;
     overflow-wrap: break-word;
+    overflow-x: hidden;
   }
 
   .filing-content > :not(.filing-table-wrap) {
@@ -229,6 +230,7 @@
     min-width: 0;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
   }
 
   .compare-column--compact .filing-table-wrap {
@@ -238,8 +240,8 @@
   .filing-content table {
     @apply border-collapse text-xs;
     display: table !important;
-    width: 100%;
-    min-width: 100%;
+    width: auto;
+    min-width: 0;
     table-layout: auto;
   }
 
@@ -267,7 +269,7 @@
 
   .filing-content td,
   .filing-content th {
-    @apply border border-slate-200 px-2.5 py-1.5 align-top;
+    @apply border border-slate-300 px-2.5 py-1.5 align-top;
     display: table-cell !important;
     overflow-wrap: break-word;
     word-break: normal;
@@ -278,6 +280,7 @@
     text-align: right;
     white-space: nowrap;
     overflow-wrap: normal;
+    font-variant-numeric: tabular-nums;
   }
 
   .filing-content td[align="center"],
@@ -293,13 +296,13 @@
   /* Keep index/label columns compact so description columns get space */
   .filing-content tr td:first-child,
   .filing-content tr th:first-child {
-    width: 1%;
-    min-width: 3.5rem;
-    max-width: 7rem;
+    width: auto;
+    min-width: 3rem;
+    max-width: none;
   }
 
   .filing-content tr td:first-child {
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .filing-content tr th:first-child {
@@ -308,9 +311,14 @@
 
   .filing-content tr td:not(:first-child):not([align="right"]),
   .filing-content tr th:not(:first-child):not([align="right"]) {
-    min-width: 12rem;
+    min-width: 6rem;
     width: auto;
     white-space: normal;
+  }
+
+  .filing-content tr td[align="right"]:not(:first-child),
+  .filing-content tr th[align="right"]:not(:first-child) {
+    min-width: 4.5rem;
   }
 
   .filing-content p {

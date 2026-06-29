@@ -100,6 +100,9 @@ def test_preserves_br_as_paragraph_breaks():
     assert "First paragraph" in normalized
     assert "Second paragraph" in normalized
     assert "paragraph Second" not in normalized.replace("\n", " ").replace("  ", " ")
+
+
+def test_realistic_ixbrl_table_fragment():
     """Realistic iXBRL table fragment with ix tags, spans, and numeric columns."""
     html = (
         "<div>"
@@ -131,3 +134,31 @@ def test_preserves_br_as_paragraph_breaks():
     assert normalized.count('align="right"') >= 4
     assert "<ix:" not in normalized
     assert "style=" not in normalized
+
+
+def test_strips_page_number_and_toc_noise_rows():
+    html = (
+        "<table>"
+        "<tr><td>5</td></tr>"
+        "<tr><td>Table of Contents</td></tr>"
+        "<tr><td>Cash and cash equivalents</td><td align=\"right\">$1,234</td></tr>"
+        "<tr><td colspan=\"2\">See accompanying notes to consolidated financial statements.</td></tr>"
+        "</table>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert "Cash and cash equivalents" in normalized
+    assert "$1,234" in normalized
+    assert "Table of Contents" not in normalized
+    assert "<td>5</td>" not in normalized
+    assert "See accompanying notes" not in normalized
+
+
+def test_preserves_narrative_paragraphs_with_see_accompanying_phrase():
+    html = (
+        "<div>"
+        "<p>Our consolidated balance sheets are prepared in accordance with GAAP. "
+        "See accompanying notes for additional detail on accounting policies.</p>"
+        "</div>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert "See accompanying notes" in normalized

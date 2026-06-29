@@ -673,6 +673,13 @@ _IX_TAG = re.compile(r"^ix:", re.I)
 _EXCERPT_TEXT_TAGS = frozenset({"p", "div", "td", "th", "li", "h1", "h2", "h3", "h4", "h5", "h6"})
 _TABLE_WRAP_CLASS = "filing-table-wrap"
 _TABLE_CELL_ATTRS = ("colspan", "rowspan", "align")
+_PAGE_ONLY_RE = re.compile(r"^\d{1,3}$")
+_TABLE_NOISE_RE = re.compile(
+    r"^(table\s+of\s+contents|see\s+accompanying\b.*|see\s+notes\s+to\b.*|"
+    r"index\s+to\s+(consolidated\s+)?financial|page\s+\d+\s+of\s+\d+)$",
+    re.IGNORECASE,
+)
+_FINANCIAL_AMOUNT_RE = re.compile(r"\$\s*[\d,]+|[\d,]{4,}")
 
 
 def _tag_classes(tag: Tag) -> list[str]:
@@ -724,6 +731,61 @@ def _normalize_table_cells(table: Tag) -> None:
         _collapse_inline_text(cell)
 
 
+def _row_cell_texts(row: Tag) -> list[str]:
+    return [
+        _normalize_text(cell.get_text(" ", strip=True))
+        for cell in row.find_all(["td", "th"])
+    ]
+
+
+def _row_has_financial_data(row: Tag) -> bool:
+    return _FINANCIAL_AMOUNT_RE.search(row.get_text(" ", strip=True)) is not None
+
+
+def _row_has_substantive_columns(row: Tag) -> bool:
+    """Keep multi-column statement rows even when one cell looks like boilerplate."""
+    texts = [t for t in _row_cell_texts(row) if t]
+    if len(texts) < 2:
+        return False
+    if _row_has_financial_data(row):
+        return True
+    return sum(1 for t in texts if len(t) > 8) >= 2
+
+
+def _is_noise_table_row(row: Tag) -> bool:
+    if _row_has_substantive_columns(row):
+        return False
+
+    text = _normalize_text(row.get_text(" ", strip=True))
+    if not text:
+        return True
+    if _PAGE_ONLY_RE.fullmatch(text):
+        return True
+    if _TABLE_NOISE_RE.match(text):
+        return True
+    if re.search(r"table\s+of\s+contents", text, re.IGNORECASE) and len(text) < 100:
+        return True
+
+    links = row.find_all("a", href=True)
+    if links and len(text) < 140:
+        if _match_toc_section(text) is not None:
+            return True
+        if re.search(r"item\s+\d", text, re.IGNORECASE) and len(links) >= 1:
+            link_text = " ".join(_normalize_text(link.get_text(" ", strip=True)) for link in links)
+            if link_text and len(link_text) >= len(text) * 0.5:
+                return True
+
+    return False
+
+
+def _strip_noise_table_rows(soup: BeautifulSoup) -> None:
+    """Drop SEC layout rows (page numbers, TOC, footers) from extracted tables."""
+    for table in soup.find_all("table"):
+        for row in list(table.find_all("tr")):
+            if _is_noise_table_row(row):
+                row.decompose()
+
+
 def _wrap_orphan_table_rows(soup: BeautifulSoup) -> None:
     """Wrap consecutive <tr> siblings that are not already inside a <table>."""
     while True:
@@ -771,6 +833,8 @@ def _normalize_excerpt_html(html: str) -> str:
 
     for table in soup.find_all("table"):
         _normalize_table_cells(table)
+
+    _strip_noise_table_rows(soup)
 
     for tag in soup.find_all(list(_EXCERPT_TEXT_TAGS)):
         if tag.name in ("td", "th"):
