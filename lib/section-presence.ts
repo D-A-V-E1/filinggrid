@@ -96,10 +96,27 @@ function sectionTextMatchesAlias(section: FilingColumn["sections"][number], sect
   return patterns.some((re) => re.test(haystack));
 }
 
+/** Resolve a catalog section by id or foreign/interim heading alias. */
+export function findCatalogSection(
+  sections: FilingColumn["sections"],
+  sectionId: string
+): FilingColumn["sections"][number] | undefined {
+  const direct = sections.find((s) => s.id === sectionId);
+  if (direct) return direct;
+  return sections.find((s) => sectionTextMatchesAlias(s, sectionId));
+}
+
+/** True when sections expose a catalog section by id or heading alias. */
+export function sectionsHaveCatalogSection(
+  sections: FilingColumn["sections"],
+  sectionId: string
+): boolean {
+  return findCatalogSection(sections, sectionId) != null;
+}
+
 /** True when the column exposes a catalog section by id or foreign/interim heading alias. */
 export function columnHasCatalogSection(col: FilingColumn, sectionId: string): boolean {
-  if (col.sections.some((s) => s.id === sectionId)) return true;
-  return col.sections.some((s) => sectionTextMatchesAlias(s, sectionId));
+  return sectionsHaveCatalogSection(col.sections, sectionId);
 }
 
 /** Preview text for a catalog section — direct id or alias / full-document fallback. */

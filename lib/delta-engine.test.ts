@@ -680,3 +680,65 @@ describe("scanDeltas foreign filer section alignment", () => {
     expect(flagsByRule(state, "headline_vs_median")).toHaveLength(0);
   });
 });
+
+describe("mega-cap note presence (live parse index patterns)", () => {
+  const NOTE_CATALOG = [
+    { id: "note-impairment", label: "Note — Impairment" },
+    { id: "note-software", label: "Note — Software" },
+    { id: "note-ppe", label: "Note — Property, Plant & Equipment" },
+  ];
+
+  /** FY25 annual parse index: AAPL omits impairment; MSFT omits software; all three file PPE. */
+  const FY25_COLUMNS = [
+    column(
+      "AAPL",
+      [
+        { id: "note-software", preview: LONG_NARRATIVE },
+        { id: "note-ppe", preview: LONG_NARRATIVE },
+      ],
+      "10-K"
+    ),
+    column(
+      "MSFT",
+      [
+        { id: "note-impairment", preview: LONG_NARRATIVE },
+        { id: "note-ppe", preview: LONG_NARRATIVE },
+      ],
+      "10-K"
+    ),
+    column(
+      "NVDA",
+      [
+        { id: "note-impairment", preview: LONG_NARRATIVE },
+        { id: "note-ppe", preview: LONG_NARRATIVE },
+      ],
+      "10-K"
+    ),
+  ];
+
+  it("flags AAPL missing impairment when MSFT and NVDA both file the note", () => {
+    const state = baseState({
+      tickers: ["AAPL", "MSFT", "NVDA"],
+      catalog: NOTE_CATALOG,
+      columns: FY25_COLUMNS,
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section", "note-impairment").map((f) => f.ticker)).toEqual([
+      "AAPL",
+    ]);
+  });
+
+  it("does not flag minority-missing notes when most peers also omit them", () => {
+    const state = baseState({
+      tickers: ["AAPL", "MSFT", "NVDA"],
+      catalog: NOTE_CATALOG,
+      columns: FY25_COLUMNS,
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section", "note-software")).toHaveLength(0);
+  });
+});

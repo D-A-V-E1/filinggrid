@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FilingColumn } from "@/lib/api";
-import { catalogSectionPreview, columnHasCatalogSection } from "@/lib/section-presence";
+import { catalogSectionPreview, columnHasCatalogSection, sectionsHaveCatalogSection } from "@/lib/section-presence";
 
 function col(
   sections: Array<{ id: string; heading?: string; label?: string; preview?: string }>,
@@ -68,5 +68,19 @@ describe("columnHasCatalogSection full-document fallback", () => {
     );
 
     expect(columnHasCatalogSection(column, "mda")).toBe(true);
+  });
+
+  it("sectionsHaveCatalogSection matches column helper for alias hits", () => {
+    const sections = [
+      {
+        id: "full-document",
+        label: "Full Document",
+        heading: "Full Filing",
+        text_preview:
+          "Notes to Consolidated Financial Statements include Revenue Recognition policies.",
+      },
+    ];
+    expect(sectionsHaveCatalogSection(sections, "note-revenue")).toBe(true);
+    expect(sectionsHaveCatalogSection(sections, "note-impairment")).toBe(false);
   });
 });

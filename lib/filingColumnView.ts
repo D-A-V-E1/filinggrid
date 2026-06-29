@@ -1,7 +1,18 @@
+import { DELTA_MAP_NOT_FILED_TOOLTIP, formatSectionRowLabel } from "./delta-labels";
 import { isNarrativeSection, isXbrlBackedSection } from "./sections";
 
 export function isFootnoteSection(sectionId: string | null): boolean {
   return sectionId?.startsWith("note-") ?? false;
+}
+
+/** Column empty state when a catalog section is absent from the parse index. */
+export function filingColumnNotFiledHeading(sectionLabel: string): string {
+  const short = formatSectionRowLabel(sectionLabel);
+  return `${short} not in this filing`;
+}
+
+export function filingColumnNotFiledBody(ticker: string): string {
+  return `${ticker} — ${DELTA_MAP_NOT_FILED_TOOLTIP.toLowerCase()}`;
 }
 
 /** Resolve compare column content mode for a filing section. */

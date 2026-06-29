@@ -29,7 +29,12 @@ import {
   type SectionHtmlRequest,
 } from "@/lib/section-html";
 import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
-import { resolveFilingColumnContentMode } from "@/lib/filingColumnView";
+import {
+  filingColumnNotFiledBody,
+  filingColumnNotFiledHeading,
+  resolveFilingColumnContentMode,
+} from "@/lib/filingColumnView";
+import { findCatalogSection, sectionsHaveCatalogSection } from "@/lib/section-presence";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
@@ -578,7 +583,12 @@ function FilingColumn({
   const [loadingStatements, setLoadingStatements] = useState(false);
   const [statementsError, setStatementsError] = useState("");
 
-  const section = activeSection ? sections.find((s) => s.id === activeSection) : sections[0];
+  const section = activeSection
+    ? findCatalogSection(sections, activeSection)
+    : sections[0];
+  const hasSectionInFiling = activeSection
+    ? sectionsHaveCatalogSection(sections, activeSection)
+    : sections.length > 0;
   const isStatementSection = isGaapStatementSection(activeSection);
   const displayLabel = section
     ? formatSectionLabel(section.label)
@@ -625,7 +635,7 @@ function FilingColumn({
 
   const { showSecViewer, showExcerptToggle, xbrlOnly } = resolveFilingColumnContentMode({
     activeSection,
-    hasSectionInFiling: Boolean(section),
+    hasSectionInFiling,
     hasXbrlData,
     isStatementSection,
   });
@@ -1033,12 +1043,25 @@ function FilingColumn({
             </div>
           ) : !activeSection && sections.length === 0 && !showFinancialsBootstrap ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>
-          ) : !section && !showFinancialsBootstrap && !showStatementBootstrap ? (
+          ) : sectionsPending &&
+            activeSection &&
+            activeSection !== "financial-statements" &&
+            !isStatementSection ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+              <p className="text-[10px] text-slate-500">Loading filing section…</p>
+            </div>
+          ) : activeSection &&
+            !hasSectionInFiling &&
+            !xbrlPanel &&
+            !showFinancialsBootstrap &&
+            !showStatementBootstrap ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
-              <p className="text-sm font-medium text-slate-500">Not in this filing</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {ticker} did not include this disclosure in the selected period.
+              <p className="text-sm font-medium text-slate-500">
+                {filingColumnNotFiledHeading(displayLabel)}
               </p>
+              <p className="mt-1 text-xs text-slate-400">{filingColumnNotFiledBody(ticker)}</p>
             </div>
           ) : notesPending &&
             activeSection?.startsWith("note-") &&
@@ -1048,15 +1071,6 @@ function FilingColumn({
               <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
               <div className="h-4 w-5/6 animate-pulse rounded bg-brand-100" />
               <p className="text-[10px] text-brand-700/70">Loading XBRL footnote data…</p>
-            </div>
-          ) : sectionsPending &&
-            activeSection &&
-            activeSection !== "financial-statements" &&
-            !isStatementSection ? (
-            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
-              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
-              <p className="text-[10px] text-slate-500">Loading filing section…</p>
             </div>
           ) : showSecViewer ? (
             sectionFilingUrl ? (
