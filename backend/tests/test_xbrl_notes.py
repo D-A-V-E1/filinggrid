@@ -82,7 +82,7 @@ async def test_load_filing_html_for_notes_fetches_when_not_cached():
         patch("filing_store.load_submissions", return_value={"filings": []}),
         patch("sec.xbrl_client.fetch_submissions", new_callable=AsyncMock) as fetch_subs,
         patch("sec.xbrl_client.find_filing", return_value={"accession_no_dash": "0001234567-24-000001"}),
-        patch("sec.xbrl_client.fetch_filing_html", new_callable=AsyncMock, return_value=fake_html) as fetch_html,
+        patch("sec.client.fetch_filing_html", new_callable=AsyncMock, return_value=fake_html) as fetch_html,
     ):
         fetch_subs.return_value = {"filings": []}
         result = await xbrl_client._load_filing_html_for_notes("1234567", 2024)
