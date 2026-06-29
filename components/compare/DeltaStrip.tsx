@@ -2,7 +2,7 @@
 
 import type { DeltaFlag } from "@/lib/delta-types";
 
-export type DeltaStripLayout = "rail" | "strip";
+export type DeltaStripLayout = "rail" | "strip" | "nav";
 
 interface DeltaStripProps {
   flags: DeltaFlag[];
@@ -46,14 +46,21 @@ export default function DeltaStrip({
   const viewMoreHandler = onViewMoreInMap ?? onViewMap;
   const moreInMapCount = Math.max(stripHiddenCount, mapHiddenCount);
 
-  if (layout === "rail") {
+  if (layout === "rail" || layout === "nav") {
+    const compact = layout === "nav";
     return (
       <section className="delta-rail-inner flex h-full min-h-0 flex-col" aria-label="Key deltas">
-        <header className="shrink-0 border-b border-slate-100 px-3 py-2.5">
+        <header
+          className={`shrink-0 border-b border-slate-100 ${compact ? "px-2 py-2" : "px-3 py-2.5"}`}
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2
+                  className={`font-semibold uppercase tracking-wider text-slate-600 ${
+                    compact ? "text-[10px]" : "text-[11px]"
+                  }`}
+                >
                   Key deltas
                 </h2>
                 {!loading && flags.length > 0 && (
@@ -61,13 +68,23 @@ export default function DeltaStrip({
                     {flags.length}
                   </span>
                 )}
-                {loading && <span className="text-xs text-slate-400">Scanning…</span>}
+                {loading && (
+                  <span className={`text-slate-400 ${compact ? "text-[10px]" : "text-xs"}`}>
+                    Scanning…
+                  </span>
+                )}
               </div>
               {tagline && !loading && (
-                <p className="mt-1.5 text-[11px] leading-snug text-slate-500">{tagline}</p>
+                <p
+                  className={`leading-snug text-slate-500 ${
+                    compact ? "mt-1 text-[10px] line-clamp-2" : "mt-1.5 text-[11px]"
+                  }`}
+                >
+                  {tagline}
+                </p>
               )}
             </div>
-            {onClose && (
+            {!compact && onClose && (
               <button
                 type="button"
                 onClick={onClose}
@@ -79,22 +96,24 @@ export default function DeltaStrip({
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+        <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? "px-2 py-1.5" : "px-3 py-2"}`}>
           {!loading && flags.length === 0 && (
-            <p className="text-xs text-slate-500">
+            <p className={`text-slate-500 ${compact ? "text-[10px]" : "text-xs"}`}>
               {totalFlagCount && totalFlagCount > 0
                 ? "No headline movers or key events in this group."
                 : "No key deltas in this group yet."}
             </p>
           )}
           {!loading && flags.length > 0 && (
-            <ul className="flex flex-col gap-1.5">
+            <ul className={`flex flex-col ${compact ? "gap-1" : "gap-1.5"}`}>
               {flags.map((flag) => (
                 <li key={flag.id}>
                   <button
                     type="button"
                     onClick={() => onFlagClick(flag)}
-                    className={`w-full rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition hover:shadow-sm ${SEVERITY_STYLES[flag.severity]}`}
+                    className={`w-full rounded-lg border text-left font-medium transition hover:shadow-sm ${
+                      compact ? "px-2 py-1.5 text-[11px]" : "px-2.5 py-2 text-xs"
+                    } ${SEVERITY_STYLES[flag.severity]}`}
                     title={`${flag.severity} · ${flag.ruleId}`}
                   >
                     <span className="font-mono text-[10px] uppercase opacity-70">{flag.ticker}</span>
@@ -108,13 +127,15 @@ export default function DeltaStrip({
         </div>
 
         {!loading && moreInMapCount > 0 && viewMoreHandler && (
-          <footer className="shrink-0 border-t border-slate-100 px-3 py-2">
+          <footer className={`shrink-0 border-t border-slate-100 ${compact ? "px-2 py-1.5" : "px-3 py-2"}`}>
             <button
               type="button"
               onClick={viewMoreHandler}
-              className="w-full text-left text-xs font-medium text-brand-700 hover:text-brand-800 hover:underline"
+              className={`w-full text-left font-medium text-brand-700 hover:text-brand-800 hover:underline ${
+                compact ? "text-[10px]" : "text-xs"
+              }`}
             >
-              +{moreInMapCount} more in delta report
+              View full report (+{moreInMapCount})
             </button>
           </footer>
         )}

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { getNavGroups } from "@/lib/sections";
+import type { DeltaFlag } from "@/lib/delta-types";
+import DeltaStrip from "./DeltaStrip";
 
 interface SectionNavProps {
   availableSectionIds: Set<string>;
@@ -11,9 +13,13 @@ interface SectionNavProps {
   isPro?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
-  onOpenKeyDeltas?: () => void;
-  keyDeltaCount?: number;
-  keyDeltasLoading?: boolean;
+  stripFlags?: DeltaFlag[];
+  deltasLoading?: boolean;
+  stripTotalCount?: number;
+  totalFlagCount?: number;
+  tagline?: string;
+  onDeltaFlagClick?: (flag: DeltaFlag) => void;
+  onViewMoreInMap?: () => void;
 }
 
 export default function SectionNav({
@@ -24,14 +30,22 @@ export default function SectionNav({
   isPro = false,
   mobileOpen = false,
   onMobileClose,
-  onOpenKeyDeltas,
-  keyDeltaCount = 0,
-  keyDeltasLoading = false,
+  stripFlags = [],
+  deltasLoading = false,
+  stripTotalCount = 0,
+  totalFlagCount = 0,
+  tagline,
+  onDeltaFlagClick,
+  onViewMoreInMap,
 }: SectionNavProps) {
   const navScrollRef = useRef<HTMLDivElement>(null);
   const activeButtonRef = useRef<HTMLButtonElement>(null);
   const sectionMap = new Map(sectionCatalog.map((s) => [s.id, s]));
   const navGroups = getNavGroups(isPro);
+
+  const showKeyDeltas =
+    Boolean(onDeltaFlagClick) &&
+    (deltasLoading || stripFlags.length > 0 || stripTotalCount > 0 || totalFlagCount > 0);
 
   useEffect(() => {
     const navEl = navScrollRef.current;
@@ -49,6 +63,11 @@ export default function SectionNav({
 
   function handleSelect(sectionId: string) {
     onSectionSelect(sectionId);
+    onMobileClose?.();
+  }
+
+  function handleDeltaFlagClick(flag: DeltaFlag) {
+    onDeltaFlagClick?.(flag);
     onMobileClose?.();
   }
 
@@ -76,23 +95,6 @@ export default function SectionNav({
             </button>
           )}
         </div>
-        {onOpenKeyDeltas && (
-          <button
-            type="button"
-            onClick={() => {
-              onOpenKeyDeltas();
-              onMobileClose?.();
-            }}
-            className="mt-2.5 flex w-full items-center justify-between rounded-md border border-brand-200 bg-white px-2.5 py-1.5 text-left text-xs font-medium text-brand-800 shadow-sm transition hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-            aria-controls="key-deltas-drawer"
-            aria-expanded={false}
-          >
-            <span>Key deltas</span>
-            <span className="rounded-full bg-brand-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-brand-900">
-              {keyDeltasLoading ? "…" : keyDeltaCount}
-            </span>
-          </button>
-        )}
       </div>
       <div ref={navScrollRef} className="min-h-0 flex-1 overflow-y-auto py-2">
         {navGroups.map((group) => {
@@ -130,6 +132,20 @@ export default function SectionNav({
           );
         })}
       </div>
+      {showKeyDeltas && (
+        <div className="flex max-h-[min(45vh,320px)] min-h-0 shrink-0 flex-col border-t border-slate-200 bg-white">
+          <DeltaStrip
+            layout="nav"
+            flags={stripFlags}
+            loading={deltasLoading}
+            stripTotalCount={stripTotalCount}
+            totalFlagCount={totalFlagCount}
+            tagline={tagline}
+            onFlagClick={handleDeltaFlagClick}
+            onViewMoreInMap={onViewMoreInMap}
+          />
+        </div>
+      )}
     </nav>
   );
 

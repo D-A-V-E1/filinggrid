@@ -57,7 +57,6 @@ import {
   rankMainstreamStrip,
 } from "@/lib/delta-surface";
 import type { DeltaFlag } from "@/lib/delta-types";
-import DeltaLeftDrawer from "./DeltaLeftDrawer";
 import DeltaReportLinkBar from "./DeltaReportLinkBar";
 import { deltaReportPath } from "@/lib/delta-report";
 
@@ -111,7 +110,6 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   const notesRetriedAfterParseRef = useRef(new Set<string>());
   const [upgradingNotesTickers, setUpgradingNotesTickers] = useState<Set<string>>(new Set());
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
-  const [deltaPanelOpen, setDeltaPanelOpen] = useState(false);
   const focusHandledRef = useRef(false);
   const [sectionScrollRequest, setSectionScrollRequest] = useState(0);
   const [sectionFocusTicker, setSectionFocusTicker] = useState<string | null>(null);
@@ -610,13 +608,8 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   );
 
   const openDeltaReport = useCallback(() => {
-    setDeltaPanelOpen(false);
     router.push(deltaReportPath(peerSlug, comparePeriod));
   }, [router, peerSlug, comparePeriod]);
-
-  const openKeyDeltas = useCallback(() => {
-    setDeltaPanelOpen(true);
-  }, []);
 
   const deltasLoading = loadingFinancials || loadingSections;
 
@@ -830,21 +823,12 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
               isPro={isPro}
               mobileOpen={navOpen}
               onMobileClose={() => setNavOpen(false)}
-              onOpenKeyDeltas={
-                stripFlags.length > 0 || deltasLoading ? openKeyDeltas : undefined
-              }
-              keyDeltaCount={stripFlags.length}
-              keyDeltasLoading={deltasLoading}
-            />
-            <DeltaLeftDrawer
-              open={deltaPanelOpen}
-              onOpenChange={setDeltaPanelOpen}
-              flags={stripFlags}
-              loading={deltasLoading}
+              stripFlags={stripFlags}
+              deltasLoading={deltasLoading}
               stripTotalCount={stripTotalCount}
               totalFlagCount={mapCoverage.flagCount}
               tagline={MAINSTREAM_STRIP_TAGLINE}
-              onFlagClick={handleDeltaFlagClick}
+              onDeltaFlagClick={handleDeltaFlagClick}
               onViewMoreInMap={mapFlags.length > 0 ? openDeltaReport : undefined}
             />
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
