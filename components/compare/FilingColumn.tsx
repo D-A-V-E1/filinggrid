@@ -601,7 +601,7 @@ function FilingColumn({
   const scrollResetActiveRef = useRef(false);
   const metricScrollGenerationRef = useRef(getScrollGeneration());
   const resetWindowOnColumnScroll = !metricFocusActive && !focusRowKey;
-  const columnContentKey = `${activeSection ?? "none"}:${sectionScrollRequest}`;
+  const columnContentKey = activeSection ?? "none";
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
   const [loadingHtml, setLoadingHtml] = useState(false);
   const [showHtmlExcerpt, setShowHtmlExcerpt] = useState(false);
@@ -774,6 +774,14 @@ function FilingColumn({
 
     setSectionHtml(null);
   }, [activeSection, ticker, cacheKey, section?.html]);
+
+  useLayoutEffect(() => {
+    if (!focusRowKey) return;
+    scrollResetActiveRef.current = false;
+    const generation = getScrollGeneration();
+    metricScrollGenerationRef.current = generation;
+    scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 48, generation);
+  }, [focusRowKey, ticker]);
 
   useLayoutEffect(() => {
     if (focusRowKey) {

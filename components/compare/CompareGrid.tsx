@@ -159,23 +159,26 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const handleSectionSelect = useCallback(
     (sectionId: string, focusTicker?: string, rowKey?: string) => {
-      bumpScrollGeneration();
       const metricFocus = Boolean(rowKey);
-      if (metricFocus && focusTicker) {
-        resetAllFilingColumnScrollsExcept(focusTicker);
+      bumpScrollGeneration();
+      const normalizedFocusTicker = focusTicker?.toUpperCase() ?? null;
+      if (metricFocus && normalizedFocusTicker) {
+        resetAllFilingColumnScrollsExcept(normalizedFocusTicker);
       } else {
         setSectionFocusTicker(null);
         setSectionFocusRowKey(null);
         resetCompareViewScroll();
       }
       setActiveSection(sectionId);
-      setSectionScrollRequest((n) => n + 1);
+      if (!metricFocus) {
+        setSectionScrollRequest((n) => n + 1);
+      }
       if (metricFocus) {
-        setSectionFocusTicker(focusTicker ?? null);
+        setSectionFocusTicker(normalizedFocusTicker);
         setSectionFocusRowKey(rowKey ?? null);
       }
-      if (focusTicker) {
-        scrollTickerColumnIntoViewWhenReady(focusTicker);
+      if (normalizedFocusTicker) {
+        scrollTickerColumnIntoViewWhenReady(normalizedFocusTicker);
       }
       if (!metricFocus) {
         requestAnimationFrame(() => resetCompareViewScrollWhenReady());
@@ -1013,7 +1016,9 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
                         sectionScrollRequest={sectionScrollRequest}
                         metricFocusActive={sectionFocusRowKey != null}
                         focusRowKey={
-                          sectionFocusTicker === col.ticker ? sectionFocusRowKey : null
+                          sectionFocusTicker?.toUpperCase() === col.ticker.toUpperCase()
+                            ? sectionFocusRowKey
+                            : null
                         }
                       />
                     );

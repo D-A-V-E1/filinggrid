@@ -1,4 +1,5 @@
 import type { DeltaFlag, DeltaRuleId, DeltaSeverity } from "@/lib/delta-types";
+import { rankMainstreamStrip } from "@/lib/delta-surface";
 
 const METRIC_FOCUS_RULE_IDS = new Set<DeltaRuleId>(["headline_vs_median", "headline_only_peer"]);
 
@@ -6,7 +7,6 @@ const METRIC_FOCUS_RULE_IDS = new Set<DeltaRuleId>(["headline_vs_median", "headl
 export function isMetricFocusDeltaFlag(flag: DeltaFlag): boolean {
   return Boolean(flag.rowKey) && METRIC_FOCUS_RULE_IDS.has(flag.ruleId);
 }
-import { rankMainstreamStrip } from "@/lib/delta-surface";
 
 const METRIC_LABELS: Record<string, string> = {
   revenue: "Revenue",

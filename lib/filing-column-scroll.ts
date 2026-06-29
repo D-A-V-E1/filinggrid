@@ -99,12 +99,18 @@ export function scrollMetricRowIntoView(
 export function scrollMetricRowIntoViewWhenReady(
   scrollEl: HTMLElement | null,
   rowKey: string,
-  attemptsLeft = 24,
+  attemptsLeft = 48,
   generation = scrollGeneration
 ): void {
   if (!isScrollGenerationCurrent(generation)) return;
   if (scrollMetricRowIntoView(scrollEl, rowKey, "auto", generation)) return;
-  if (attemptsLeft <= 0) return;
+  if (attemptsLeft <= 0) {
+    window.setTimeout(() => {
+      if (!isScrollGenerationCurrent(generation)) return;
+      scrollMetricRowIntoView(scrollEl, rowKey, "auto", generation);
+    }, 150);
+    return;
+  }
   requestAnimationFrame(() =>
     scrollMetricRowIntoViewWhenReady(scrollEl, rowKey, attemptsLeft - 1, generation)
   );
