@@ -236,6 +236,114 @@ describe("scanDeltas contingency emphasis", () => {
   });
 });
 
+describe("scanDeltas headline metrics", () => {
+  const INTERIM_PERIOD = "interim-2026-Q2-10-Q";
+
+  function finWithQuarterly(
+    ticker: string,
+    fy: number,
+    fp: string,
+    metrics: Record<string, number>,
+    annualSummary: FinancialsXbrl["annual_summary"] = [{ fy: fy - 1, revenue: 1 }]
+  ): FinancialsXbrl {
+    const metricSeries = Object.fromEntries(
+      Object.entries(metrics).map(([key, value]) => [
+        key,
+        {
+          label: key,
+          concept: key,
+          quarterly: [{ fy, fp, value }],
+        },
+      ])
+    );
+    return {
+      ticker,
+      cik: "",
+      entity_name: ticker,
+      fiscal_year_filter: fy,
+      source: "sec_companyfacts",
+      from_cache: false,
+      annual_summary: annualSummary,
+      metrics: metricSeries,
+    };
+  }
+
+  it("uses metrics.quarterly for interim 10-Q when annual_summary lacks the selected FY", () => {
+    const state = baseState({
+      fiscalYear: 2026,
+      period: INTERIM_PERIOD,
+      columns: [column("MSFT", []), column("AAPL", [])],
+      financialsByTicker: {
+        MSFT: finWithQuarterly("MSFT", 2026, "Q2", { revenue: 40_000_000_000 }),
+        AAPL: finWithQuarterly("AAPL", 2026, "Q2", { revenue: 130_000_000_000 }),
+      },
+    });
+
+    const flags = flagsByRule(state, "headline_vs_median", "financial-statements");
+    expect(flags.some((f) => f.ticker === "AAPL" && f.metadata?.metric === "revenue")).toBe(true);
+  });
+
+  it("does not fall back to prior-year annual_summary rows on interim compare", () => {
+    const state = baseState({
+      fiscalYear: 2026,
+      period: INTERIM_PERIOD,
+      columns: [column("MSFT", []), column("AAPL", [])],
+      financialsByTicker: {
+        MSFT: {
+          ticker: "MSFT",
+          cik: "",
+          entity_name: "MSFT",
+          fiscal_year_filter: 2026,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [{ fy: 2025, revenue: 40_000_000_000 }],
+        },
+        AAPL: {
+          ticker: "AAPL",
+          cik: "",
+          entity_name: "AAPL",
+          fiscal_year_filter: 2026,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [{ fy: 2025, revenue: 120_000_000_000 }],
+        },
+      },
+    });
+
+    expect(flagsByRule(state, "headline_vs_median")).toHaveLength(0);
+  });
+
+  it("still flags annual headline_vs_median from annual_summary", () => {
+    const state = baseState({
+      fiscalYear: 2025,
+      columns: [column("MSFT", []), column("AAPL", [])],
+      financialsByTicker: {
+        MSFT: {
+          ticker: "MSFT",
+          cik: "",
+          entity_name: "MSFT",
+          fiscal_year_filter: 2025,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [{ fy: 2025, revenue: 50_000_000_000 }],
+        },
+        AAPL: {
+          ticker: "AAPL",
+          cik: "",
+          entity_name: "AAPL",
+          fiscal_year_filter: 2025,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [{ fy: 2025, revenue: 151_000_000_000 }],
+        },
+      },
+    });
+
+    const flags = flagsByRule(state, "headline_vs_median");
+    expect(flags.some((f) => f.ticker === "AAPL" && f.metadata?.metric === "revenue")).toBe(true);
+  });
+});
+
 describe("scanDeltas prose_number_gap", () => {
   it("does not flag prose_number_gap when notes_xbrl is missing", () => {
     const state = baseState({

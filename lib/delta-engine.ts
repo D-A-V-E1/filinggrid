@@ -119,19 +119,50 @@ function median(values: number[]): number | null {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-function fySummary(fin: FinancialsXbrl | undefined, fiscalYear: number | null): Record<string, number> | null {
-  if (!fin?.annual_summary?.length) return null;
+function parseInterimSlot(period?: string): { fy: number; fp: string } | null {
+  const match = period?.match(/^interim-(\d{4})-(Q[1-4])/i);
+  if (!match) return null;
+  return { fy: parseInt(match[1], 10), fp: match[2].toUpperCase() };
+}
+
+/** Headline metrics for the active compare period — quarterly for 10-Q, annual FY otherwise. */
+function headlineMetricsForPeriod(
+  fin: FinancialsXbrl | undefined,
+  fiscalYear: number | null,
+  period?: string
+): Record<string, number> | null {
+  if (!fin) return null;
+  const interim = parseInterimSlot(period);
+
+  if (interim && fin.metrics) {
+    const out: Record<string, number> = {};
+    for (const key of HEADLINE_METRICS) {
+      const quarterly = fin.metrics[key]?.quarterly;
+      if (!quarterly?.length) continue;
+      const match =
+        quarterly.find((q) => q.fy === interim.fy && q.fp === interim.fp) ??
+        quarterly.find((q) => q.fy === interim.fy);
+      const val = match?.value;
+      if (typeof val === "number" && Number.isFinite(val)) out[key] = val;
+    }
+    if (Object.keys(out).length > 0) return out;
+  }
+
+  if (!fin.annual_summary?.length) return null;
+  const targetFy = interim?.fy ?? fiscalYear;
   const row =
-    fiscalYear != null
-      ? fin.annual_summary.find((r) => r.fy === fiscalYear) ?? fin.annual_summary[0]
+    targetFy != null
+      ? fin.annual_summary.find((r) => r.fy === targetFy)
       : fin.annual_summary[0];
   if (!row) return null;
+  if (interim && row.fy !== interim.fy) return null;
+
   const out: Record<string, number> = {};
   for (const key of HEADLINE_METRICS) {
     const val = row[key];
     if (typeof val === "number" && Number.isFinite(val)) out[key] = val;
   }
-  return out;
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 function sectionLabel(catalog: { id: string; label: string }[], sectionId: string): string {
@@ -282,7 +313,11 @@ function scanHeadlineMetrics(state: DeltaSessionState, flags: DeltaFlag[], compa
 
   const valuesByMetric: Record<string, Record<string, number>> = {};
   for (const ticker of state.tickers) {
-    const summary = fySummary(state.financialsByTicker[ticker], state.fiscalYear);
+    const summary = headlineMetricsForPeriod(
+      state.financialsByTicker[ticker],
+      state.fiscalYear,
+      state.period
+    );
     if (!summary) continue;
     for (const metric of HEADLINE_METRICS) {
       const val = summary[metric];
@@ -333,7 +368,11 @@ function scanHeadlineMetrics(state: DeltaSessionState, flags: DeltaFlag[], compa
 
   for (const metric of ["net_income", "eps_diluted"] as const) {
     const negatives = state.tickers.filter((t) => {
-      const summary = fySummary(state.financialsByTicker[t], state.fiscalYear);
+      const summary = headlineMetricsForPeriod(
+        state.financialsByTicker[t],
+        state.fiscalYear,
+        state.period
+      );
       const val = summary?.[metric];
       return val != null && val < 0;
     });
