@@ -6,8 +6,8 @@
 
 | | |
 |---|---|
-| **Last updated** | 2026-06-28 |
-| **Status** | **Phase 1 shipped** — L0 left drawer + L1 map on compare load; Phase 2 drawer/L2–L3 depth; Phase 3 L4 |
+| **Last updated** | 2026-06-29 |
+| **Status** | **Phase 1 shipped** — SectionNav (Sections \| Deltas tabs) + DeltaStrip + delta report page; Phase 2 drawer/L2–L3 depth; Phase 3 L4 |
 
 ---
 
@@ -128,7 +128,7 @@ flowchart LR
   Drawer --> Edgar
 ```
 
-Strip (L0), section delta map (L1), inline highlights (L2–L4), and column **vs last year** badges route through [`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) **(Phase 2+)**. Phase 1 strip/map click → grid scroll only.
+Strip (L0), section delta map (L1), inline highlights (L2–L4), and column **vs last year** badges route through [`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) **(Phase 2+)**. Phase 1 strip/map click → grid scroll only (`SectionNav` Deltas tab, `DeltaReportLinkBar`, `SectionDeltaMapGrid` on delta report page).
 
 **Lib:** [`lib/delta-detail.ts`](../lib/delta-detail.ts) — `buildDeltaDetail(flag, sessionState) → { tagRows, excerpts, peerContrast, pyCyDiff?, links }`; composes lazy fetches; no inference layer.
 
@@ -707,7 +707,7 @@ Implement in [`lib/delta-rank.ts`](../lib/delta-rank.ts): `rankDeltas(flags, pre
 
 | Surface | Scope | Cap | Purpose |
 |---------|-------|-----|---------|
-| **L0 headline drawer** | Highest-severity cross-comp-set flags | **5–7**, severity-ranked (P1 first) | Left slide-out panel — *"what's weird right now"* |
+| **L0 Deltas tab** | Highest-severity cross-comp-set flags | **5–7**, severity-ranked (P1 first) | [`SectionNav`](../components/compare/SectionNav.tsx) **Sections \| Deltas** tab + [`DeltaStrip`](../components/compare/DeltaStrip.tsx) — *"what's weird right now"* |
 | **L1 section delta map** | **ALL** section-level deltas across catalog | **None** — every section with ≥1 flag gets a cell/badge | Delta zoom: which footnotes/items differ |
 | **Persona register / list** | Deterministic subset of all flags for active preset | **None** — full hit list for that persona's catalog | Workpaper-style completeness for Reporting, Investing, Accounting, Auditor, Corp dev |
 | **Delta detail drawer** | Single flag evidence | One flag per open | Factual what-changed — tags + excerpts (+ PY/CY in Phase 3) |
@@ -878,7 +878,7 @@ PD accelerates **where to look**; it does not replace reading the filing for inv
 
 #### Completeness checklist (ship criteria)
 
-**Phase 1 (shipped):** L0 strip (7 cap, mainstream filter incl. P1/P2 missing_section) + L1 map (material hits via [`filterMapWorthyFlags`](../lib/delta-surface.ts)); coverage footer N/M; flag click → grid scroll (no drawer yet).  
+**Phase 1 (shipped):** L0 strip (7 cap, mainstream filter incl. P1/P2 missing_section) + L1 map via `DeltaReportLinkBar` + `/compare/[slug]/deltas` (`SectionDeltaMapGrid`); coverage footer N/M; flag click → grid scroll (no drawer yet).  
 **Phase 2:** Registers uncapped; scan buttons merge results; drawer on every register row; footer shows scan mode.  
 **Phase 3:** L4 rows in registers; export optional; golden filer doc maintained.  
 **Ongoing:** Quarterly lexicon review; golden set re-run after catalog changes.
@@ -900,8 +900,8 @@ PD accelerates **where to look**; it does not replace reading the filing for inv
 
 | Phase | Completeness deliverables |
 |-------|---------------------------|
-| **Phase 1 (shipped)** | L1 section delta map — material hits via `filterMapWorthyFlags`; coverage footer *"Scanned N sections · M with deltas"*; L0 strip 7-cap mainstream filter (incl. P1/P2 missing_section); click → grid |
-| **Phase 2** | Persona scoped register/list views ([`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) or persona tabs on [`SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx)); opt-in **Scan all footnotes** + **Scan events & movers**; P1/P2/P3 badges; drawer on all register rows |
+| **Phase 1 (shipped)** | L1 section delta map — material hits via `filterMapWorthyFlags`; `DeltaReportLinkBar` + `/compare/[slug]/deltas` (`CompareDeltaReport`, `SectionDeltaMapGrid`); coverage footer *"Scanned N sections · M with deltas"*; L0 strip 7-cap mainstream filter (incl. P1/P2 missing_section); click → grid |
+| **Phase 2** | Persona scoped register/list views ([`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) or persona tabs on [`CompareDeltaReport`](../components/compare/CompareDeltaReport.tsx)); opt-in **Scan all footnotes** + **Scan events & movers**; P1/P2/P3 badges; drawer on all register rows |
 | **Phase 3** | Export disclosure change register (Pro optional CSV/clipboard); L4 PY rows in Reporting + Accounting registers; open-matter resolution rows in Auditor register |
 
 ### Components & lib
@@ -910,9 +910,11 @@ PD accelerates **where to look**; it does not replace reading the filing for inv
 |--------|------|
 | [`lib/delta-register.ts`](../lib/delta-register.ts) | `PERSONA_CATALOGS`, `buildPersonaRegister(flags, preset)`, `groupRegisterRows()`, severity P1/P2/P3 assignment |
 | [`components/compare/DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) | Persona tabbed list view — full hit rows, severity badge, click → drawer; scan buttons + progress |
-| [`components/compare/SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) | L1 map (all section deltas) + optional embed of register tabs + coverage footer |
+| [`components/compare/DeltaReportLinkBar.tsx`](../components/compare/DeltaReportLinkBar.tsx) | L1 entry on compare grid — headline + link to full delta report |
+| [`components/compare/CompareDeltaReport.tsx`](../components/compare/CompareDeltaReport.tsx) + [`app/compare/[peer_slug]/deltas/page.tsx`](../app/compare/[peer_slug]/deltas/page.tsx) | Full delta report at `/compare/[slug]/deltas` |
+| [`components/compare/SectionDeltaMapGrid.tsx`](../components/compare/SectionDeltaMapGrid.tsx) | L1 section × ticker grid (all section deltas) + coverage footer |
 
-**Alternative layout:** Persona tabs directly on `SectionDeltaMap` (Map | Reporting | Investing | Accounting | Open matters) — pick one in Phase 2 implementation; both share `lib/delta-register.ts`.
+**Alternative layout:** Persona tabs directly on `CompareDeltaReport` (Map | Reporting | Investing | Accounting | Open matters) — pick one in Phase 2 implementation; both share `lib/delta-register.ts`.
 
 ---
 
@@ -938,7 +940,9 @@ No new paywalls on delta features. L4 prior-period on Free only when prior perio
 
 **Goal:** User opens compare → within seconds sees **what's weird** without opening a section.
 
-**Engine:** [`scanDeltas()`](../lib/delta-engine.ts) on parse metadata + headline financials (`headline_only` batch). Surfaces: [`DeltaLeftDrawer.tsx`](../components/compare/DeltaLeftDrawer.tsx) + [`DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) (L0 left drawer), [`SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) (L1 horizontal bar), wired in [`CompareGrid.tsx`](../components/compare/CompareGrid.tsx). Display filters in [`lib/delta-surface.ts`](../lib/delta-surface.ts).
+**Engine:** [`scanDeltas()`](../lib/delta-engine.ts) on parse metadata + headline financials (`headline_only` batch). Surfaces: [`SectionNav.tsx`](../components/compare/SectionNav.tsx) (**Sections \| Deltas** tabs) + [`DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) (L0), [`DeltaReportLinkBar.tsx`](../components/compare/DeltaReportLinkBar.tsx) on compare + [`CompareDeltaReport.tsx`](../components/compare/CompareDeltaReport.tsx) / [`SectionDeltaMapGrid.tsx`](../components/compare/SectionDeltaMapGrid.tsx) at `/compare/[slug]/deltas` (L1), wired in [`CompareGrid.tsx`](../components/compare/CompareGrid.tsx). Display filters in [`lib/delta-surface.ts`](../lib/delta-surface.ts).
+
+**Recent fixes (post–Phase 1 polish):** [`DeltaReportLinkBar`](../components/compare/DeltaReportLinkBar.tsx) spinner/settling while financials upgrade; metric row centering without window-scroll race ([`lib/filing-column-scroll.ts`](../lib/filing-column-scroll.ts)); gzip `refresh_tickers` cache path; excerpt text fallback when HTML sparse; Pro full GAAP tables on `financial-statements` overview; XBRL footnote table HTML preservation in disclosures panel.
 
 | Delta type | Detection | UI surface | Notes |
 |------------|-----------|------------|-------|
@@ -966,7 +970,7 @@ During headline-only financials load, `notes_xbrl` is empty — dollar-event not
 
 **Click behavior (Phase 1):** Strip and map cells call `handleSectionSelect(sectionId, ticker)` — scroll grid to section/column. **No drawer yet** (Phase 2).
 
-**Strip vs map:** Strip shows top **7** mainstream flags ([`rankMainstreamStrip`](../lib/delta-surface.ts), cap via `MAINSTREAM_STRIP_CAP`); includes P1/P2 `missing_section`; map shows key hits only (excludes `prose_number_gap`, P3 rollups, `metrics_not_comparable`). Strip shows **+N more** when capped; **See all X deltas** opens the full map.
+**Strip vs map:** Strip shows top **7** mainstream flags ([`rankMainstreamStrip`](../lib/delta-surface.ts), cap via `MAINSTREAM_STRIP_CAP`); includes P1/P2 `missing_section`; map shows key hits only (excludes `prose_number_gap`, P3 rollups, `metrics_not_comparable`). Strip shows **+N more** when capped; **See all X deltas** opens [`/compare/[slug]/deltas`](../app/compare/[peer_slug]/deltas/page.tsx) (`CompareDeltaReport` + `SectionDeltaMapGrid`).
 
 **Exit:** Free tier, 3 peers — marketing screenshot is the delta strip, not the grid alone.
 
@@ -996,9 +1000,18 @@ During headline-only financials load, `notes_xbrl` is empty — dollar-event not
 | **MD&A driver cross-link** | Block-scoped lexicon scan on `mda`; `mda_driver_mention` attaches to headline outliers; corroboration severity boost | Med (lazy text; with events scan) | Med |
 | **`mda_driver_only_peer`** / **`mda_driver_spike`** | Lexicon hits only in one column or count &gt; peer median in Results block | Med (lazy text) | Med |
 
-**UI:** Highlights in [`FilingColumn.tsx`](../components/compare/FilingColumn.tsx); all flags open **[`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx)** with tagged amount rows + disclosure excerpts + **MD&A excerpt block when cross-linked** for the active delta (lazy `fetchSectionText` on click). **[`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx)** (or persona tabs on `SectionDeltaMap`) — full persona hit lists; opt-in **Scan all footnotes** + **Scan events & movers** buttons. Optional external FASB.org link in drawer — never hosted codification text. **Jump to grid** + **EDGAR** as drawer actions.
+**UI:** Highlights in [`FilingColumn.tsx`](../components/compare/FilingColumn.tsx); all flags open **[`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx)** with tagged amount rows + disclosure excerpts + **MD&A excerpt block when cross-linked** for the active delta (lazy `fetchSectionText` on click). **[`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx)** (or persona tabs on `CompareDeltaReport`) — full persona hit lists; opt-in **Scan all footnotes** + **Scan events & movers** buttons. Optional external FASB.org link in drawer — never hosted codification text. **Jump to grid** + **EDGAR** as drawer actions.
 
 **Delta detail drawer (Phase 2):** Basic panel — source section/period, tagged amounts table, matching excerpt(s), peer factual contrast (*"others unchanged"* or peer quote), no PY/CY diff blocks yet.
+
+**Phase 2 — recommended implementation order:**
+
+1. [`lib/delta-detail.ts`](../lib/delta-detail.ts) + `buildDeltaDetail()` for 2–3 flag types (`missing_section`, `headline_vs_median`, `asc_mention_gap`)
+2. [`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) — lazy section text on open
+3. Wire strip / map / register clicks → drawer (grid jump as secondary action)
+4. Lazy text rules: `asc_mention_gap`, open-matter text (subset)
+5. [`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) + [`lib/delta-register.ts`](../lib/delta-register.ts) persona tabs
+6. Opt-in scan buttons (**Scan all footnotes**, **Scan events & movers**)
 
 **Internal only:** ASC regex helpers in [`lib/disclosure-treatment-rules.ts`](../lib/disclosure-treatment-rules.ts) or [`lib/asc-extract.ts`](../lib/asc-extract.ts) — never exposed as "ASC module" in UI.
 
@@ -1074,7 +1087,10 @@ During headline-only financials load, `notes_xbrl` is empty — dollar-event not
 | [`components/compare/DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) | On-click expand: factual what-changed panel; Jump to grid + EDGAR (Phase 2+) |
 | [`components/compare/DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) | Persona tabbed register — full hit list, scan buttons, export (Phase 2/3) |
 | [`components/compare/DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) | L0 headline entry (7 cap) — click → grid; +N more + link to map; drawer in Phase 2 |
-| [`components/compare/SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) | L1 map (material section deltas) + coverage footer |
+| [`components/compare/SectionNav.tsx`](../components/compare/SectionNav.tsx) | Left nav — Sections \| Deltas tabs + embedded `DeltaStrip` |
+| [`components/compare/DeltaReportLinkBar.tsx`](../components/compare/DeltaReportLinkBar.tsx) | L1 compare entry — headline, settling spinner, link to report |
+| [`components/compare/CompareDeltaReport.tsx`](../components/compare/CompareDeltaReport.tsx) | Full delta report page + CSV export |
+| [`components/compare/SectionDeltaMapGrid.tsx`](../components/compare/SectionDeltaMapGrid.tsx) | L1 section × ticker grid + coverage footer |
 | [`docs/DELTA_REGRESSION_FILERS.md`](../docs/DELTA_REGRESSION_FILERS.md) | Golden compare slugs + expected flags — manual/CI regression *(optional follow-up)* |
 | [`backend/sec/xbrl_client.py`](../backend/sec/xbrl_client.py) | **Detection source only** — unchanged public API |
 
