@@ -94,7 +94,12 @@ def test_preserves_colspan_and_strips_inline_styles():
     assert "display:none" not in normalized
 
 
-def test_nvda_style_financial_table_fragment():
+def test_preserves_br_as_paragraph_breaks():
+    html = "<div>First paragraph<br><br>Second paragraph</div>"
+    normalized = _normalize_excerpt_html(html)
+    assert "First paragraph" in normalized
+    assert "Second paragraph" in normalized
+    assert "paragraph Second" not in normalized.replace("\n", " ").replace("  ", " ")
     """Realistic iXBRL table fragment with ix tags, spans, and numeric columns."""
     html = (
         "<div>"

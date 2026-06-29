@@ -688,13 +688,17 @@ def _collapse_inline_text(tag: Tag) -> None:
         if isinstance(child, NavigableString):
             chunk = str(child)
         elif isinstance(child, Tag):
+            if child.name == "br":
+                chunks.append("\n\n")
+                continue
             chunk = child.get_text(" ", strip=True)
         else:
             continue
         chunk = chunk.strip()
         if chunk:
             chunks.append(chunk)
-    text = re.sub(r"\s+", " ", " ".join(chunks))
+    text = re.sub(r"[ \t]+", " ", " ".join(chunks))
+    text = re.sub(r"\n{3,}", "\n\n", text)
     tag.clear()
     if text:
         tag.append(text)
