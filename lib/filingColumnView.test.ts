@@ -3,6 +3,7 @@ import {
   filingColumnNotFiledBody,
   filingColumnNotFiledHeading,
   resolveFilingColumnContentMode,
+  shouldLoadFullGaapStatements,
 } from "@/lib/filingColumnView";
 
 describe("filingColumnNotFiled copy", () => {
@@ -19,6 +20,24 @@ describe("filingColumnNotFiled copy", () => {
     expect(filingColumnNotFiledBody("AAPL")).toBe(
       "AAPL — section absent from this peer's report"
     );
+  });
+});
+
+describe("shouldLoadFullGaapStatements", () => {
+  it("loads on financial-statements overview for Pro when headline financials exist", () => {
+    expect(shouldLoadFullGaapStatements("financial-statements", true, true)).toBe(true);
+  });
+
+  it("loads on GAAP statement sub-sections for Pro", () => {
+    expect(shouldLoadFullGaapStatements("income_statement", true, true)).toBe(true);
+  });
+
+  it("does not load for free tier on financial-statements", () => {
+    expect(shouldLoadFullGaapStatements("financial-statements", false, true)).toBe(false);
+  });
+
+  it("does not load before headline financials arrive", () => {
+    expect(shouldLoadFullGaapStatements("financial-statements", true, false)).toBe(false);
   });
 });
 

@@ -11,7 +11,7 @@ interface SectionNavProps {
   availableSectionIds: Set<string>;
   sectionCatalog: { id: string; label: string }[];
   activeSection: string | null;
-  onSectionSelect: (sectionId: string) => void;
+  onSectionSelect: (sectionId: string, focusTicker?: string, rowKey?: string) => void;
   isPro?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -66,7 +66,7 @@ export default function SectionNav({
   }, [activeSection, leftPaneView]);
 
   function handleSelect(sectionId: string) {
-    onSectionSelect(sectionId);
+    onSectionSelect(sectionId, undefined, undefined);
     onMobileClose?.();
   }
 

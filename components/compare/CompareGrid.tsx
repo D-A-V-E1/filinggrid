@@ -23,6 +23,7 @@ import {
 } from "@/lib/sections";
 import {
   clearParseMeta,
+  clearColumnSectionCaches,
   hasSectionIndex,
   isRetriableParseError,
   loadParseMeta,
@@ -60,6 +61,7 @@ import type { DeltaFlag } from "@/lib/delta-types";
 import DeltaReportLinkBar from "./DeltaReportLinkBar";
 import { deltaReportPath } from "@/lib/delta-report";
 import {
+  bumpScrollGeneration,
   resetCompareViewScroll,
   resetCompareViewScrollWhenReady,
   resetAllFilingColumnScrollsExcept,
@@ -158,17 +160,22 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const handleSectionSelect = useCallback(
     (sectionId: string, focusTicker?: string, rowKey?: string) => {
+      bumpScrollGeneration();
       const metricFocus = Boolean(rowKey);
       if (metricFocus && focusTicker) {
         resetWindowScroll();
         resetAllFilingColumnScrollsExcept(focusTicker);
       } else {
+        setSectionFocusTicker(null);
+        setSectionFocusRowKey(null);
         resetCompareViewScroll();
       }
       setActiveSection(sectionId);
       setSectionScrollRequest((n) => n + 1);
-      setSectionFocusTicker(focusTicker ?? null);
-      setSectionFocusRowKey(rowKey ?? null);
+      if (metricFocus) {
+        setSectionFocusTicker(focusTicker ?? null);
+        setSectionFocusRowKey(rowKey ?? null);
+      }
       if (focusTicker) {
         scrollTickerColumnIntoViewWhenReady(focusTicker);
       }
@@ -340,7 +347,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     upgradeFullFinancials,
   ]);
 
-  const loadFilings = useCallback(() => {
+  const loadFilings = useCallback((options?: { refreshTickers?: string[] }) => {
     const loadId = ++loadIdRef.current;
     upgradedFullFinancialsRef.current = new Set();
     notesRetriedAfterParseRef.current = new Set();
@@ -499,7 +506,9 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
             setData(merged);
             if (hasSectionIndex(merged)) saveParseMeta(cacheKey, merged);
           },
-        }, period);
+        }, period, {
+          refreshTickers: options?.refreshTickers,
+        });
       } catch (err) {
         if (loadId !== loadIdRef.current) return;
         if (err instanceof ApiError && err.isPaywall) {
@@ -613,9 +622,15 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const retryFailedColumns = useCallback(() => {
     clearParseMeta(cacheKey);
+    columnParseErrors.forEach((c) => {
+      if (c.cache_key) clearColumnSectionCaches(c.cache_key);
+    });
     compareLoadKeyRef.current = null;
-    loadFilings();
-  }, [cacheKey, loadFilings]);
+    const refreshTickers = columnParseErrors
+      .filter((c) => isRetriableParseError(c.error))
+      .map((c) => c.ticker);
+    loadFilings({ refreshTickers });
+  }, [cacheKey, columnParseErrors, loadFilings]);
 
   const stripFlags = useMemo(() => {
     if (!deltaScan) return [];

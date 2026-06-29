@@ -342,13 +342,21 @@ def build_filing_url(
     return f"{ARCHIVES_BASE}/{cik_int}/{accession_no_dash}/{primary}"
 
 
-async def fetch_filing_html(cik: str, filing: dict[str, Any]) -> bytes:
-    from filing_store import load_filing_html, save_filing_html
+async def fetch_filing_html(cik: str, filing: dict[str, Any], *, force_refresh: bool = False) -> bytes:
+    from filing_store import (
+        invalidate_filing_html_caches,
+        is_gzip_corruption_error,
+        load_filing_html,
+        save_filing_html,
+    )
 
     accession = filing["accession_no_dash"]
-    cached = load_filing_html(cik, accession)
-    if cached:
-        return cached
+    if force_refresh:
+        invalidate_filing_html_caches(cik, accession)
+    else:
+        cached = load_filing_html(cik, accession)
+        if cached:
+            return cached
 
     key = (cik, accession)
     in_flight = _filing_html_inflight.get(key)
@@ -358,11 +366,22 @@ async def fetch_filing_html(cik: str, filing: dict[str, Any]) -> bytes:
     async def _load() -> bytes:
         url = build_filing_url(cik, accession, filing.get("primary_document"))
         client = await get_http_client()
-        resp = await _rate_limited_get(client, url)
-        resp.raise_for_status()
-        html_bytes = await resp.aread()
-        save_filing_html(cik, accession, html_bytes)
-        return html_bytes
+        last_exc: Exception | None = None
+        for attempt in range(2):
+            try:
+                resp = await _rate_limited_get(client, url)
+                resp.raise_for_status()
+                html_bytes = await resp.aread()
+                save_filing_html(cik, accession, html_bytes)
+                return html_bytes
+            except Exception as exc:
+                last_exc = exc
+                if is_gzip_corruption_error(exc) and attempt == 0:
+                    invalidate_filing_html_caches(cik, accession)
+                    continue
+                raise
+        assert last_exc is not None
+        raise last_exc
 
     task = asyncio.create_task(_load())
     _filing_html_inflight[key] = task
@@ -424,14 +443,19 @@ async def fetch_filing_document(cik: str, accession_no_dash: str, document_name:
     return await resp.aread()
 
 
-async def fetch_filing_ixbrl_html(cik: str, filing: dict[str, Any]) -> bytes:
+async def fetch_filing_ixbrl_html(cik: str, filing: dict[str, Any], *, force_refresh: bool = False) -> bytes:
     """Load the best inline-XBRL HTML for a filing (primary doc or 6-K exhibit)."""
     from filing_store import load_filing_ixbrl_html, save_filing_ixbrl_html
 
     accession = filing["accession_no_dash"]
-    cached = load_filing_ixbrl_html(cik, accession)
-    if cached:
-        return cached
+    if force_refresh:
+        from filing_store import invalidate_filing_html_caches
+
+        invalidate_filing_html_caches(cik, accession)
+    else:
+        cached = load_filing_ixbrl_html(cik, accession)
+        if cached:
+            return cached
 
     key = (cik, accession)
     in_flight = _filing_ixbrl_inflight.get(key)
@@ -439,7 +463,7 @@ async def fetch_filing_ixbrl_html(cik: str, filing: dict[str, Any]) -> bytes:
         return await in_flight
 
     async def _load() -> bytes:
-        primary_html = await fetch_filing_html(cik, filing)
+        primary_html = await fetch_filing_html(cik, filing, force_refresh=force_refresh)
         if _html_has_ixbrl_facts(primary_html):
             save_filing_ixbrl_html(cik, accession, primary_html)
             return primary_html
@@ -492,20 +516,25 @@ def _html_financial_score(html: bytes) -> int:
     return sum(marker in lower for marker in _FINANCIAL_HTML_MARKERS)
 
 
-async def fetch_filing_report_html(cik: str, filing: dict[str, Any]) -> bytes:
+async def fetch_filing_report_html(cik: str, filing: dict[str, Any], *, force_refresh: bool = False) -> bytes:
     """Load the best financial report HTML for a filing (6-K exhibits are often separate)."""
     from filing_store import load_filing_report_html, save_filing_report_html
 
     accession = filing["accession_no_dash"]
     form = (filing.get("form") or "").replace("/A", "").upper()
     if form != "6-K":
-        return await fetch_filing_html(cik, filing)
+        return await fetch_filing_html(cik, filing, force_refresh=force_refresh)
 
-    cached = load_filing_report_html(cik, accession)
-    if cached:
-        return cached
+    if force_refresh:
+        from filing_store import invalidate_filing_html_caches
 
-    primary_html = await fetch_filing_html(cik, filing)
+        invalidate_filing_html_caches(cik, accession)
+    else:
+        cached = load_filing_report_html(cik, accession)
+        if cached:
+            return cached
+
+    primary_html = await fetch_filing_html(cik, filing, force_refresh=force_refresh)
     try:
         index_items = await _fetch_filing_index(cik, filing)
     except httpx.HTTPError:

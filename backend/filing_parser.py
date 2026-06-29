@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from parse_cache import (
     clear_filing_structure,
+    evict_parsed_column,
     find_cache_key,
     find_section_html,
     get_filing_structure,
@@ -45,6 +46,8 @@ class ParseRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=8)
     fiscal_year: int | None = None
     period: str | None = None
+    refresh_cache: bool = False
+    refresh_tickers: list[str] | None = None
 
 
 class ColumnResult(BaseModel):
@@ -135,10 +138,28 @@ def _column_meta_payload(column: ColumnResult) -> ColumnResult:
 
 
 def _format_parse_error(exc: Exception) -> str:
-    msg = str(exc)
-    if "Compressed file ended before the end-of-stream" in msg:
-        return "Filing cache was corrupted; retrying from SEC failed. Refresh to try again."
-    return msg
+    from filing_store import is_gzip_corruption_error
+
+    if is_gzip_corruption_error(exc):
+        return "Filing cache was corrupted; please retry."
+    return str(exc)
+
+
+def _invalidate_filing_caches(cik: str, accession: str, cache_key: str) -> None:
+    from filing_store import invalidate_filing_html_caches, invalidate_parsed_filing
+
+    invalidate_filing_html_caches(cik, accession)
+    invalidate_parsed_filing(cache_key)
+    evict_parsed_column(cache_key)
+
+
+def _should_refresh_ticker(ticker: str, request: ParseRequest) -> bool:
+    if request.refresh_cache:
+        return True
+    if not request.refresh_tickers:
+        return False
+    wanted = {t.upper().strip() for t in request.refresh_tickers if t.strip()}
+    return ticker.upper() in wanted
 
 
 async def _resolve_column_filing(
@@ -148,6 +169,8 @@ async def _resolve_column_filing(
     period: str | None,
     interim_slot: tuple[int, str, str] | None,
     facts_cache: CompareFactsCache | None,
+    *,
+    refresh_cache: bool = False,
 ) -> _ResolvedFiling | ColumnResult:
     ticker = ticker.upper().strip()
     try:
@@ -199,8 +222,11 @@ async def _resolve_column_filing(
         primary_document = filing.get("primary_document")
         filing_url = build_filing_url(resolved["cik"], accession, primary_document)
 
+        if refresh_cache:
+            _invalidate_filing_caches(resolved["cik"], accession, cache_key)
+
         cached = load_parsed_column(cache_key)
-        if cached:
+        if cached and not refresh_cache:
             col_meta, sections = cached
             cik = col_meta.get("cik", resolved["cik"])
             primary = col_meta.get("primary_document", primary_document)
@@ -261,27 +287,49 @@ async def _resolve_column_filing(
         )
 
 
-async def _build_section_index(resolved: _ResolvedFiling) -> tuple[ColumnResult, list[dict[str, Any]], bool]:
-    if resolved.sections is not None:
+async def _build_section_index(
+    resolved: _ResolvedFiling,
+    *,
+    refresh_cache: bool = False,
+) -> tuple[ColumnResult, list[dict[str, Any]], bool]:
+    if resolved.sections is not None and not refresh_cache:
         return resolved.column, resolved.sections, resolved.from_cache
 
-    try:
-        html_bytes = await fetch_filing_report_html(resolved.resolved["cik"], resolved.filing)
+    accession = resolved.filing.get("accession_no_dash", "")
+    cik = resolved.resolved["cik"]
 
-        def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-            structure = _prepare_filing_structure(html_bytes)
-            sections = _sections_from_structure(structure, include_html=False)
-            return sections, structure
+    for attempt in range(2):
+        try:
+            html_bytes = await fetch_filing_report_html(
+                cik,
+                resolved.filing,
+                force_refresh=refresh_cache or attempt > 0,
+            )
 
-        sections, structure = await asyncio.to_thread(_build_section_index_sync)
-        store_filing_structure(resolved.cache_key, structure)
-        del html_bytes
+            def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+                structure = _prepare_filing_structure(html_bytes)
+                sections = _sections_from_structure(structure, include_html=False)
+                return sections, structure
 
-        column = resolved.column.model_copy(update={"sections": sections})
-        return column, sections, False
-    except Exception as exc:
-        column = resolved.column.model_copy(update={"error": _format_parse_error(exc), "sections": []})
-        return column, [], False
+            sections, structure = await asyncio.to_thread(_build_section_index_sync)
+            store_filing_structure(resolved.cache_key, structure)
+            del html_bytes
+
+            column = resolved.column.model_copy(update={"sections": sections})
+            return column, sections, False
+        except Exception as exc:
+            from filing_store import is_gzip_corruption_error
+
+            if is_gzip_corruption_error(exc) and attempt == 0:
+                _invalidate_filing_caches(cik, accession, resolved.cache_key)
+                continue
+            column = resolved.column.model_copy(update={"error": _format_parse_error(exc), "sections": []})
+            return column, [], False
+
+    column = resolved.column.model_copy(
+        update={"error": "Filing cache was corrupted; please retry.", "sections": []}
+    )
+    return column, [], False
 
 
 async def _parse_single_ticker(
@@ -291,14 +339,16 @@ async def _parse_single_ticker(
     period: str | None = None,
     interim_slot: tuple[int, str, str] | None = None,
     facts_cache: CompareFactsCache | None = None,
+    *,
+    refresh_cache: bool = False,
 ) -> tuple[ColumnResult, list[dict[str, Any]], str | None, bool]:
     outcome = await _resolve_column_filing(
-        ticker, ticker_map, requested_year, period, interim_slot, facts_cache
+        ticker, ticker_map, requested_year, period, interim_slot, facts_cache, refresh_cache=refresh_cache
     )
     if isinstance(outcome, ColumnResult):
         return outcome, [], None, False
 
-    column, sections, from_cache = await _build_section_index(outcome)
+    column, sections, from_cache = await _build_section_index(outcome, refresh_cache=refresh_cache)
     return column, sections, outcome.cache_key, from_cache
 
 
@@ -320,6 +370,7 @@ async def parse_filings(request: ParseRequest) -> ParseResponse:
                 request.period,
                 interim_slot,
                 facts_cache,
+                refresh_cache=_should_refresh_ticker(ticker, request),
             )
             for ticker in request.tickers
         ]
@@ -368,6 +419,7 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
                 request.period,
                 interim_slot,
                 facts_cache,
+                refresh_cache=_should_refresh_ticker(ticker, request),
             )
         ): ticker
         for ticker in request.tickers
@@ -394,7 +446,13 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
 
     # Phase 2: download HTML and build section indexes for uncached tickers.
     html_tasks = {
-        asyncio.create_task(_build_section_index(item)): item.ticker for item in pending_html
+        asyncio.create_task(
+            _build_section_index(
+                item,
+                refresh_cache=_should_refresh_ticker(item.ticker, request),
+            )
+        ): item.ticker
+        for item in pending_html
     }
     for task in asyncio.as_completed(html_tasks):
         column, sections_full, from_cache = await task
@@ -490,7 +548,10 @@ async def get_section_html(
     if html:
         from sec.section_extractor import _normalize_excerpt_html
 
-        html = _normalize_excerpt_html(html)
+        try:
+            html = _normalize_excerpt_html(html)
+        except Exception:
+            pass
 
     return SectionHtmlResponse(
         ticker=ticker,
@@ -585,7 +646,11 @@ async def _extract_and_cache_section(
         if html and cache_key:
             from sec.section_extractor import _normalize_excerpt_html
 
-            store_section_html(cache_key, section_id, _normalize_excerpt_html(html))
+            try:
+                normalized = _normalize_excerpt_html(html)
+            except Exception:
+                normalized = html
+            store_section_html(cache_key, section_id, normalized)
 
     if want_text:
         text = await asyncio.to_thread(extract_section_text, html_bytes, section_id, structure)

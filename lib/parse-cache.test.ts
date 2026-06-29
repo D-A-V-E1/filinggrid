@@ -84,6 +84,7 @@ describe("parse-cache column errors", () => {
     expect(
       isRetriableParseError("Compressed file ended before the end-of-stream marker was reached.")
     ).toBe(true);
+    expect(isRetriableParseError("Filing cache was corrupted; please retry.")).toBe(true);
     expect(isRetriableParseError("No comparable filing found")).toBe(false);
   });
 });

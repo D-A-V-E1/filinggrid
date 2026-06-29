@@ -33,6 +33,7 @@ import {
   filingColumnNotFiledBody,
   filingColumnNotFiledHeading,
   resolveFilingColumnContentMode,
+  shouldLoadFullGaapStatements,
 } from "@/lib/filingColumnView";
 import { findCatalogSection, sectionsHaveCatalogSection } from "@/lib/section-presence";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
@@ -41,6 +42,8 @@ import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/
 import type { CompareColumnLayout } from "@/lib/compare-layout";
 import { forwardVerticalWheelFromHorizontalScrollContainer, attachFilingTableWheelForwarding } from "@/lib/forward-vertical-wheel";
 import {
+  getScrollGeneration,
+  resetWindowScroll,
   scrollFilingColumnToTop,
   scrollMetricRowIntoViewWhenReady,
 } from "@/lib/filing-column-scroll";
@@ -279,6 +282,13 @@ type StatementTab =
   | "balance_sheet"
   | "cash_flow"
   | "stockholders_equity";
+
+const ALL_STATEMENT_TABS: StatementTab[] = [
+  "income_statement",
+  "balance_sheet",
+  "cash_flow",
+  "stockholders_equity",
+];
 
 function formatPeriodLabel(period: FinancialStatementsXbrl["period"]): string {
   if (period.fp === "FY" || period.kind === "annual") {
@@ -554,6 +564,7 @@ function FilingColumn({
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
   const scrollResetActiveRef = useRef(false);
+  const metricScrollGenerationRef = useRef(getScrollGeneration());
   const columnContentKey = `${activeSection ?? "none"}:${sectionScrollRequest}`;
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
   const [loadingHtml, setLoadingHtml] = useState(false);
@@ -570,6 +581,11 @@ function FilingColumn({
     ? sectionsHaveCatalogSection(sections, activeSection)
     : sections.length > 0;
   const isStatementSection = isGaapStatementSection(activeSection);
+  const showFullGaapStatements = shouldLoadFullGaapStatements(
+    activeSection,
+    isPro,
+    financialsXbrl != null
+  );
   const displayLabel = section
     ? formatSectionLabel(section.label)
     : sectionLabel
@@ -726,9 +742,12 @@ function FilingColumn({
   useLayoutEffect(() => {
     if (focusRowKey) {
       scrollResetActiveRef.current = false;
-      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey);
+      const generation = getScrollGeneration();
+      metricScrollGenerationRef.current = generation;
+      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 24, generation);
       return;
     }
+    resetWindowScroll();
     scrollFilingColumnToTop(scrollRef.current);
     scrollResetActiveRef.current = true;
   }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
@@ -737,9 +756,12 @@ function FilingColumn({
     if (!activeSection) return;
     if (focusRowKey) {
       scrollResetActiveRef.current = false;
-      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey);
+      const generation = getScrollGeneration();
+      metricScrollGenerationRef.current = generation;
+      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 24, generation);
       return;
     }
+    resetWindowScroll();
     scrollFilingColumnToTop(scrollRef.current);
     scrollResetActiveRef.current = true;
   }, [
@@ -759,6 +781,7 @@ function FilingColumn({
     if (!activeSection) return;
     if (focusRowKey) return;
 
+    resetWindowScroll();
     scrollFilingColumnToTop(scrollRef.current);
     const t50 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 50);
     const t300 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 300);
@@ -814,7 +837,7 @@ function FilingColumn({
   }, [ticker, resolvedFiscalYear, period, isPro]);
 
   useEffect(() => {
-    if (!isStatementSection || !isPro || !financialsXbrl || fullStatements) {
+    if (!showFullGaapStatements || fullStatements) {
       return;
     }
 
@@ -828,6 +851,22 @@ function FilingColumn({
       })
       .catch((err) => {
         if (!cancelled) {
+          if (err instanceof ApiError && err.isPaywall) {
+            const detail = err.detail;
+            const reason =
+              typeof detail === "object" && detail !== null && "reason" in detail
+                ? String(detail.reason)
+                : "subscription_required";
+            onPaywall?.(
+              reason,
+              formatApiError(
+                err,
+                "Full GAAP financial statements require a Professional subscription."
+              )
+            );
+            setStatementsError("");
+            return;
+          }
           setStatementsError(err instanceof Error ? err.message : "Failed to load statements");
         }
       })
@@ -840,13 +879,12 @@ function FilingColumn({
     };
   }, [
     activeSection,
-    isStatementSection,
-    isPro,
-    financialsXbrl,
+    showFullGaapStatements,
     fullStatements,
     ticker,
     resolvedFiscalYear,
     period,
+    onPaywall,
   ]);
 
   const handleStatementsUpgrade = useCallback(() => {
@@ -937,7 +975,7 @@ function FilingColumn({
     activeSection === "financial-statements" && (hasXbrlData || financialsPending);
 
   const showStatementBootstrap =
-    isStatementSection && isPro && (loadingStatements || fullStatements != null || financialsPending);
+    showFullGaapStatements && (loadingStatements || fullStatements != null || financialsPending);
 
   if (error) {
     return (
@@ -1000,13 +1038,17 @@ function FilingColumn({
             <LockedStatementsPanel onUpgrade={handleStatementsUpgrade} />
           )}
 
-          {isStatementSection && isPro && financialsXbrl && (
+          {showFullGaapStatements && (
             <>
               {loadingStatements && !fullStatements && (
                 <div className="mb-4 space-y-2 rounded-lg border border-brand-200 bg-brand-50/40 px-4 py-4 shadow-sm">
                   <div className="h-4 w-2/3 animate-pulse rounded bg-brand-200" />
                   <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
-                  <p className="text-[10px] text-brand-700/70">Loading full GAAP statement…</p>
+                  <p className="text-[10px] text-brand-700/70">
+                    {activeSection === "financial-statements"
+                      ? "Loading full GAAP financial statements…"
+                      : "Loading full GAAP statement…"}
+                  </p>
                 </div>
               )}
               {statementsError && !fullStatements && (
@@ -1014,32 +1056,49 @@ function FilingColumn({
                   <p className="text-xs text-red-700">{statementsError}</p>
                 </div>
               )}
-              {fullStatements && activeStatementTable && (
-                <>
-                  <SingleStatementPanel
-                    table={activeStatementTable}
-                    period={fullStatements.period}
-                    title={`Full GAAP — ${displayLabel}`}
-                    fetchMs={fullStatements.fetch_ms}
-                    fromCache={fullStatements.from_cache}
-                    tableFit={tableFit}
-                  />
-                  {activeStatementTable.rows.length === 0 && gaapStatementFilingUrl && (
-                    <FilingViewer
-                      filingUrl={gaapStatementFilingUrl}
-                      sectionLabel={displayLabel}
-                      ticker={ticker}
+              {fullStatements &&
+                (activeSection === "financial-statements" ? (
+                  ALL_STATEMENT_TABS.map((tab) => {
+                    const table = fullStatements.statements[tab];
+                    if (!table?.rows.length) return null;
+                    return (
+                      <SingleStatementPanel
+                        key={tab}
+                        table={table}
+                        period={fullStatements.period}
+                        title={`Full GAAP — ${table.label}`}
+                        fetchMs={fullStatements.fetch_ms}
+                        fromCache={fullStatements.from_cache}
+                        tableFit={tableFit}
+                      />
+                    );
+                  })
+                ) : activeStatementTable ? (
+                  <>
+                    <SingleStatementPanel
+                      table={activeStatementTable}
+                      period={fullStatements.period}
+                      title={`Full GAAP — ${displayLabel}`}
+                      fetchMs={fullStatements.fetch_ms}
+                      fromCache={fullStatements.from_cache}
+                      tableFit={tableFit}
                     />
-                  )}
-                </>
-              )}
+                    {activeStatementTable.rows.length === 0 && gaapStatementFilingUrl && (
+                      <FilingViewer
+                        filingUrl={gaapStatementFilingUrl}
+                        sectionLabel={displayLabel}
+                        ticker={ticker}
+                      />
+                    )}
+                  </>
+                ) : null)}
             </>
           )}
 
           {financialsError &&
           (activeSection === "financial-statements" || isStatementSection) &&
           !xbrlPanel &&
-          !(isStatementSection && fullStatements) ? (
+          !(showFullGaapStatements && fullStatements) ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4">
               <p className="text-sm font-medium text-red-800">Could not load XBRL financials</p>
               <p className="mt-1 text-xs text-red-700">{financialsError}</p>

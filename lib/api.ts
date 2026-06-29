@@ -359,11 +359,17 @@ export interface ParseStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
+export interface ParseStreamOptions {
+  refreshCache?: boolean;
+  refreshTickers?: string[];
+}
+
 export async function parseFilingsStream(
   tickers: string[],
   fiscalYear: number | undefined,
   callbacks: ParseStreamCallbacks,
-  period?: string
+  period?: string,
+  options?: ParseStreamOptions
 ): Promise<void> {
   const headers = await buildAuthHeaders({ Accept: "application/x-ndjson" });
 
@@ -374,6 +380,8 @@ export async function parseFilingsStream(
       tickers,
       fiscal_year: fiscalYear ?? null,
       period: period ?? null,
+      refresh_cache: options?.refreshCache ?? false,
+      refresh_tickers: options?.refreshTickers ?? null,
     }),
   });
 
@@ -565,6 +573,19 @@ export async function fetchFinancialsBatch(
   }
 }
 
+function escapePlainSectionText(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Render plain-text SEC excerpt when HTML normalization is unavailable. */
+export function plainTextSectionAsHtml(text: string): string {
+  return `<pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-800">${escapePlainSectionText(text)}</pre>`;
+}
+
 export async function fetchSectionHtml(
   ticker: string,
   sectionId: string,
@@ -582,8 +603,18 @@ export async function fetchSectionHtml(
   if (filingCacheKey?.trim()) params.set("cache_key", filingCacheKey.trim());
 
   const url = `/parse/section?${params}`;
-  const result = await apiFetch<SectionHtmlResponse>(url);
-  return result.html;
+  try {
+    const result = await apiFetch<SectionHtmlResponse>(url);
+    if (result.html?.trim()) return result.html;
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status < 500) throw err;
+  }
+
+  const text = await fetchSectionText(ticker, sectionId, fiscalYear, period);
+  if (!text.trim()) {
+    throw new ApiError(404, "No excerpt available for this section in the selected filing.");
+  }
+  return plainTextSectionAsHtml(text);
 }
 
 export async function fetchSectionText(

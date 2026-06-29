@@ -82,6 +82,54 @@ def _discard_corrupt_cache_file(path: Path) -> None:
 
 
 
+def is_gzip_corruption_error(exc: BaseException) -> bool:
+
+    if isinstance(exc, EOFError):
+
+        return True
+
+    msg = str(exc)
+
+    if "Compressed file ended before the end-of-stream" in msg:
+
+        return True
+
+    if isinstance(exc, (OSError, zlib.error)):
+
+        return "invalid gzip" in msg.lower() or "incorrect header check" in msg.lower()
+
+    return False
+
+
+
+
+
+def invalidate_filing_html_caches(cik: str, accession: str) -> None:
+
+    """Drop all gzipped HTML variants for one filing (primary, ixbrl, report)."""
+
+    root = _cache_root() / "html"
+
+    cik_int = int(cik)
+
+    for suffix in ("", "_ixbrl", "_report"):
+
+        _discard_corrupt_cache_file(root / f"{cik_int}_{accession}{suffix}.html.gz")
+
+
+
+
+
+def invalidate_parsed_filing(cache_key: str) -> None:
+
+    path = _cache_root() / "parsed" / f"{_safe_name(cache_key)}.json.gz"
+
+    _discard_corrupt_cache_file(path)
+
+
+
+
+
 def _read_gzip_bytes(path: Path) -> bytes | None:
 
     if not path.exists():

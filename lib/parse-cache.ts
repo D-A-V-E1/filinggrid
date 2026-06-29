@@ -167,3 +167,19 @@ export function clearParseMeta(key: string): void {
   sessionStorage.removeItem(key);
   sessionStorage.removeItem(`${key}:draft`);
 }
+
+/** Drop cached section HTML/text for one filing column (e.g. before retry). */
+export function clearColumnSectionCaches(cacheKey: string): void {
+  if (typeof window === "undefined" || !cacheKey) return;
+  const prefixes = [`${SECTION_PREFIX}${cacheKey}:`, `${SECTION_TEXT_PREFIX}${cacheKey}:`];
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key && prefixes.some((prefix) => key.startsWith(prefix))) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
