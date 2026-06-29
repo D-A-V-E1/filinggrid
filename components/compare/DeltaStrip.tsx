@@ -106,7 +106,7 @@ export default function DeltaStrip({
             <p className={`text-slate-500 ${compact ? "text-[10px]" : "text-xs"}`}>
               {totalFlagCount && totalFlagCount > 0
                 ? "No headline movers or key events in this group."
-                : "No key deltas in this group yet."}
+                : "No material differences detected across scanned sections."}
             </p>
           )}
           {!loading && flags.length > 0 && (
@@ -162,7 +162,7 @@ export default function DeltaStrip({
           <span className="text-xs text-slate-500">
             {totalFlagCount && totalFlagCount > 0
               ? "No headline movers or key events in this group."
-              : "No key deltas in this group yet."}
+              : "No material differences detected across scanned sections."}
           </span>
         )}
         {!loading && stripHiddenCount > 0 && (

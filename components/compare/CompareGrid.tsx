@@ -738,16 +738,15 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
               </button>
             </div>
           )}
-          {mapFlags.length > 0 && (
-            <DeltaReportLinkBar
-              peerSlug={peerSlug}
-              tickers={tickers}
-              period={comparePeriod}
-              flags={mapFlags}
-              scannedCount={deltaScan?.coverage.scannedSections ?? 0}
-              sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
-            />
-          )}
+          <DeltaReportLinkBar
+            peerSlug={peerSlug}
+            tickers={tickers}
+            period={comparePeriod}
+            flags={mapFlags}
+            scannedCount={deltaScan?.coverage.scannedSections ?? 0}
+            sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
+            loading={deltasLoading}
+          />
         </div>
       )}
 
@@ -840,7 +839,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
               totalFlagCount={mapCoverage.flagCount}
               tagline={MAINSTREAM_STRIP_TAGLINE}
               onDeltaFlagClick={handleDeltaFlagClick}
-              onViewMoreInMap={mapFlags.length > 0 ? openDeltaReport : undefined}
+              onViewMoreInMap={openDeltaReport}
             />
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {columnParseErrors.length > 0 && (

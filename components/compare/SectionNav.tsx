@@ -46,9 +46,8 @@ export default function SectionNav({
   const sectionMap = new Map(sectionCatalog.map((s) => [s.id, s]));
   const navGroups = getNavGroups(isPro);
 
-  const showKeyDeltas =
-    Boolean(onDeltaFlagClick) &&
-    (deltasLoading || stripFlags.length > 0 || stripTotalCount > 0 || totalFlagCount > 0);
+  // Always show Sections | Deltas tabs once compare is wired (onDeltaFlagClick); empty state lives in DeltaStrip.
+  const showKeyDeltas = Boolean(onDeltaFlagClick);
 
   useEffect(() => {
     if (leftPaneView !== "sections") return;

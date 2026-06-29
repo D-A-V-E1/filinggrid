@@ -13,6 +13,7 @@ interface DeltaReportLinkBarProps {
   flags: DeltaFlag[];
   scannedCount: number;
   sectionsWithDeltas: number;
+  loading?: boolean;
 }
 
 export default function DeltaReportLinkBar({
@@ -22,23 +23,33 @@ export default function DeltaReportLinkBar({
   flags,
   scannedCount,
   sectionsWithDeltas,
+  loading = false,
 }: DeltaReportLinkBarProps) {
   const headline = deltaMapHeadline(flags.length, sectionsWithDeltas);
   const insightTeaser = deltaMapInsightTeaser(flags);
   const reportHref = deltaReportPath(peerSlug, period);
+  const hasFlags = flags.length > 0;
 
   return (
     <section
-      className="relative shrink-0 border-b border-slate-200 border-l-4 border-l-brand-600 bg-gradient-to-r from-brand-50/80 via-white to-slate-50/40"
+      className={`relative shrink-0 border-b border-slate-200 border-l-4 bg-gradient-to-r via-white to-slate-50/40 ${
+        hasFlags
+          ? "border-l-brand-600 from-brand-50/80"
+          : "border-l-slate-300 from-slate-50/80"
+      }`}
       aria-label="Section delta map summary"
     >
       <div className="flex w-full flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white shadow-md shadow-brand-600/25"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold shadow-md ${
+              hasFlags
+                ? "bg-brand-600 text-white shadow-brand-600/25"
+                : "bg-slate-200 text-slate-600 shadow-slate-200/50"
+            }`}
             aria-hidden
           >
-            {flags.length}
+            {loading ? "…" : flags.length}
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">
@@ -49,7 +60,9 @@ export default function DeltaReportLinkBar({
               <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{insightTeaser}</p>
             )}
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Scanned {scannedCount} section{scannedCount === 1 ? "" : "s"} across {tickers.length} peers
+              {loading
+                ? "Scanning sections for differences…"
+                : `Scanned ${scannedCount} section${scannedCount === 1 ? "" : "s"} across ${tickers.length} peers`}
             </p>
           </div>
         </div>
