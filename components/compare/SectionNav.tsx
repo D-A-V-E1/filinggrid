@@ -50,8 +50,6 @@ export default function SectionNav({
     Boolean(onDeltaFlagClick) &&
     (deltasLoading || stripFlags.length > 0 || stripTotalCount > 0 || totalFlagCount > 0);
 
-  const deltaBadgeCount = deltasLoading ? null : stripFlags.length > 0 ? stripFlags.length : stripTotalCount;
-
   useEffect(() => {
     if (leftPaneView !== "sections") return;
 
@@ -106,20 +104,13 @@ export default function SectionNav({
         aria-selected={leftPaneView === "deltas"}
         aria-controls="left-pane-panel-deltas"
         onClick={() => setLeftPaneView("deltas")}
-        className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold uppercase tracking-widest transition ${
+        className={`flex-1 px-3 py-2.5 text-xs font-semibold uppercase tracking-widest transition ${
           leftPaneView === "deltas"
             ? "border-b-2 border-brand-600 bg-white text-brand-700"
             : "border-b-2 border-transparent text-slate-500 hover:bg-white/60 hover:text-slate-700"
         }`}
       >
-        Key deltas
-        {deltasLoading ? (
-          <span className="text-[10px] font-normal normal-case tracking-normal text-slate-400">…</span>
-        ) : deltaBadgeCount != null && deltaBadgeCount > 0 ? (
-          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-slate-600">
-            {deltaBadgeCount}
-          </span>
-        ) : null}
+        Deltas
       </button>
     </div>
   ) : (
@@ -136,10 +127,10 @@ export default function SectionNav({
       id="left-pane-panel-sections"
       role="tabpanel"
       aria-labelledby={showKeyDeltas ? "left-pane-tab-sections" : undefined}
-      className={`left-pane-panel flex min-h-0 flex-col ${
+      className={`left-pane-panel col-start-1 row-start-1 flex min-h-0 flex-col ${
         !showKeyDeltas || leftPaneView === "sections" ? "left-pane-panel--active" : ""
       }`}
-      hidden={showKeyDeltas && leftPaneView !== "sections"}
+      aria-hidden={showKeyDeltas && leftPaneView !== "sections"}
     >
       {showKeyDeltas && availableSectionIds.size === 0 && (
         <div className="shrink-0 border-b border-slate-100 px-4 py-2">
@@ -190,10 +181,10 @@ export default function SectionNav({
       id="left-pane-panel-deltas"
       role="tabpanel"
       aria-labelledby="left-pane-tab-deltas"
-      className={`left-pane-panel flex min-h-0 flex-col bg-white ${
+      className={`left-pane-panel col-start-1 row-start-1 flex min-h-0 flex-col bg-white ${
         leftPaneView === "deltas" ? "left-pane-panel--active" : ""
       }`}
-      hidden={leftPaneView !== "deltas"}
+      aria-hidden={leftPaneView !== "deltas"}
     >
       {tagline && !deltasLoading && (
         <p className="shrink-0 border-b border-slate-100 px-3 py-2 text-[10px] leading-snug text-slate-500">
@@ -231,7 +222,7 @@ export default function SectionNav({
         </div>
       )}
       {tabBar}
-      <div className="relative min-h-0 flex-1">
+      <div className="grid h-0 min-h-0 flex-1 grid-cols-1 grid-rows-1 overflow-hidden">
         {sectionsPanel}
         {deltasPanel}
       </div>

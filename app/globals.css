@@ -380,8 +380,6 @@
   }
 
   .left-pane-panel {
-    position: absolute;
-    inset: 0;
     display: flex;
     min-height: 0;
     flex-direction: column;
@@ -392,6 +390,7 @@
   }
 
   .left-pane-panel--active {
+    z-index: 1;
     opacity: 1;
     pointer-events: auto;
   }
