@@ -346,6 +346,11 @@
     height: auto;
   }
 
+  .delta-rail {
+    min-width: 280px;
+    max-width: 280px;
+  }
+
   .delta-map-backdrop {
     position: fixed;
     inset: 0;

@@ -48,7 +48,7 @@ import {
   rankMainstreamStrip,
 } from "@/lib/delta-surface";
 import type { DeltaFlag } from "@/lib/delta-types";
-import DeltaStrip from "./DeltaStrip";
+import DeltaRail from "./DeltaRail";
 import SectionDeltaMap from "./SectionDeltaMap";
 
 interface CompareGridProps {
@@ -694,15 +694,6 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               </button>
             </div>
           )}
-          <DeltaStrip
-            flags={stripFlags}
-            loading={deltasLoading}
-            stripTotalCount={stripTotalCount}
-            totalFlagCount={mapCoverage.flagCount}
-            tagline={MAINSTREAM_STRIP_TAGLINE}
-            onFlagClick={handleDeltaFlagClick}
-            onViewMap={mapFlags.length > 0 ? openDeltaMap : undefined}
-          />
           {mapFlags.length > 0 && (
             <SectionDeltaMap
               tickers={tickers}
@@ -807,7 +798,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               mobileOpen={navOpen}
               onMobileClose={() => setNavOpen(false)}
             />
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {columnParseErrors.length > 0 && (
                 <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-900">
                   {columnParseErrors.length === data.columns.length ? (
@@ -902,6 +894,16 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                   })}
                 </div>
               </div>
+              </div>
+              <DeltaRail
+                flags={stripFlags}
+                loading={deltasLoading}
+                stripTotalCount={stripTotalCount}
+                totalFlagCount={mapCoverage.flagCount}
+                tagline={MAINSTREAM_STRIP_TAGLINE}
+                onFlagClick={handleDeltaFlagClick}
+                onViewMoreInMap={mapFlags.length > 0 ? openDeltaMap : undefined}
+              />
             </div>
           </div>
         )}

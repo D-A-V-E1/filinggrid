@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Last updated** | 2026-06-28 |
-| **Status** | **Phase 1 shipped** — L0 strip + L1 map on compare load; Phase 2 drawer/L2–L3 depth; Phase 3 L4 |
+| **Status** | **Phase 1 shipped** — L0 right rail + L1 map on compare load; Phase 2 drawer/L2–L3 depth; Phase 3 L4 |
 
 ---
 
@@ -707,7 +707,7 @@ Implement in [`lib/delta-rank.ts`](../lib/delta-rank.ts): `rankDeltas(flags, pre
 
 | Surface | Scope | Cap | Purpose |
 |---------|-------|-----|---------|
-| **L0 headline strip** | Highest-severity cross-comp-set flags | **5–7**, severity-ranked (P1 first) | Instant hook at compare open — *"what's weird right now"* |
+| **L0 headline rail** | Highest-severity cross-comp-set flags | **5–7**, severity-ranked (P1 first) | Right-side glance panel at compare open — *"what's weird right now"* |
 | **L1 section delta map** | **ALL** section-level deltas across catalog | **None** — every section with ≥1 flag gets a cell/badge | Delta zoom: which footnotes/items differ |
 | **Persona register / list** | Deterministic subset of all flags for active preset | **None** — full hit list for that persona's catalog | Workpaper-style completeness for Reporting, Investing, Accounting, Auditor, Corp dev |
 | **Delta detail drawer** | Single flag evidence | One flag per open | Factual what-changed — tags + excerpts (+ PY/CY in Phase 3) |
@@ -938,7 +938,7 @@ No new paywalls on delta features. L4 prior-period on Free only when prior perio
 
 **Goal:** User opens compare → within seconds sees **what's weird** without opening a section.
 
-**Engine:** [`scanDeltas()`](../lib/delta-engine.ts) on parse metadata + headline financials (`headline_only` batch). Surfaces: [`DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx), [`SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx), wired in [`CompareGrid.tsx`](../components/compare/CompareGrid.tsx). Display filters in [`lib/delta-surface.ts`](../lib/delta-surface.ts).
+**Engine:** [`scanDeltas()`](../lib/delta-engine.ts) on parse metadata + headline financials (`headline_only` batch). Surfaces: [`DeltaRail.tsx`](../components/compare/DeltaRail.tsx) + [`DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) (L0 right rail), [`SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) (L1 horizontal bar), wired in [`CompareGrid.tsx`](../components/compare/CompareGrid.tsx). Display filters in [`lib/delta-surface.ts`](../lib/delta-surface.ts).
 
 | Delta type | Detection | UI surface | Notes |
 |------------|-----------|------------|-------|
