@@ -37,7 +37,7 @@ const MAINSTREAM_TOPIC_SECTIONS = new Set([
 ]);
 
 export const MAINSTREAM_STRIP_TAGLINE =
-  "Biggest number moves, missing peer disclosures, and material one-time events — not every footnote difference.";
+  "Biggest number moves, missing peer disclosures, and key one-time events — not every footnote difference.";
 
 export function isMainstreamStripFlag(flag: DeltaFlag): boolean {
   if (flag.metadata?.rollupCount != null) return false;

@@ -208,7 +208,7 @@ export function cellFlagsTooltip(flags: DeltaFlag[]): CellFlagsTooltip | null {
 
 export const DELTA_MAP_ALIGNED_LABEL = "Aligned";
 export const DELTA_MAP_ALIGNED_TOOLTIP =
-  "Section matches peers — no material difference in this filing";
+  "Section matches peers — no key difference in this filing";
 
 export const DELTA_MAP_NOT_FILED_LABEL = "Not filed";
 export const DELTA_MAP_NOT_FILED_TOOLTIP = "Section absent from this peer's report";
@@ -226,8 +226,8 @@ export function sectionGroupLabel(catalogLabel: string): string {
 
 /** Marketing headline for collapsed delta map trigger. */
 export function deltaMapHeadline(flagCount: number, sectionsWithDeltas: number): string {
-  if (flagCount === 0) return "No material differences in this peer group";
-  const diffs = `${flagCount} material difference${flagCount === 1 ? "" : "s"}`;
+  if (flagCount === 0) return "No key differences in this peer group";
+  const diffs = `${flagCount} key difference${flagCount === 1 ? "" : "s"}`;
   const sections = `${sectionsWithDeltas} section${sectionsWithDeltas === 1 ? "" : "s"}`;
   return `${diffs} across ${sections}`;
 }
