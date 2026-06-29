@@ -64,6 +64,7 @@ function scrollColumnContentToTop(scrollEl: HTMLDivElement | null): void {
   if (!scrollEl) return;
   const apply = () => {
     scrollEl.scrollTop = 0;
+    scrollEl.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
   apply();
   requestAnimationFrame(() => {
@@ -517,6 +518,9 @@ function FilingColumn({
   const resolvedFiscalYear =
     fiscalYearFilter ?? financialsXbrl?.fiscal_year_filter ?? fiscalYear ?? null;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bodyTopRef = useRef<HTMLDivElement>(null);
+  const scrollResetActiveRef = useRef(false);
+  const columnContentKey = `${activeSection ?? "none"}:${sectionScrollRequest}`;
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
   const [loadingHtml, setLoadingHtml] = useState(false);
   const [showHtmlExcerpt, setShowHtmlExcerpt] = useState(false);
@@ -637,6 +641,7 @@ function FilingColumn({
   }, [activeSection, ticker]);
 
   useLayoutEffect(() => {
+    scrollResetActiveRef.current = true;
     scrollColumnContentToTop(scrollRef.current);
   }, [activeSection, ticker, sectionScrollRequest]);
 
@@ -655,8 +660,31 @@ function FilingColumn({
     xbrlPanel,
     sectionHtml,
     showHtmlExcerpt,
+    loadingHtml,
     sectionScrollRequest,
   ]);
+
+  useEffect(() => {
+    scrollResetActiveRef.current = true;
+    const scrollEl = scrollRef.current;
+    const bodyEl = bodyTopRef.current;
+    if (!scrollEl || !bodyEl) return;
+
+    const observer = new ResizeObserver(() => {
+      if (!scrollResetActiveRef.current) return;
+      scrollColumnContentToTop(scrollEl);
+    });
+    observer.observe(bodyEl);
+
+    const stop = window.setTimeout(() => {
+      scrollResetActiveRef.current = false;
+    }, 600);
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(stop);
+    };
+  }, [activeSection, ticker, sectionScrollRequest]);
 
   useEffect(() => {
     setFullStatements(null);
@@ -720,6 +748,7 @@ function FilingColumn({
       if (cached) {
         setSectionHtml(cached);
         setShowHtmlExcerpt(true);
+        scrollColumnContentToTop(scrollRef.current);
         return;
       }
     }
@@ -759,6 +788,7 @@ function FilingColumn({
         if (cacheKey && html) saveSectionHtml(cacheKey, activeSection, html);
         setSectionHtml(html);
         setShowHtmlExcerpt(true);
+        scrollColumnContentToTop(scrollRef.current);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.isPaywall) {
@@ -819,6 +849,7 @@ function FilingColumn({
 
   return (
     <div
+      data-compare-ticker={ticker.toUpperCase()}
       className={`compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-slate-50/50 last:border-r-0${
         isCompact ? " compare-column--compact" : ""
       }${tableFit ? " compare-column--table-fit" : ""}`}
@@ -849,7 +880,11 @@ function FilingColumn({
         ref={scrollRef}
         className="filing-column-scroll min-h-0 flex-1 overflow-y-scroll overscroll-y-contain"
       >
-        <div className={`compare-column-body ${isCompact ? "px-3.5 py-3.5" : "px-5 py-5"}`}>
+        <div
+          key={columnContentKey}
+          ref={bodyTopRef}
+          className={`compare-column-body ${isCompact ? "px-3.5 py-3.5" : "px-5 py-5"}`}
+        >
           {xbrlPanel}
 
           {activeSection === "financial-statements" && hasXbrlData && !isPro && (

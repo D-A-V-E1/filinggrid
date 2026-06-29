@@ -95,6 +95,26 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
   const [mixedFilerBannerDismissed, setMixedFilerBannerDismissed] = useState(false);
   const [deltaMapExpanded, setDeltaMapExpanded] = useState(false);
   const [sectionScrollRequest, setSectionScrollRequest] = useState(0);
+  const columnsScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollTickerColumnIntoView = useCallback((ticker: string) => {
+    const container = columnsScrollRef.current;
+    if (!container) return;
+    const column = container.querySelector<HTMLElement>(
+      `[data-compare-ticker="${ticker.toUpperCase()}"]`
+    );
+    if (!column) return;
+
+    const colLeft = column.offsetLeft;
+    const colRight = colLeft + column.offsetWidth;
+    const viewLeft = container.scrollLeft;
+    const viewRight = viewLeft + container.clientWidth;
+    if (colLeft < viewLeft) {
+      container.scrollLeft = colLeft;
+    } else if (colRight > viewRight) {
+      container.scrollLeft = colRight - container.clientWidth;
+    }
+  }, []);
 
   const columnLayout = useMemo(() => getCompareColumnLayout(tickers.length), [tickers.length]);
 
@@ -462,10 +482,16 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
     isPro,
   ]);
 
-  const handleSectionSelect = useCallback((sectionId: string) => {
-    setActiveSection(sectionId);
-    setSectionScrollRequest((n) => n + 1);
-  }, []);
+  const handleSectionSelect = useCallback(
+    (sectionId: string, focusTicker?: string) => {
+      setActiveSection(sectionId);
+      setSectionScrollRequest((n) => n + 1);
+      if (focusTicker) {
+        requestAnimationFrame(() => scrollTickerColumnIntoView(focusTicker));
+      }
+    },
+    [scrollTickerColumnIntoView]
+  );
 
   const deltaScan = useMemo(() => {
     if (!data || tickers.length === 0) return null;
@@ -512,7 +538,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
 
   const handleDeltaFlagClick = useCallback(
     (flag: DeltaFlag) => {
-      handleSectionSelect(flag.sectionId);
+      handleSectionSelect(flag.sectionId, flag.ticker);
     },
     [handleSectionSelect]
   );
@@ -645,8 +671,8 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
               expanded={deltaMapExpanded}
               onExpandedChange={setDeltaMapExpanded}
-              onCellClick={(_ticker, sectionId) => {
-                handleSectionSelect(sectionId);
+              onCellClick={(ticker, sectionId) => {
+                handleSectionSelect(sectionId, ticker);
                 setDeltaMapExpanded(false);
               }}
             />
@@ -732,7 +758,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
               >
                 Sections
               </button>
-              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+              <div ref={columnsScrollRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
                 <div
                   className={`compare-columns-grid grid h-full min-h-0${
                     columnLayout.fixedColumns ? " compare-columns-grid--fixed" : ""

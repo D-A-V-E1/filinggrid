@@ -152,6 +152,7 @@
   .compare-column-body {
     min-height: min(100%, 12rem);
     min-width: 0;
+    overflow-anchor: none;
   }
 
   .xbrl-metrics-scroll {

@@ -28,8 +28,16 @@ export default function SectionNav({
   const navGroups = getNavGroups(isPro);
 
   useEffect(() => {
-    if (activeButtonRef.current && navScrollRef.current) {
-      activeButtonRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const navEl = navScrollRef.current;
+    const btnEl = activeButtonRef.current;
+    if (!navEl || !btnEl) return;
+
+    const navRect = navEl.getBoundingClientRect();
+    const btnRect = btnEl.getBoundingClientRect();
+    if (btnRect.top < navRect.top) {
+      navEl.scrollTop -= navRect.top - btnRect.top;
+    } else if (btnRect.bottom > navRect.bottom) {
+      navEl.scrollTop += btnRect.bottom - navRect.bottom;
     }
   }, [activeSection]);
 
