@@ -19,6 +19,7 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
     {"id": "properties", "label": "Item 2 — Properties", "patterns": [r"item\s*2[\.\s—–-]*properties"]},
     {"id": "legal-proceedings", "label": "Item 3 — Legal Proceedings", "patterns": [
         r"item\s*3[\.\s—–-]*legal", r"part\s*ii[\.\s—–-]*item\s*1[\.\s—–-]*legal",
+        r"legal\s+and\s+administrative\s+proceed", r"legal\s+proceed",
     ]},
     {"id": "mine-safety", "label": "Item 4 — Mine Safety", "patterns": [r"item\s*4[\.\s—–-]*mine", r"mine\s*safety"]},
     {"id": "mda", "label": "Item 7 — MD&A", "patterns": [
@@ -155,6 +156,7 @@ _ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"risk\s*factors", re.IGNORECASE), "risk-factors"),
     (re.compile(r"financial\s*statements", re.IGNORECASE), "financial-statements"),
     (re.compile(r"condensed\s*consolidated", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"legal\s+and\s+administrative\s+proceed", re.IGNORECASE), "legal-proceedings"),
     (re.compile(r"legal\s*proceed", re.IGNORECASE), "legal-proceedings"),
     (re.compile(r"quantitative.*qualitative.*market|market\s*risk", re.IGNORECASE), "market-risk"),
     (re.compile(r"controls\s*and\s*procedures", re.IGNORECASE), "controls"),
@@ -299,7 +301,12 @@ def _is_section_heading(text: str) -> bool:
     if len(cleaned) < 3:
         return False
     # Risk-factor and MD&A bullets are not section headings (e.g. AMD impairment prose).
-    if re.match(r"^[\u2022\u2013\u2014\-\*]\s", cleaned) or re.match(r"^[A-Za-z]\.\s+", cleaned):
+    if re.match(r"^[\u2022\u2013\u2014\-\*]\s", cleaned):
+        return False
+    if re.match(r"^[A-Za-z]\.\s+", cleaned):
+        # 20-F lettered sub-items (e.g. "D. Risk Factors") are real section boundaries.
+        if _match_section(cleaned) is not None:
+            return len(cleaned) <= _MAX_HEADING_CHARS
         return False
     if _ITEM_HEADER.match(cleaned) or _NOTE_HEADER.match(cleaned):
         return len(cleaned) <= _MAX_HEADING_CHARS
