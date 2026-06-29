@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getNavGroups } from "@/lib/sections";
 import type { DeltaFlag } from "@/lib/delta-types";
 import DeltaStrip from "./DeltaStrip";
+
+type LeftPaneView = "sections" | "deltas";
 
 interface SectionNavProps {
   availableSectionIds: Set<string>;
@@ -38,6 +40,7 @@ export default function SectionNav({
   onDeltaFlagClick,
   onViewMoreInMap,
 }: SectionNavProps) {
+  const [leftPaneView, setLeftPaneView] = useState<LeftPaneView>("sections");
   const navScrollRef = useRef<HTMLDivElement>(null);
   const activeButtonRef = useRef<HTMLButtonElement>(null);
   const sectionMap = new Map(sectionCatalog.map((s) => [s.id, s]));
@@ -47,7 +50,11 @@ export default function SectionNav({
     Boolean(onDeltaFlagClick) &&
     (deltasLoading || stripFlags.length > 0 || stripTotalCount > 0 || totalFlagCount > 0);
 
+  const deltaBadgeCount = deltasLoading ? null : stripFlags.length > 0 ? stripFlags.length : stripTotalCount;
+
   useEffect(() => {
+    if (leftPaneView !== "sections") return;
+
     const navEl = navScrollRef.current;
     const btnEl = activeButtonRef.current;
     if (!navEl || !btnEl) return;
@@ -59,7 +66,7 @@ export default function SectionNav({
     } else if (btnRect.bottom > navRect.bottom) {
       navEl.scrollTop += btnRect.bottom - navRect.bottom;
     }
-  }, [activeSection]);
+  }, [activeSection, leftPaneView]);
 
   function handleSelect(sectionId: string) {
     onSectionSelect(sectionId);
@@ -71,43 +78,74 @@ export default function SectionNav({
     onMobileClose?.();
   }
 
-  const navContent = (
-    <nav
-      className="flex h-full w-60 max-w-[85vw] shrink-0 flex-col border-r border-slate-200 bg-slate-50"
-      aria-label="SEC disclosure sections"
+  const tabBar = showKeyDeltas ? (
+    <div
+      role="tablist"
+      aria-label="Left pane view"
+      className="flex shrink-0 border-b border-slate-200 bg-slate-50"
     >
-      {onMobileClose && (
-        <div className="flex shrink-0 justify-end border-b border-slate-200 bg-slate-50 px-3 py-2 md:hidden">
-          <button
-            type="button"
-            onClick={onMobileClose}
-            className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-            aria-label="Close section menu"
-          >
-            ×
-          </button>
+      <button
+        type="button"
+        role="tab"
+        id="left-pane-tab-sections"
+        aria-selected={leftPaneView === "sections"}
+        aria-controls="left-pane-panel-sections"
+        onClick={() => setLeftPaneView("sections")}
+        className={`flex-1 px-3 py-2.5 text-xs font-semibold uppercase tracking-widest transition ${
+          leftPaneView === "sections"
+            ? "border-b-2 border-brand-600 bg-white text-brand-700"
+            : "border-b-2 border-transparent text-slate-500 hover:bg-white/60 hover:text-slate-700"
+        }`}
+      >
+        Sections
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="left-pane-tab-deltas"
+        aria-selected={leftPaneView === "deltas"}
+        aria-controls="left-pane-panel-deltas"
+        onClick={() => setLeftPaneView("deltas")}
+        className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold uppercase tracking-widest transition ${
+          leftPaneView === "deltas"
+            ? "border-b-2 border-brand-600 bg-white text-brand-700"
+            : "border-b-2 border-transparent text-slate-500 hover:bg-white/60 hover:text-slate-700"
+        }`}
+      >
+        Key deltas
+        {deltasLoading ? (
+          <span className="text-[10px] font-normal normal-case tracking-normal text-slate-400">…</span>
+        ) : deltaBadgeCount != null && deltaBadgeCount > 0 ? (
+          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-slate-600">
+            {deltaBadgeCount}
+          </span>
+        ) : null}
+      </button>
+    </div>
+  ) : (
+    <div className="shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Sections</p>
+      {availableSectionIds.size === 0 && (
+        <p className="mt-1 text-[10px] text-slate-400">Waiting for filings…</p>
+      )}
+    </div>
+  );
+
+  const sectionsPanel = (
+    <div
+      id="left-pane-panel-sections"
+      role="tabpanel"
+      aria-labelledby={showKeyDeltas ? "left-pane-tab-sections" : undefined}
+      className={`left-pane-panel flex min-h-0 flex-col ${
+        !showKeyDeltas || leftPaneView === "sections" ? "left-pane-panel--active" : ""
+      }`}
+      hidden={showKeyDeltas && leftPaneView !== "sections"}
+    >
+      {showKeyDeltas && availableSectionIds.size === 0 && (
+        <div className="shrink-0 border-b border-slate-100 px-4 py-2">
+          <p className="text-[10px] text-slate-400">Waiting for filings…</p>
         </div>
       )}
-      {showKeyDeltas && (
-        <div className="flex max-h-[min(45vh,320px)] min-h-0 shrink-0 flex-col border-b border-slate-200 bg-white">
-          <DeltaStrip
-            layout="nav"
-            flags={stripFlags}
-            loading={deltasLoading}
-            stripTotalCount={stripTotalCount}
-            totalFlagCount={totalFlagCount}
-            tagline={tagline}
-            onFlagClick={handleDeltaFlagClick}
-            onViewMoreInMap={onViewMoreInMap}
-          />
-        </div>
-      )}
-      <div className="shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Sections</p>
-        {availableSectionIds.size === 0 && (
-          <p className="mt-1 text-[10px] text-slate-400">Waiting for filings…</p>
-        )}
-      </div>
       <div ref={navScrollRef} className="min-h-0 flex-1 overflow-y-auto py-2">
         {navGroups.map((group) => {
           const groupSections = group.ids
@@ -143,6 +181,59 @@ export default function SectionNav({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+
+  const deltasPanel = showKeyDeltas ? (
+    <div
+      id="left-pane-panel-deltas"
+      role="tabpanel"
+      aria-labelledby="left-pane-tab-deltas"
+      className={`left-pane-panel flex min-h-0 flex-col bg-white ${
+        leftPaneView === "deltas" ? "left-pane-panel--active" : ""
+      }`}
+      hidden={leftPaneView !== "deltas"}
+    >
+      {tagline && !deltasLoading && (
+        <p className="shrink-0 border-b border-slate-100 px-3 py-2 text-[10px] leading-snug text-slate-500">
+          {tagline}
+        </p>
+      )}
+      <DeltaStrip
+        layout="nav"
+        hideHeader
+        flags={stripFlags}
+        loading={deltasLoading}
+        stripTotalCount={stripTotalCount}
+        totalFlagCount={totalFlagCount}
+        onFlagClick={handleDeltaFlagClick}
+        onViewMoreInMap={onViewMoreInMap}
+      />
+    </div>
+  ) : null;
+
+  const navContent = (
+    <nav
+      className="flex h-full w-60 max-w-[85vw] shrink-0 flex-col border-r border-slate-200 bg-slate-50"
+      aria-label="SEC disclosure sections"
+    >
+      {onMobileClose && (
+        <div className="flex shrink-0 justify-end border-b border-slate-200 bg-slate-50 px-3 py-2 md:hidden">
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+            aria-label="Close section menu"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {tabBar}
+      <div className="relative min-h-0 flex-1">
+        {sectionsPanel}
+        {deltasPanel}
       </div>
     </nav>
   );

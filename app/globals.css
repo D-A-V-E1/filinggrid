@@ -378,4 +378,27 @@
     min-width: 0;
     overflow-wrap: anywhere;
   }
+
+  .left-pane-panel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+
+  .left-pane-panel--active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .left-pane-panel {
+      transition: none;
+    }
+  }
 }
