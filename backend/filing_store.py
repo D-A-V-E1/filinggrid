@@ -7,8 +7,8 @@ from __future__ import annotations
 
 
 import gzip
-
 import json
+import zlib
 
 from datetime import datetime
 
@@ -30,7 +30,7 @@ PARSE_CACHE_VERSION = 10
 
 
 
-_GZIP_READ_ERRORS = (OSError, EOFError)
+_GZIP_READ_ERRORS = (OSError, EOFError, zlib.error)
 
 
 

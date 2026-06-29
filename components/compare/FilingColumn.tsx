@@ -110,7 +110,7 @@ function applyColumnScrollFocus(
 
 function formatColumnError(error: string): string {
   if (/Compressed file ended before the end-of-stream/i.test(error)) {
-    return "Filing could not be loaded (corrupted cache). Refresh the page to retry.";
+    return "Filing could not be loaded (corrupted server cache). Use Retry failed columns above.";
   }
   if (/Filing cache was corrupted/i.test(error)) {
     return error;
