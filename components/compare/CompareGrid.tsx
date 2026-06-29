@@ -822,7 +822,7 @@ export default function CompareGrid({ tickers, fiscalYear, period, slugError }: 
                         sectionsPending={loadingSections && col.sections.length === 0}
                         columnCount={tickers.length}
                         columnLayout={columnLayout}
-                        fiscalYearFilter={resolvedFiscalYear ?? col.fiscal_year}
+                        fiscalYearFilter={resolvedFiscalYear ?? null}
                         isPro={isPro}
                         onPaywall={handlePaywall}
                         deltaFlagCount={mainstreamHeat[col.ticker] ?? 0}

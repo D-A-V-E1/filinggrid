@@ -791,10 +791,10 @@ function FilingColumn({
     setLoadingHtml(true);
     setSectionError("");
 
+    const compareFiscalYear = fiscalYearFilter ?? null;
     const { fiscalYear: requestFy, period: requestPeriod } = sectionHtmlRequestParams(
       period,
-      resolvedFiscalYear,
-      fiscalYear
+      compareFiscalYear
     );
     // #region agent log
     agentDebugLog(
@@ -804,7 +804,7 @@ function FilingColumn({
         ticker,
         activeSection,
         columnFy: fiscalYear,
-        resolvedFiscalYear,
+        compareFiscalYear,
         comparePeriod: period ?? null,
         requestFy,
         requestPeriod,
@@ -857,7 +857,7 @@ function FilingColumn({
     ticker,
     fiscalYear,
     period,
-    resolvedFiscalYear,
+    fiscalYearFilter,
     onPaywall,
   ]);
 

@@ -101,18 +101,17 @@ export function displayFormLabel(form: string): string {
 /** Align /parse/section query params with the active compare period (not per-column FY). */
 export function sectionHtmlRequestParams(
   comparePeriod?: string | null,
-  resolvedFiscalYear?: number | null,
-  columnFiscalYear?: number | null
+  compareFiscalYear?: number | null
 ): { fiscalYear: number | null; period: string | null } {
   const periodId = comparePeriod?.trim() || null;
-  const compareFy = resolvedFiscalYear ?? null;
+  const compareFy = compareFiscalYear ?? null;
 
   if (!periodId && compareFy == null) {
     return { fiscalYear: null, period: null };
   }
 
   return {
-    fiscalYear: compareFy ?? columnFiscalYear ?? null,
+    fiscalYear: compareFy,
     period: periodId,
   };
 }
