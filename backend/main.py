@@ -50,7 +50,11 @@ class GZipExceptStreamMiddleware:
         self.gzip = GZipMiddleware(app, minimum_size=minimum_size)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and scope.get("path") in ("/parse/stream", "/filings/financials/batch"):
+        if scope["type"] == "http" and scope.get("path") in (
+            "/parse/stream",
+            "/filings/financials/batch",
+            "/parse/section",
+        ):
             await self.app(scope, receive, send)
             return
         await self.gzip(scope, receive, send)
@@ -304,14 +308,33 @@ async def parse_section_endpoint(
     section_id: str = Query(..., min_length=1, max_length=64),
     fiscal_year: int | None = Query(None),
     period: str | None = Query(None),
+    cache_key: str | None = Query(None, max_length=128),
     format: Literal["html", "text"] = Query("html", alias="format"),
 ):
     check_parse_access(auth, 1)
     await check_free_period_access(auth, [ticker], fiscal_year, period)
     try:
-        return await get_section_html(ticker, section_id, fiscal_year, content_format=format)
+        return await get_section_html(
+            ticker, section_id, fiscal_year, content_format=format, cache_key=cache_key
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Filing cache was corrupted; please retry in a moment.",
+        ) from exc
+    except Exception as exc:
+        msg = str(exc)
+        if "Compressed file ended before the end-of-stream" in msg or isinstance(exc, EOFError):
+            raise HTTPException(
+                status_code=503,
+                detail="Filing cache was corrupted; please retry in a moment.",
+            ) from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Could not load section excerpt. Please try again.",
+        ) from exc
 
 
 @app.get("/peer-groups", response_model=list[SavedPeerGroupResponse])

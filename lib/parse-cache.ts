@@ -24,6 +24,21 @@ export function hasSectionIndex(data: ParseResponse): boolean {
   return data.columns.some((c) => !c.error && c.sections.length > 0);
 }
 
+/** True when any column failed to parse (e.g. corrupt server gzip cache). */
+export function hasColumnParseErrors(data: ParseResponse): boolean {
+  return data.columns.some((c) => Boolean(c.error));
+}
+
+/** Parse errors that may succeed after server cache invalidation or a fresh fetch. */
+export function isRetriableParseError(error: string | null | undefined): boolean {
+  if (!error) return false;
+  return (
+    /Compressed file ended before the end-of-stream/i.test(error) ||
+    /Filing cache was corrupted/i.test(error) ||
+    /corrupted cache/i.test(error)
+  );
+}
+
 /** True when columns have resolved filing headers (form, dates) before section index. */
 export function hasColumnHeaders(data: ParseResponse): boolean {
   return data.columns.some((c) => !c.error && Boolean(c.form));
@@ -53,7 +68,7 @@ export function loadParseMeta(key: string, period?: string): ParseResponse | nul
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const data = JSON.parse(raw) as ParseResponse;
-    if (!hasSectionIndex(data)) {
+    if (!hasSectionIndex(data) || hasColumnParseErrors(data)) {
       sessionStorage.removeItem(key);
       return null;
     }
@@ -70,7 +85,7 @@ export function loadParseMeta(key: string, period?: string): ParseResponse | nul
 
 export function saveParseMeta(key: string, data: ParseResponse): void {
   if (typeof window === "undefined") return;
-  if (!hasSectionIndex(data)) return;
+  if (!hasSectionIndex(data) || hasColumnParseErrors(data)) return;
   try {
     sessionStorage.setItem(key, JSON.stringify(data));
     sessionStorage.removeItem(`${key}:draft`);
@@ -151,4 +166,20 @@ export function clearParseMeta(key: string): void {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(key);
   sessionStorage.removeItem(`${key}:draft`);
+}
+
+/** Drop cached section HTML/text for one filing column (e.g. before retry). */
+export function clearColumnSectionCaches(cacheKey: string): void {
+  if (typeof window === "undefined" || !cacheKey) return;
+  const prefixes = [`${SECTION_PREFIX}${cacheKey}:`, `${SECTION_TEXT_PREFIX}${cacheKey}:`];
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key && prefixes.some((prefix) => key.startsWith(prefix))) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 }

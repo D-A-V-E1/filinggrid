@@ -1,6 +1,12 @@
 """Tests for SEC filing excerpt HTML normalization."""
 
-from sec.section_extractor import _normalize_excerpt_html
+from sec.section_extractor import _normalize_excerpt_html, _safe_normalize_excerpt_html
+
+
+def test_safe_normalize_returns_raw_on_failure():
+    assert _safe_normalize_excerpt_html(None) is None
+    assert _safe_normalize_excerpt_html("") is None
+    assert _safe_normalize_excerpt_html("  hi  ") == "hi"
 
 
 def test_unwraps_spans_and_inserts_word_spacing():
@@ -94,7 +100,15 @@ def test_preserves_colspan_and_strips_inline_styles():
     assert "display:none" not in normalized
 
 
-def test_nvda_style_financial_table_fragment():
+def test_preserves_br_as_paragraph_breaks():
+    html = "<div>First paragraph<br><br>Second paragraph</div>"
+    normalized = _normalize_excerpt_html(html)
+    assert "First paragraph" in normalized
+    assert "Second paragraph" in normalized
+    assert "paragraph Second" not in normalized.replace("\n", " ").replace("  ", " ")
+
+
+def test_realistic_ixbrl_table_fragment():
     """Realistic iXBRL table fragment with ix tags, spans, and numeric columns."""
     html = (
         "<div>"
@@ -126,3 +140,67 @@ def test_nvda_style_financial_table_fragment():
     assert normalized.count('align="right"') >= 4
     assert "<ix:" not in normalized
     assert "style=" not in normalized
+
+
+def test_aligns_page_numbers_in_two_column_index_rows():
+    html = (
+        "<table>"
+        "<tr><td>Consolidated Statements of Operations</td><td>42</td></tr>"
+        "<tr><td>Consolidated Balance Sheets</td><td>44</td></tr>"
+        "</table>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert 'align="right"' in normalized
+    assert normalized.count('align="right"') == 2
+    assert "Consolidated Statements of Operations" in normalized
+
+
+def test_strips_page_number_and_toc_noise_rows():
+    html = (
+        "<table>"
+        "<tr><td>5</td></tr>"
+        "<tr><td>Table of Contents</td></tr>"
+        "<tr><td>Cash and cash equivalents</td><td align=\"right\">$1,234</td></tr>"
+        "<tr><td colspan=\"2\">See accompanying notes to consolidated financial statements.</td></tr>"
+        "</table>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert "Cash and cash equivalents" in normalized
+    assert "$1,234" in normalized
+    assert "Table of Contents" not in normalized
+    assert "<td>5</td>" not in normalized
+    assert "See accompanying notes" not in normalized
+
+
+def test_strips_embedded_resource_tags():
+    html = (
+        '<base href="/api/backend/parse/">'
+        '<link href="s_00005086326000079">'
+        '<img src="s_00005086326000079">'
+        "<p>Related party disclosure</p>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert "Related party disclosure" in normalized
+    assert "s_00005086326000079" not in normalized
+    assert "<base" not in normalized.lower()
+    assert "<link" not in normalized.lower()
+    assert "<img" not in normalized.lower()
+
+
+def test_unwraps_anchor_hrefs():
+    html = '<a href="s_00005086326000079">Cross reference</a>'
+    normalized = _normalize_excerpt_html(html)
+    assert "Cross reference" in normalized
+    assert "<a" not in normalized.lower()
+    assert "s_00005086326000079" not in normalized
+
+
+def test_preserves_narrative_paragraphs_with_see_accompanying_phrase():
+    html = (
+        "<div>"
+        "<p>Our consolidated balance sheets are prepared in accordance with GAAP. "
+        "See accompanying notes for additional detail on accounting policies.</p>"
+        "</div>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert "See accompanying notes" in normalized

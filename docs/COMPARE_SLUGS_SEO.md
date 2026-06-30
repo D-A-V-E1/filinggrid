@@ -13,7 +13,9 @@ How popular compare URLs are defined, published to the sitemap, and indexed for 
 
 | Piece | Role |
 |-------|------|
-| `lib/seo.ts` → `POPULAR_COMPARISONS` | `{ slug, label }[]` — **only place** to add curated compare landing pages |
+| `data/popular-peer-groups.json` | Curated sections and groups — **primary place** to add compare landing pages |
+| `lib/popular-comparisons.ts` | Types and exports (`POPULAR_COMPARISONS`, `POPULAR_PEER_SECTIONS`) |
+| `lib/seo.ts` | Re-exports `POPULAR_COMPARISONS` for sitemap and legacy imports |
 | `POPULAR_COMPARE_SLUGS` | Derived slug list for sitemap |
 | `app/sitemap.ts` | Emits `/compare/{slug}` for each popular slug at build time |
 | `app/compare/[peer_slug]/layout.tsx` | Per-slug title, description, OG image, JSON-LD |

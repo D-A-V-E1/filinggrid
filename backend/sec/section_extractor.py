@@ -19,21 +19,26 @@ SECTION_DEFINITIONS: list[dict[str, Any]] = [
     {"id": "properties", "label": "Item 2 — Properties", "patterns": [r"item\s*2[\.\s—–-]*properties"]},
     {"id": "legal-proceedings", "label": "Item 3 — Legal Proceedings", "patterns": [
         r"item\s*3[\.\s—–-]*legal", r"part\s*ii[\.\s—–-]*item\s*1[\.\s—–-]*legal",
+        r"legal\s+and\s+administrative\s+proceed", r"legal\s+proceed",
     ]},
     {"id": "mine-safety", "label": "Item 4 — Mine Safety", "patterns": [r"item\s*4[\.\s—–-]*mine", r"mine\s*safety"]},
     {"id": "mda", "label": "Item 7 — MD&A", "patterns": [
         r"item\s*7[\.\s—–-]*management", r"item\s*5[\.\s—–-]*operating",
         r"item\s*2[\.\s—–-]*management", r"item\s*2[\.\s—–-]*md&a",
         r"^management.s\s*discussion", r"^md&a$", r"^operating\s*and\s*financial\s*review",
-        r"results\s*of\s*operations",
+        r"operating\s*and\s*financial\s*reviews",
+        r"^discussion\s*and\s*analysis", r"^financial\s*condition\s*and\s*results",
+        r"^results\s*of\s*operations",
     ]},
     {"id": "market-risk", "label": "Item 7A — Market Risk", "patterns": [
         r"item\s*7a", r"item\s*3[\.\s—–-]*quantitative", r"item\s*3[\.\s—–-]*market",
         r"quantitative.*qualitative.*market",
     ]},
     {"id": "financial-statements", "label": "Item 8 — Financial Statements", "patterns": [
-        r"item\s*8", r"item\s*1[\.\s—–-]*financial", r"^financial\s*statements",
-        r"condensed\s*consolidated\s*financial",
+        r"item\s*8", r"item\s*18", r"item\s*1[\.\s—–-]*financial", r"^financial\s*statements",
+        r"consolidated\s*financial\s*statements", r"notes\s*to\s*consolidated\s*financial",
+        r"condensed\s*consolidated\s*financial", r"condensed\s*consolidated\s*statements",
+        r"^consolidated\s*statements\s*of",
     ]},
     {"id": "disagreements", "label": "Item 9 — Disagreements", "patterns": [r"item\s*9[\.\s—–-]*"]},
     {"id": "controls", "label": "Item 9A — Controls & Procedures", "patterns": [
@@ -143,6 +148,7 @@ _ITEM_IDS = {
     "7": "mda",
     "7a": "market-risk",
     "8": "financial-statements",
+    "18": "financial-statements",
     "9": "disagreements",
     "9a": "controls",
     "9b": "other-info",
@@ -150,11 +156,18 @@ _ITEM_IDS = {
 # Item numbers differ between 10-K and 10-Q; resolve using the subtitle when present.
 _ITEM_SUBTITLE_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"operating\s*and\s*financial\s*review", re.IGNORECASE), "mda"),
+    (re.compile(r"operating\s*and\s*financial\s*reviews", re.IGNORECASE), "mda"),
     (re.compile(r"information\s*on\s*the\s*company", re.IGNORECASE), "business"),
     (re.compile(r"management.s\s*discussion|md&a", re.IGNORECASE), "mda"),
+    (re.compile(r"discussion\s*and\s*analysis", re.IGNORECASE), "mda"),
+    (re.compile(r"financial\s*condition\s*and\s*results", re.IGNORECASE), "mda"),
     (re.compile(r"risk\s*factors", re.IGNORECASE), "risk-factors"),
     (re.compile(r"financial\s*statements", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"consolidated\s*financial\s*statements", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"notes\s*to\s*consolidated\s*financial", re.IGNORECASE), "financial-statements"),
     (re.compile(r"condensed\s*consolidated", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"consolidated\s*statements\s*of", re.IGNORECASE), "financial-statements"),
+    (re.compile(r"legal\s+and\s+administrative\s+proceed", re.IGNORECASE), "legal-proceedings"),
     (re.compile(r"legal\s*proceed", re.IGNORECASE), "legal-proceedings"),
     (re.compile(r"quantitative.*qualitative.*market|market\s*risk", re.IGNORECASE), "market-risk"),
     (re.compile(r"controls\s*and\s*procedures", re.IGNORECASE), "controls"),
@@ -203,6 +216,31 @@ def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip())
 
 
+def _strip_exhibit_prefix(text: str) -> str:
+    """Drop leading exhibit labels from 6-K cover rows (e.g. 'Exhibit 99.1 Consolidated...')."""
+    cleaned = _normalize_text(text)
+    stripped = re.sub(
+        r"^(?:exhibit\s+(?:number|no\.?|#)?\s*)?\d+[A-Za-z]?(?:\.\d+)?[\.\:\)]?\s*",
+        "",
+        cleaned,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    return stripped if len(stripped) >= 8 else cleaned
+
+
+def _heading_match_candidates(text: str) -> list[str]:
+    cleaned = _normalize_text(text)
+    candidates = [cleaned]
+    stripped = _strip_exhibit_prefix(cleaned)
+    if stripped != cleaned:
+        candidates.append(stripped)
+    clause = re.split(r"\s+(?:for the|and independent|for the year)\b", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
+    if clause and clause not in candidates:
+        candidates.append(_normalize_text(clause))
+    return candidates
+
+
 def _section_label(section_id: str) -> str:
     return next(s["label"] for s in SECTION_DEFINITIONS if s["id"] == section_id)
 
@@ -246,6 +284,14 @@ def _resolve_item_section(item_num: str, head: str) -> tuple[str, str] | None:
 
 
 def _match_section(text: str) -> tuple[str, str] | None:
+    for candidate in _heading_match_candidates(text):
+        match = _match_section_candidate(candidate)
+        if match:
+            return match
+    return None
+
+
+def _match_section_candidate(text: str) -> tuple[str, str] | None:
     cleaned = _normalize_text(text)
     if len(cleaned) < 3:
         return None
@@ -299,9 +345,16 @@ def _is_section_heading(text: str) -> bool:
     if len(cleaned) < 3:
         return False
     # Risk-factor and MD&A bullets are not section headings (e.g. AMD impairment prose).
-    if re.match(r"^[\u2022\u2013\u2014\-\*]\s", cleaned) or re.match(r"^[A-Za-z]\.\s+", cleaned):
+    if re.match(r"^[\u2022\u2013\u2014\-\*]\s", cleaned):
+        return False
+    if re.match(r"^[A-Za-z]\.\s+", cleaned):
+        # 20-F lettered sub-items (e.g. "D. Risk Factors") are real section boundaries.
+        if _match_section(cleaned) is not None:
+            return len(cleaned) <= _MAX_HEADING_CHARS
         return False
     if _ITEM_HEADER.match(cleaned) or _NOTE_HEADER.match(cleaned):
+        return len(cleaned) <= _MAX_HEADING_CHARS
+    if _match_section(cleaned) is not None:
         return len(cleaned) <= _MAX_HEADING_CHARS
     return len(cleaned) <= 150
 
@@ -376,9 +429,36 @@ def _find_headings(blocks: list[Tag], block_index: dict[int, int]) -> list[tuple
     return [(h[0], h[1], h[2], h[3]) for h in headings]
 
 
+_EMBEDDED_RESOURCE_TAGS = (
+    "script",
+    "style",
+    "noscript",
+    "meta",
+    "link",
+    "svg",
+    "iframe",
+    "img",
+    "object",
+    "embed",
+    "base",
+    "picture",
+    "source",
+    "video",
+    "audio",
+)
+
+
 def _strip_heavy_markup(soup: BeautifulSoup) -> None:
-    for tag in soup(["script", "style", "noscript", "meta", "link", "svg", "iframe"]):
+    for tag in soup(_EMBEDDED_RESOURCE_TAGS):
         tag.decompose()
+
+
+def _strip_embedded_resources(soup: BeautifulSoup) -> None:
+    """Remove tags that trigger sub-resource fetches when excerpt HTML is injected in the app."""
+    for tag in soup(_EMBEDDED_RESOURCE_TAGS):
+        tag.decompose()
+    for anchor in soup.find_all("a"):
+        anchor.unwrap()
 
 
 def _table_row_ancestor(tag: Tag) -> Tag | None:
@@ -654,13 +734,21 @@ def _extract_between(
     outer = _outermost_blocks(slice_blocks)
     html = "".join(str(b) for b in outer)
     raw = html if html else str(start)
-    return _normalize_excerpt_html(raw)
+    normalized = _safe_normalize_excerpt_html(raw)
+    return normalized if normalized is not None else raw
 
 
 _IX_TAG = re.compile(r"^ix:", re.I)
 _EXCERPT_TEXT_TAGS = frozenset({"p", "div", "td", "th", "li", "h1", "h2", "h3", "h4", "h5", "h6"})
 _TABLE_WRAP_CLASS = "filing-table-wrap"
 _TABLE_CELL_ATTRS = ("colspan", "rowspan", "align")
+_PAGE_ONLY_RE = re.compile(r"^\d{1,3}$")
+_TABLE_NOISE_RE = re.compile(
+    r"^(table\s+of\s+contents|see\s+accompanying\b.*|see\s+notes\s+to\b.*|"
+    r"index\s+to\s+(consolidated\s+)?financial|page\s+\d+\s+of\s+\d+)$",
+    re.IGNORECASE,
+)
+_FINANCIAL_AMOUNT_RE = re.compile(r"\$\s*[\d,]+|[\d,]{4,}")
 
 
 def _tag_classes(tag: Tag) -> list[str]:
@@ -688,13 +776,17 @@ def _collapse_inline_text(tag: Tag) -> None:
         if isinstance(child, NavigableString):
             chunk = str(child)
         elif isinstance(child, Tag):
+            if child.name == "br":
+                chunks.append("\n\n")
+                continue
             chunk = child.get_text(" ", strip=True)
         else:
             continue
         chunk = chunk.strip()
         if chunk:
             chunks.append(chunk)
-    text = re.sub(r"\s+", " ", " ".join(chunks))
+    text = re.sub(r"[ \t]+", " ", " ".join(chunks))
+    text = re.sub(r"\n{3,}", "\n\n", text)
     tag.clear()
     if text:
         tag.append(text)
@@ -706,6 +798,72 @@ def _normalize_table_cells(table: Tag) -> None:
             if wrapper.find("table") is None:
                 wrapper.unwrap()
         _collapse_inline_text(cell)
+
+
+def _align_index_page_columns(table: Tag) -> None:
+    """Right-align page-number cells in two-column statement index tables."""
+    for row in table.find_all("tr"):
+        cells = row.find_all(["td", "th"])
+        if len(cells) != 2:
+            continue
+        page_text = _normalize_text(cells[1].get_text(" ", strip=True))
+        if _PAGE_ONLY_RE.fullmatch(page_text):
+            cells[1]["align"] = "right"
+
+
+def _row_cell_texts(row: Tag) -> list[str]:
+    return [
+        _normalize_text(cell.get_text(" ", strip=True))
+        for cell in row.find_all(["td", "th"])
+    ]
+
+
+def _row_has_financial_data(row: Tag) -> bool:
+    return _FINANCIAL_AMOUNT_RE.search(row.get_text(" ", strip=True)) is not None
+
+
+def _row_has_substantive_columns(row: Tag) -> bool:
+    """Keep multi-column statement rows even when one cell looks like boilerplate."""
+    texts = [t for t in _row_cell_texts(row) if t]
+    if len(texts) < 2:
+        return False
+    if _row_has_financial_data(row):
+        return True
+    return sum(1 for t in texts if len(t) > 8) >= 2
+
+
+def _is_noise_table_row(row: Tag) -> bool:
+    if _row_has_substantive_columns(row):
+        return False
+
+    text = _normalize_text(row.get_text(" ", strip=True))
+    if not text:
+        return True
+    if _PAGE_ONLY_RE.fullmatch(text):
+        return True
+    if _TABLE_NOISE_RE.match(text):
+        return True
+    if re.search(r"table\s+of\s+contents", text, re.IGNORECASE) and len(text) < 100:
+        return True
+
+    links = row.find_all("a", href=True)
+    if links and len(text) < 140:
+        if _match_toc_section(text) is not None:
+            return True
+        if re.search(r"item\s+\d", text, re.IGNORECASE) and len(links) >= 1:
+            link_text = " ".join(_normalize_text(link.get_text(" ", strip=True)) for link in links)
+            if link_text and len(link_text) >= len(text) * 0.5:
+                return True
+
+    return False
+
+
+def _strip_noise_table_rows(soup: BeautifulSoup) -> None:
+    """Drop SEC layout rows (page numbers, TOC, footers) from extracted tables."""
+    for table in soup.find_all("table"):
+        for row in list(table.find_all("tr")):
+            if _is_noise_table_row(row):
+                row.decompose()
 
 
 def _wrap_orphan_table_rows(soup: BeautifulSoup) -> None:
@@ -740,6 +898,26 @@ def _wrap_tables_for_display(soup: BeautifulSoup) -> None:
         wrap.append(table.extract())
 
 
+_MAX_SECTION_HTML_BYTES = 2_000_000
+
+
+def _safe_normalize_excerpt_html(html: str | None) -> str | None:
+    """Normalize excerpt HTML; fall back to raw input or None when unusable."""
+    if not html or not isinstance(html, str):
+        return None
+    stripped = html.strip()
+    if not stripped:
+        return None
+    if len(stripped.encode("utf-8", errors="replace")) > _MAX_SECTION_HTML_BYTES:
+        return None
+    if len(stripped) < 5:
+        return stripped
+    try:
+        return _normalize_excerpt_html(stripped)
+    except Exception:
+        return stripped if len(stripped.encode("utf-8", errors="replace")) <= _MAX_SECTION_HTML_BYTES else None
+
+
 def _normalize_excerpt_html(html: str) -> str:
     """Make extracted SEC section HTML readable without rewriting the full parser."""
     if not html or len(html) < 5:
@@ -750,11 +928,15 @@ def _normalize_excerpt_html(html: str) -> str:
         html = f"<table>{stripped}</table>"
 
     soup = BeautifulSoup(html, "html.parser")
+    _strip_embedded_resources(soup)
     _unwrap_presentation_tags(soup)
     _wrap_orphan_table_rows(soup)
 
     for table in soup.find_all("table"):
         _normalize_table_cells(table)
+        _align_index_page_columns(table)
+
+    _strip_noise_table_rows(soup)
 
     for tag in soup.find_all(list(_EXCERPT_TEXT_TAGS)):
         if tag.name in ("td", "th"):

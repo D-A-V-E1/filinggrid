@@ -72,8 +72,8 @@ export default function AccountWelcome({ isPro, onDismiss }: AccountWelcomeProps
         </li>
       </ol>
       <p className="mt-4 text-xs text-brand-700">
-        You may receive emails from Supabase (sign-in links) or Stripe (receipts and billing
-        updates). Check spam if you do not see them.
+        Sign-in links come from Peer Disclosures; billing receipts come from Stripe. Check spam if
+        you do not see them.
       </p>
       <button
         type="button"

@@ -6,8 +6,8 @@
 
 | | |
 |---|---|
-| **Last updated** | 2026-06-27 |
-| **Status** | Planning — Phase 1 not yet implemented |
+| **Last updated** | 2026-06-29 |
+| **Status** | **Phase 1 shipped** — SectionNav (Sections \| Deltas tabs) + DeltaStrip + delta report page; Phase 2 drawer/L2–L3 depth; Phase 3 L4 |
 
 ---
 
@@ -105,7 +105,7 @@ Every delta flag in the strip, map, or inline highlight opens the **same drawer*
 
 | Delta flag type | Drawer shows (factual) |
 |-----------------|------------------------|
-| **`headline_vs_median`** (revenue outlier) | Tagged revenue line label + CY amount; peer amount table; optional YoY from `annual_summary` |
+| **`headline_vs_median`** (revenue outlier) | Tagged revenue line label + CY amount; peer amount table; optional YoY from `annual_summary`; **MD&A excerpt block** when `mda_driver_mention` cross-link (Results of Operations spans) |
 | **`missing_section`** | *Section not present* for flagged ticker; peer excerpt(s) showing note exists in others |
 | **`treatment_only_peer`** (LIFO vs WAC) | Inventory policy excerpt with matched phrase (e.g. LIFO); peer excerpts with FIFO / weighted-average wording |
 | **`asc_mention_gap`** | Sentence citing ASC topic; peer contrast (*"No ASC 326 citation in other columns on this note"*) |
@@ -128,7 +128,7 @@ flowchart LR
   Drawer --> Edgar
 ```
 
-Strip (L0), section delta map (L1), inline highlights (L2–L4), and column **vs last year** badges all route through [`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx). Grid navigation is a secondary action, not the primary expand surface.
+Strip (L0), section delta map (L1), inline highlights (L2–L4), and column **vs last year** badges route through [`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) **(Phase 2+)**. Phase 1 strip/map click → grid scroll only (`SectionNav` Deltas tab, `DeltaReportLinkBar`, `SectionDeltaMapGrid` on delta report page).
 
 **Lib:** [`lib/delta-detail.ts`](../lib/delta-detail.ts) — `buildDeltaDetail(flag, sessionState) → { tagRows, excerpts, peerContrast, pyCyDiff?, links }`; composes lazy fetches; no inference layer.
 
@@ -153,7 +153,7 @@ Strip (L0), section delta map (L1), inline highlights (L2–L4), and column **vs
 
 | ID | Rule (same FY, loaded peers) | Example label |
 |----|------------------------------|---------------|
-| `headline_vs_median` | Value or YoY % >1.5× peer median (or <0.5×) | "Revenue growth 2× peer median" |
+| `headline_vs_median` | Active **FY level** >1.5× peer median (or <0.5×) on revenue, net income, op income, EPS — **not YoY %** (YoY → `headline_py_spread`, Phase 2) | "NVDA revenue well above peer median" |
 | `headline_only_peer` | Only one ticker with material value or only one negative EPS | "Only META negative net income" |
 | `headline_py_spread` | Own YoY change vs peer median YoY change (L4-lite on bootstrap) | "EPS grew 80% vs peers' 12% median" |
 | `tax_rate_outlier` | Effective tax rate (derived or tagged) vs peer median ± threshold | "Effective tax rate 8 pts below peers" |
@@ -437,6 +437,91 @@ In SEC filing context, **"open opinions"** is not one field. It spans several di
 
 ---
 
+## MD&A driver cross-link (metric → narrative)
+
+**Purpose:** Make headline and footnote flags **smarter and more accurate** by linking metric outliers to **MD&A excerpts** where filers describe results — without LLM, cause attribution, or "key drivers" summaries. User sees: *metric flag + MD&A cites [terms] in [subsection]* with matching sentences.
+
+**Guardrail:** Never *"likely due to"* or synthesized driver narratives. Drawer shows tagged amounts **and** factual MD&A quote spans only.
+
+### Why MD&A
+
+Item 7 (`mda`) is where issuers explain revenue, margin, EPS, liquidity, and estimates in prose. A revenue outlier is more actionable when the drawer also surfaces *Results of Operations* sentences mentioning volume, pricing, mix, FX, etc. — still filing text, not inference.
+
+### Structure-aware scan (not whole-section keyword count)
+
+Parse MD&A into blocks via heading regex (filers vary; best-effort):
+
+| Block | Heading patterns (examples) | Driver lexicon scope |
+|-------|----------------------------|----------------------|
+| **Results of Operations** | `Results of Operations`, `Overview of Results` | Revenue, volume, pricing, mix, ASP, segment names |
+| **Liquidity** | `Liquidity`, `Capital Resources` | Covenant, liquidity, debt, cash uses |
+| **Critical accounting estimates** | `Critical Accounting`, `Estimates and Assumptions` | Impairment, allowance, revenue recognition judgments |
+| **Overview** | `Overview`, `Business Highlights` | Restructuring, macro, one-time events |
+
+Rules run **inside the matched block**, not across the full MD&A blob — reduces false positives from footnote-style mentions elsewhere in Item 7.
+
+### Driver lexicon catalog (deterministic)
+
+Extend Phase 2 event keyword catalog with **metric-family lexicons** in [`lib/mda-driver-lexicon.ts`](../lib/mda-driver-lexicon.ts):
+
+| Family | Lexicon examples (regex / phrase buckets) | Links to metric flags |
+|--------|-------------------------------------------|------------------------|
+| **Revenue** | volume, units sold, pricing, price, mix, ASP, backlog, demand, foreign exchange, FX | `headline_vs_median`, `headline_py_spread` (revenue) |
+| **Margin** | gross margin, input costs, freight, utilization, commodity | `margin_outlier` |
+| **EPS** | diluted, share count, buyback, repurchase, dilution, antidilutive | `headline_vs_median` (EPS), `headline_py_spread` |
+| **Tax** | effective tax rate, discrete, valuation allowance | `tax_rate_outlier` |
+| **One-time** | (shared with events catalog) impairment, restructuring, acquisition | `topic_only_peer`, event keywords |
+
+Lexicons are curated JSON — expandable without engine rewrite.
+
+### Delta rules (MD&A cross-link)
+
+| ID | Detection | User sees (example) | Level |
+|----|-----------|---------------------|-------|
+| `mda_driver_mention` | Base metric outlier + ≥1 lexicon hit in scoped MD&A block | "Revenue outlier — MD&A cites pricing and mix (Results of Operations)" | L2 / L3 |
+| `mda_driver_only_peer` | Only one ticker with lexicon hit for that metric family while outlier | "Only NVDA discusses data center demand in MD&A vs revenue outlier peers" | L2 |
+| `mda_driver_spike` | Lexicon hit count &gt; peer median in Results block | "Heavy pricing/mix language in MD&A vs peers" | L2 |
+| `mda_results_changed_py` | Results of Operations block text diff vs PY (threshold) | "MD&A Results of Operations changed vs last year" | L4 |
+| `mda_driver_new_py` | Lexicon term **new in CY** vs PY in Results block | "New FX language in MD&A vs last year" | L4 |
+
+**Corroboration boost (internal, not a separate user flag):** When `mda_driver_mention` attaches to an existing `headline_vs_median` or `topic_only_peer`, [`lib/delta-rank.ts`](../lib/delta-rank.ts) may bump severity +1 (cap P1). Strip label unchanged; drawer shows MD&A block.
+
+**Cross-link payload on any headline flag:**
+
+```ts
+{ related_sections: ["mda"], mda_block?: "results_of_operations", lexicon_hits: string[], excerpt_spans: Span[] }
+```
+
+### Drawer integration
+
+When a metric or event flag has MD&A cross-link data, drawer adds:
+
+| Block | Content |
+|-------|---------|
+| **MD&A excerpts** | Sentence spans from scoped block matching driver lexicon |
+| **Subsection label** | Plain name: "Results of Operations" — not Item 7 |
+| **Peer contrast** | Which peers also mention same lexicon terms in MD&A (factual) |
+| **Actions** | **Jump to MD&A** (sync grid) · existing Jump to grid / EDGAR |
+
+Phase 3 adds **REMOVED/ADDED** for `mda_results_changed_py` and `mda_driver_new_py`.
+
+### L1 map (`mda` cell)
+
+`mda` section delta map cell may show multiple badges: `risk_mda_expansion`, event keywords, `mda_driver_*`, PY change. Severity = max tier among hits; **uncapped** (all hits in register). Persona **Investing** boosts MD&A driver rows in strip/register sort.
+
+### Phase assignment
+
+| Phase | Scope |
+|-------|-------|
+| **Phase 2** | MD&A block parser; driver lexicons; `mda_driver_mention`, `mda_driver_only_peer`, `mda_driver_spike`; corroboration boost; drawer MD&A excerpt block; Investing register group **MD&A driver language**; runs with opt-in **Scan events & movers** (or when user opens MD&A) |
+| **Phase 3** | `mda_results_changed_py`, `mda_driver_new_py`; PY→CY excerpt blocks in drawer; cross-boost L4 note flags when MD&A Results also changed |
+
+**Performance:** Same as events scan — lazy `fetchSectionText` for `mda`; cache per `(cache_key, section_id)`; never bulk MD&A scan on Phase 1 load.
+
+**Accuracy limits (UI tooltip):** MD&A structure parsing is best-effort; foreign filers (20-F) may use different headings — narrative flags still valid, block labels may read "MD&A body."
+
+---
+
 ## Delta types that matter most — by user
 
 All personas use the **same delta engine**, **same Delta detail drawer**, and layered drill-down. What changes is **L0 strip ranking** (which flags surface in the 5–7 headline cap) and optional **persona preset** that filters **register/list display order** (e.g. "Reporting" vs "Investing") — not separate products, paywalls, drawer variants, or which rules run. **Completeness lives in L1 map + persona registers** — see [Completeness & persona registers](#completeness--persona-registers).
@@ -445,7 +530,7 @@ All personas use the **same delta engine**, **same Delta detail drawer**, and la
 
 | ID | User sees (example) | Level |
 |----|---------------------|---------------|
-| `headline_vs_median` | "NVDA revenue growth 2× peer median" | L0 / L3 |
+| `headline_vs_median` | "NVDA revenue well above peer median" | L0 / L3 |
 | `headline_only_peer` | "Only META negative net income in group" | L0 / L3 |
 | `headline_py_spread` | "EPS +80% YoY vs peers' +12% median" | L0 / L4 |
 | `tax_rate_outlier` | "Effective tax rate 8 pts below peers" | L0 / L3 |
@@ -467,6 +552,11 @@ All personas use the **same delta engine**, **same Delta detail drawer**, and la
 | `amended_filing` | "Filing amended — verify figures" | L0 |
 | `metrics_not_comparable_mixed_filers` | "US and foreign filers in group — metric comparisons limited" | L0 |
 | `risk_mda_expansion` | "Risk / MD&A much longer vs peers" | L2 |
+| `mda_driver_mention` | "Revenue outlier — MD&A cites pricing and mix" | L2 / L3 |
+| `mda_driver_only_peer` | "Only peer discussing demand drivers in MD&A" | L2 |
+| `mda_driver_spike` | "Heavy pricing/mix language in MD&A vs peers" | L2 |
+| `mda_results_changed_py` | "MD&A Results of Operations changed vs last year" | L4 |
+| `mda_driver_new_py` | "New FX language in MD&A vs last year" | L4 |
 | `segment_gap` | "Segment note missing vs peers who segment" | L1 |
 | `open_matter_present` | "Open SEC staff comments in group" | L1 / L2 |
 | `open_matter_only_peer` | "Only peer with material weakness in group" | L1 |
@@ -499,7 +589,7 @@ All personas use the **same delta engine**, **same Delta detail drawer**, and la
 
 | Priority | Delta types | Why |
 |----------|-------------|-----|
-| **Highest** | `headline_vs_median`, `headline_py_spread` on **revenue, EPS, net income**; `treatment_only_peer` on revenue; `asc_mention_gap` on revenue/leases; `section_changed_py`, `risk_mda_expansion` | Model drivers + policy signals that move estimates |
+| **Highest** | `headline_vs_median`, `headline_py_spread` on **revenue, EPS, net income**; `treatment_only_peer` on revenue; `asc_mention_gap` on revenue/leases; `section_changed_py`, `risk_mda_expansion`, **`mda_driver_mention`** (metric + MD&A excerpt) | Model drivers + policy signals that move estimates |
 | **High** | `tax_rate_outlier`, `margin_outlier`, `asc_set_diff`, `topic_only_peer` (impairment), `treatment_py_change` on revenue; `going_concern_flag`, `contingency_open_emphasis`, `open_staff_comments` | Estimate, tax, recognition & open-risk story |
 | **Medium** | `missing_section`, `segment_gap`, footnote `metric_vs_median`, `asu_adoption_only_peer`; `contingency_resolved_py`, `staff_comment_resolved_py` | Completeness vs comp set; "clean-up" narrative |
 | **Lower** | `prose_number_gap`, `amended_filing`, `adoption_method_diff` | Unless auditing a specific name |
@@ -590,7 +680,7 @@ All personas use the **same delta engine**, **same Delta detail drawer**, and la
 
 ### Ranking integration (product + engineering)
 
-**Phase 1:** Single **universal** ranker optimized for persona #6 + reporting (#3) overlap — missing sections, impairment/legal presence, column heat.
+**Phase 1:** Universal ranker live via [`rankMainstreamStrip`](../lib/delta-surface.ts) + [`rankDeltas`](../lib/delta-rank.ts) (`general` preset, cap 7).
 
 **Phase 2+:** Optional toolbar preset (stored in `localStorage`, not account-required):
 
@@ -617,7 +707,7 @@ Implement in [`lib/delta-rank.ts`](../lib/delta-rank.ts): `rankDeltas(flags, pre
 
 | Surface | Scope | Cap | Purpose |
 |---------|-------|-----|---------|
-| **L0 headline strip** | Highest-severity cross-comp-set flags | **5–7**, severity-ranked (P1 first) | Instant hook at compare open — *"what's weird right now"* |
+| **L0 Deltas tab** | Highest-severity cross-comp-set flags | **5–7**, severity-ranked (P1 first) | [`SectionNav`](../components/compare/SectionNav.tsx) **Sections \| Deltas** tab + [`DeltaStrip`](../components/compare/DeltaStrip.tsx) — *"what's weird right now"* |
 | **L1 section delta map** | **ALL** section-level deltas across catalog | **None** — every section with ≥1 flag gets a cell/badge | Delta zoom: which footnotes/items differ |
 | **Persona register / list** | Deterministic subset of all flags for active preset | **None** — full hit list for that persona's catalog | Workpaper-style completeness for Reporting, Investing, Accounting, Auditor, Corp dev |
 | **Delta detail drawer** | Single flag evidence | One flag per open | Factual what-changed — tags + excerpts (+ PY/CY in Phase 3) |
@@ -674,6 +764,7 @@ Each preset maps to a **fixed catalog** of section IDs + delta type IDs. Engine 
 | Group | Contents |
 |-------|----------|
 | **Financial outliers** | `headline_vs_median`, `headline_py_spread`, `tax_rate_outlier`, `margin_outlier`, `metric_vs_median` |
+| **MD&A driver language** | `mda_driver_mention`, `mda_driver_only_peer`, `mda_driver_spike` — metric-linked excerpts from Results of Operations |
 | **One-time language** | Event keyword hits on MD&A + notes — `topic_only_peer`, keyword spike counts |
 | **Risk & audit** | `going_concern_flag`, `open_staff_comments`, `contingency_open_emphasis`, `amended_filing` |
 
@@ -705,6 +796,93 @@ Each preset maps to a **fixed catalog** of section IDs + delta type IDs. Engine 
 | **Mixed filer banner** | When domestic + foreign columns — suppress metric medians, show banner; narrative registers still complete |
 | **Export register (Pro, Phase 3)** | CSV/clipboard of active persona register — optional Workiva handoff; not a new SKU |
 
+### Coverage guarantees & anti-static evolution (no LLM)
+
+**Honest product promise:** PD does **not** guarantee *"found everything material in the filing."* It guarantees *"ran **N** deterministic checks on **M** catalog sections; here is **every** hit with rule ID and filing evidence."* High-stakes work still requires verifying the original filing.
+
+#### What "complete" means
+
+| Surface | Completeness claim |
+|---------|-------------------|
+| **L0 strip** | **Not complete** — top 5–7 ranked hooks only |
+| **L1 map** | **Complete for section-level flags** — every catalog section with ≥1 hit gets a cell |
+| **Persona registers** | **Complete for that persona's rule catalog** — uncapped rows, sorted by severity |
+| **Coverage footer** | **Audit trail** — *"Scanned N sections · M with deltas"* + scan mode (metadata / footnote / events) |
+| **Opt-in scans** | User must run **Scan all footnotes** / **Scan events & movers** for full text-rule coverage |
+
+**UI rule:** Never imply the strip is exhaustive. Phase 1 footer shows material map coverage (*"Scanned N sections · M with deltas"*) from [`mapWorthyCoverage`](../lib/delta-surface.ts); full ASC/treatment/open-matter text rules still require Phase 2 opt-in scans.
+
+#### Layered detection — specific rules + generic fallbacks
+
+Specific lexicon/ASC/treatment rules catch **known** patterns. **Fallback rules** reduce "obvious miss because phrase wasn't in catalog":
+
+| Fallback type | Rule examples | Catches |
+|---------------|---------------|---------|
+| **Structural** | `missing_section`, `segment_gap`, `topic_only_peer` | Peer has disclosure you don't — no keyword needed |
+| **Numeric** | `headline_vs_median`, `metric_vs_median`, `tax_rate_outlier` | Outliers without reading prose |
+| **Text diff (L4)** | `section_changed_py`, `mda_results_changed_py`, `treatment_py_change` | Substantive PY→CY change even if lexicon missed new wording |
+| **Density spike** | Keyword count &gt; peer median in section | Unusual emphasis on a term peers barely mention |
+| **Length spike** | `risk_mda_expansion` | Section much longer than peers |
+| **Cross-check** | `prose_number_gap`, MD&A corroboration boost | Narrative vs tags or metrics vs MD&A misaligned |
+
+**Design principle:** Add **named rules** for recurring earnings-season patterns; rely on **diff + spikes + presence** for novel one-offs until lexicon is updated.
+
+#### Expandable catalogs (prevent static rule rot)
+
+Rule patterns live in **data**, not scattered one-offs:
+
+| Asset | Contents | Update cadence |
+|-------|----------|----------------|
+| Event keyword catalog | impairment, restructuring, cyber, … | After earnings season / user reports |
+| [`lib/mda-driver-lexicon.ts`](../lib/mda-driver-lexicon.ts) | Revenue/margin/EPS driver phrases | Same |
+| Treatment phrase buckets | LIFO/FIFO, adoption methods, … | Phase 3 clustering + manual adds |
+| Open-matter buckets | MW, UTP, going concern, … | Rare; SEC form changes |
+
+Engine logs **catalog version** in session metadata (internal) for support/debug. Adding a phrase **must not** require engine rewrite.
+
+#### Golden filer regression set (engineering)
+
+Maintain a **fixed compare URL set** (~10–20 slugs) covering known flag types — e.g. impairment-only-peer, open staff comments, material weakness, mixed 10-K/20-F, revenue outlier + MD&A drivers. Document in [`docs/DELTA_REGRESSION_FILERS.md`](../docs/DELTA_REGRESSION_FILERS.md) *(optional follow-up)*.
+
+| Check | When |
+|-------|------|
+| Manual or scripted flag assertion per golden slug | Before merge on delta PRs |
+| Lexicon/catalog version bump | When keywords added — re-run golden set |
+| False-positive review | Quarterly — demote noisy rules to P3 or raise threshold |
+
+Optional later: lightweight pytest or smoke script that calls delta-engine on fixture `ParseResponse` + mocked section text — not required for Phase 1.
+
+#### Severity without suppression
+
+P3 flags remain in **map + register**; only the **strip** caps. Users drilling for completeness see low-severity hits — they sort last, not disappear.
+
+#### User-facing limits (tooltips / footer)
+
+Set expectations when rules cannot fire reliably:
+
+- Pattern match in filing text — not a legal or audit conclusion  
+- Resolution flags (*appears resolved*) — narrative inference only  
+- Footnote scan not run — ASC/treatment/open-matter text rules incomplete until opt-in scan  
+- Mixed US + foreign filers — metric medians suppressed; narrative flags still run  
+- Judgment-heavy items (UTP thresholds, CAM resolution prose) — may not flag; see roadmap data limits  
+
+#### What still will not be caught (document, don't over-promise)
+
+- Off-EDGAR facts (comment letter threads, PCAOB inspection)  
+- Nuanced legal/accounting judgment without structured text signal  
+- Novel events with no metric move, small PY diff, and no lexicon hit  
+- Wrong user-selected comp set — rules run correctly on a misleading group  
+- Industry-specific drivers until lexicon or diff rules surface them  
+
+PD accelerates **where to look**; it does not replace reading the filing for investment, audit, or filing decisions.
+
+#### Completeness checklist (ship criteria)
+
+**Phase 1 (shipped):** L0 strip (7 cap, mainstream filter incl. P1/P2 missing_section) + L1 map via `DeltaReportLinkBar` + `/compare/[slug]/deltas` (`SectionDeltaMapGrid`); coverage footer N/M; flag click → grid scroll (no drawer yet).  
+**Phase 2:** Registers uncapped; scan buttons merge results; drawer on every register row; footer shows scan mode.  
+**Phase 3:** L4 rows in registers; export optional; golden filer doc maintained.  
+**Ongoing:** Quarterly lexicon review; golden set re-run after catalog changes.
+
 ### Performance
 
 | Load phase | What runs | Cost |
@@ -712,7 +890,7 @@ Each preset maps to a **fixed catalog** of section IDs + delta type IDs. Engine 
 | **Initial (Phase 1)** | L0 strip + L1 map from **metadata only** (`ParseResponse` section presence, headline financials, topic presence) | Very low |
 | **Coverage footer** | Count catalog sections scanned vs sections with ≥1 L1-eligible flag | Trivial |
 | **Full footnote scan** | ASC/treatment/open-matter rules on all `note-*` text | **Not on load** — Phase 2: background batch after idle **or** opt-in **"Scan all footnotes"** button |
-| **Event & mover scan** | Keyword catalog on MD&A + flagged notes | **Not on load** — Phase 2: opt-in **"Scan events & movers"** button (or auto after footnote scan completes) |
+| **Event & mover scan** | Keyword catalog + **MD&A driver lexicon** on `mda`, `risk-factors`, flagged notes | **Not on load** — Phase 2: opt-in **"Scan events & movers"** button (includes MD&A block parse + driver cross-link) |
 | **Per-row / drawer** | `fetchSectionText` lazy on register row expand or drawer open | Low — cached per `(cache_key, section_id)` |
 | **L4 / PY** | Prior-period fetch on drawer open or vs-last-year toggle only | Medium — never bulk on load |
 
@@ -722,8 +900,8 @@ Each preset maps to a **fixed catalog** of section IDs + delta type IDs. Engine 
 
 | Phase | Completeness deliverables |
 |-------|---------------------------|
-| **Phase 1** | L1 section delta map — **full catalog**, every section-level hit; coverage footer *"Scanned N sections · M with deltas"*; L0 strip remains 5–7 headline cap |
-| **Phase 2** | Persona scoped register/list views ([`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) or persona tabs on [`SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx)); opt-in **Scan all footnotes** + **Scan events & movers**; P1/P2/P3 badges; drawer on all register rows |
+| **Phase 1 (shipped)** | L1 section delta map — material hits via `filterMapWorthyFlags`; `DeltaReportLinkBar` + `/compare/[slug]/deltas` (`CompareDeltaReport`, `SectionDeltaMapGrid`); coverage footer *"Scanned N sections · M with deltas"*; L0 strip 7-cap mainstream filter (incl. P1/P2 missing_section); click → grid |
+| **Phase 2** | Persona scoped register/list views ([`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) or persona tabs on [`CompareDeltaReport`](../components/compare/CompareDeltaReport.tsx)); opt-in **Scan all footnotes** + **Scan events & movers**; P1/P2/P3 badges; drawer on all register rows |
 | **Phase 3** | Export disclosure change register (Pro optional CSV/clipboard); L4 PY rows in Reporting + Accounting registers; open-matter resolution rows in Auditor register |
 
 ### Components & lib
@@ -732,9 +910,11 @@ Each preset maps to a **fixed catalog** of section IDs + delta type IDs. Engine 
 |--------|------|
 | [`lib/delta-register.ts`](../lib/delta-register.ts) | `PERSONA_CATALOGS`, `buildPersonaRegister(flags, preset)`, `groupRegisterRows()`, severity P1/P2/P3 assignment |
 | [`components/compare/DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) | Persona tabbed list view — full hit rows, severity badge, click → drawer; scan buttons + progress |
-| [`components/compare/SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) | L1 map (all section deltas) + optional embed of register tabs + coverage footer |
+| [`components/compare/DeltaReportLinkBar.tsx`](../components/compare/DeltaReportLinkBar.tsx) | L1 entry on compare grid — headline + link to full delta report |
+| [`components/compare/CompareDeltaReport.tsx`](../components/compare/CompareDeltaReport.tsx) + [`app/compare/[peer_slug]/deltas/page.tsx`](../app/compare/[peer_slug]/deltas/page.tsx) | Full delta report at `/compare/[slug]/deltas` |
+| [`components/compare/SectionDeltaMapGrid.tsx`](../components/compare/SectionDeltaMapGrid.tsx) | L1 section × ticker grid (all section deltas) + coverage footer |
 
-**Alternative layout:** Persona tabs directly on `SectionDeltaMap` (Map | Reporting | Investing | Accounting | Open matters) — pick one in Phase 2 implementation; both share `lib/delta-register.ts`.
+**Alternative layout:** Persona tabs directly on `CompareDeltaReport` (Map | Reporting | Investing | Accounting | Open matters) — pick one in Phase 2 implementation; both share `lib/delta-register.ts`.
 
 ---
 
@@ -756,30 +936,49 @@ No new paywalls on delta features. L4 prior-period on Free only when prior perio
 
 ## Build phases
 
-### Phase 1 — L0 + L1 (instant deltas on load)
+### Phase 1 — L0 + L1 (instant deltas on load) — **shipped**
 
 **Goal:** User opens compare → within seconds sees **what's weird** without opening a section.
 
-| Delta type | Detection | Performance | Complexity |
-|------------|-----------|-------------|------------|
-| **Missing section vs peers** | L1 map + L0 roll-up | Low | Low |
-| **Headline metric vs peer median** | `annual_summary` on revenue, net income, EPS, op income for active FY | Low — uses bootstrap financials | Low |
-| **Headline only-peer** | Sole negative EPS, sole revenue decline, etc. | Low | Low |
-| **Narrative vs numbers mismatch** | Section present, no tagged note data (internal check) | Low | Low |
-| **Topic presence outliers** | `legal-proceedings`, `note-impairment`, `note-contingencies` — only some peers | Low | Low |
-| **Open staff comments (Item 1B)** | `open_staff_comments`, `only_peer_open_staff` on `unresolved-staff` metadata + preview *(full lazy-text → Phase 2)* | Low | Low |
-| **Accountant disagreement (Item 9)** | `disagreement_reported` when section present with content *(full lazy-text → Phase 2)* | Low | Low |
-| **Open contingency emphasis** | `contingency_open_emphasis` — extends legal/contingency keyword presence *(full lazy-text → Phase 2)* | Low | Low |
-| **Column heat** | Count of L1/L2-eligible flags per ticker | Low | Low |
-| **Mixed domestic/foreign banner** | ≥1 10-K/10-Q and ≥1 20-F/6-K column; suppress cross-taxonomy metric medians | Low | Low |
+**Engine:** [`scanDeltas()`](../lib/delta-engine.ts) on parse metadata + headline financials (`headline_only` batch). Surfaces: [`SectionNav.tsx`](../components/compare/SectionNav.tsx) (**Sections \| Deltas** tabs) + [`DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) (L0), [`DeltaReportLinkBar.tsx`](../components/compare/DeltaReportLinkBar.tsx) on compare + [`CompareDeltaReport.tsx`](../components/compare/CompareDeltaReport.tsx) / [`SectionDeltaMapGrid.tsx`](../components/compare/SectionDeltaMapGrid.tsx) at `/compare/[slug]/deltas` (L1), wired in [`CompareGrid.tsx`](../components/compare/CompareGrid.tsx). Display filters in [`lib/delta-surface.ts`](../lib/delta-surface.ts).
 
-**UI:** [`DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) (not "Outliers/XBRL") + [`SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) (coverage reframed as **delta map** — **full catalog**, no cap) + **coverage footer** *"Scanned N sections · M with deltas"*. Phase 1 flags click through to grid only; **Delta detail drawer** ships Phase 2.
+**Recent fixes (post–Phase 1 polish):** [`DeltaReportLinkBar`](../components/compare/DeltaReportLinkBar.tsx) spinner/settling while financials upgrade; metric row centering without window-scroll race ([`lib/filing-column-scroll.ts`](../lib/filing-column-scroll.ts)); gzip `refresh_tickers` cache path; excerpt text fallback when HTML sparse; Pro full GAAP tables on `financial-statements` overview; XBRL footnote table HTML preservation in disclosures panel.
+
+| Delta type | Detection | UI surface | Notes |
+|------------|-----------|------------|-------|
+| **`missing_section`** | Catalog section present in ≥2 peers, absent in minority | Map + strip (P1/P2 ranked) | Skips GAAP statement IDs |
+| **`headline_vs_median`** | Active FY **level** >1.5× or <0.5× peer median on revenue, net income, op income, EPS (annual); **interim 10-Q/6-K uses 1.35× / 0.65×** | Strip + map | Not YoY; suppressed when mixed filers / mixed sources |
+| **`headline_only_peer`** | Sole negative net income or EPS in group | Strip + map | Magnitude suppressed under mixed filers |
+| **`topic_only_peer`** | Only one peer with material signal on section | Strip + map (mainstream sections only) | See footnote rules below |
+| **`open_staff_comments`** / **`only_peer_open_staff`** | Substantive `unresolved-staff` preview | Strip + map | Governance preview OK |
+| **`disagreement_reported`** | Substantive `disagreements` preview | Strip + map | |
+| **`contingency_open_emphasis`** | Keyword spike vs peer median on `legal-proceedings` / `note-contingencies` | Strip + map | `note-contingencies` requires non-zero tagged FY amounts |
+| **`prose_number_gap`** | `note-*` present, no tagged note data | **Engine only** — hidden from strip/map (`isMapWorthyFlag`) | Phase 2+ may surface in Accounting register |
+| **`metrics_not_comparable_mixed_filers`** | Mixed domestic/foreign or mixed HTML vs companyfacts sources | Strip (informational) | Suppresses headline magnitude rules |
+| **Column heat** | Mainstream flag count per ticker on column header | Column badge | From [`countMainstreamFlagsByTicker`](../lib/delta-surface.ts) |
+| **Mixed domestic/foreign banner** | ≥1 domestic + ≥1 foreign column | Dismissible banner | Suppresses cross-taxonomy metric medians |
+
+**`topic_only_peer` footnote rules (Phase 1 tightening):**
+
+| Section class | Examples | Material signal |
+|---------------|----------|-----------------|
+| **Dollar-event notes** | `note-impairment`, `note-contingencies`, `note-restructuring`, `note-acquisitions` | Non-zero tagged FY amounts in `notes_xbrl` — **not** narrative preview alone |
+| **Governance / open matters** | `unresolved-staff`, `controls`, `disagreements` | Substantive section `text_preview` (≥40 chars, not "none" boilerplate) |
+| **Legal narrative** | `legal-proceedings` | Substantive preview |
+
+During headline-only financials load, `notes_xbrl` is empty — dollar-event note flags **do not emit** until full financials upgrade (user opens a note or lazy upgrade). Rescan after `notes_xbrl` lands.
+
+**Click behavior (Phase 1):** Strip and map cells call `handleSectionSelect(sectionId, ticker)` — scroll grid to section/column. **No drawer yet** (Phase 2).
+
+**Strip vs map:** Strip shows top **7** mainstream flags ([`rankMainstreamStrip`](../lib/delta-surface.ts), cap via `MAINSTREAM_STRIP_CAP`); includes P1/P2 `missing_section`; map shows key hits only (excludes `prose_number_gap`, P3 rollups, `metrics_not_comparable`). Strip shows **+N more** when capped; **See all X deltas** opens [`/compare/[slug]/deltas`](../app/compare/[peer_slug]/deltas/page.tsx) (`CompareDeltaReport` + `SectionDeltaMapGrid`).
 
 **Exit:** Free tier, 3 peers — marketing screenshot is the delta strip, not the grid alone.
 
 ---
 
-### Phase 2 — L2 + L3 (section depth + ASC mentions + open matters)
+### Phase 2 — L2 + L3 (section depth + ASC mentions + open matters) — **not yet shipped**
+
+**Still pending:** [`DeltaDetailDrawer`](../components/compare/DeltaDetailDrawer.tsx), inline row highlights in [`FilingColumn.tsx`](../components/compare/FilingColumn.tsx), `metric_vs_median`, `headline_py_spread`, `tax_rate_outlier`, `margin_outlier`, full lazy-text ASC/open-matter rules, persona registers, opt-in scan buttons.
 
 **Goal:** Active section shows **peer vs peer** and **line-level** deltas; **ASC mention detection** and **open-matter presence** on lazy section text.
 
@@ -798,10 +997,21 @@ No new paywalls on delta features. L4 prior-period on Free only when prior perio
 | **Category open-matter flags** | Staff comments, controls weakness, opinion/CAM, UTP, contingency, going concern (see open-matters section) | Med (lazy text) | Med |
 | **Open matters (peer snapshot)** | `auditor_opinion_nonstandard`, `going_concern_flag`, `cam_emphasis`, `controls_weakness_open`, `utb_open_emphasis`, `utb_balance_outlier`, `contingency_accrual_outlier`, `open_matter_only_peer` | Med (lazy `financial-statements` + `controls` text) | Med |
 | **Taxonomy-gated footnote metrics** | `metric_vs_median` only when ≥2 peers share taxonomy + currency | Low | Med |
+| **MD&A driver cross-link** | Block-scoped lexicon scan on `mda`; `mda_driver_mention` attaches to headline outliers; corroboration severity boost | Med (lazy text; with events scan) | Med |
+| **`mda_driver_only_peer`** / **`mda_driver_spike`** | Lexicon hits only in one column or count &gt; peer median in Results block | Med (lazy text) | Med |
 
-**UI:** Highlights in [`FilingColumn.tsx`](../components/compare/FilingColumn.tsx); all flags open **[`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx)** with tagged amount rows + disclosure excerpts for the active delta (lazy `fetchSectionText` on click). **[`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx)** (or persona tabs on `SectionDeltaMap`) — full persona hit lists; opt-in **Scan all footnotes** + **Scan events & movers** buttons. Optional external FASB.org link in drawer — never hosted codification text. **Jump to grid** + **EDGAR** as drawer actions.
+**UI:** Highlights in [`FilingColumn.tsx`](../components/compare/FilingColumn.tsx); all flags open **[`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx)** with tagged amount rows + disclosure excerpts + **MD&A excerpt block when cross-linked** for the active delta (lazy `fetchSectionText` on click). **[`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx)** (or persona tabs on `CompareDeltaReport`) — full persona hit lists; opt-in **Scan all footnotes** + **Scan events & movers** buttons. Optional external FASB.org link in drawer — never hosted codification text. **Jump to grid** + **EDGAR** as drawer actions.
 
 **Delta detail drawer (Phase 2):** Basic panel — source section/period, tagged amounts table, matching excerpt(s), peer factual contrast (*"others unchanged"* or peer quote), no PY/CY diff blocks yet.
+
+**Phase 2 — recommended implementation order:**
+
+1. [`lib/delta-detail.ts`](../lib/delta-detail.ts) + `buildDeltaDetail()` for 2–3 flag types (`missing_section`, `headline_vs_median`, `asc_mention_gap`)
+2. [`DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) — lazy section text on open
+3. Wire strip / map / register clicks → drawer (grid jump as secondary action)
+4. Lazy text rules: `asc_mention_gap`, open-matter text (subset)
+5. [`DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) + [`lib/delta-register.ts`](../lib/delta-register.ts) persona tabs
+6. Opt-in scan buttons (**Scan all footnotes**, **Scan events & movers**)
 
 **Internal only:** ASC regex helpers in [`lib/disclosure-treatment-rules.ts`](../lib/disclosure-treatment-rules.ts) or [`lib/asc-extract.ts`](../lib/asc-extract.ts) — never exposed as "ASC module" in UI.
 
@@ -823,6 +1033,7 @@ No new paywalls on delta features. L4 prior-period on Free only when prior perio
 | **`open_matter_resolved_py`** | Canonical rollup: PY→CY open-matter bucket cleared + optional remediation phrase | Med (prior fetch) | Med–High |
 | **Category resolution flags (L4)** | `staff_comment_*_py`, `controls_weakness_*_py`, `contingency_resolved_py`, `disagreement_resolved_py` — PY→CY on `unresolved-staff`, `controls`, `note-contingencies`, `disagreements` | Med (prior fetch) | Med–High |
 | **Amended filing** | 10-K/A metadata — trust delta | Low | Low |
+| **MD&A PY change** | `mda_results_changed_py`, `mda_driver_new_py` on Results block vs PY | Med (prior fetch) | Med–High |
 
 **UI:** Column control **vs last year**; treatment and open-matter flags merge into same Delta strip with level badge (peer / year); plain-English labels only. **Export disclosure change register** (Pro optional CSV/clipboard) from active persona register tab.
 
@@ -862,19 +1073,25 @@ No new paywalls on delta features. L4 prior-period on Free only when prior perio
 
 | Module | Role |
 |--------|------|
-| [`lib/delta-engine.ts`](../lib/delta-engine.ts) | `scanLevel(level, sessionState) → DeltaFlag[]`; composes L0–L4 |
-| [`lib/disclosure-treatment-rules.ts`](../lib/disclosure-treatment-rules.ts) | Treatment phrase clusters + ASC regex peer-set diff (or extend delta-engine) |
-| [`lib/open-matters-rules.ts`](../lib/open-matters-rules.ts) | Open-matter phrase buckets + PY→CY resolution inference — internal only |
+| [`lib/delta-surface.ts`](../lib/delta-surface.ts) | Strip/map display filters — `filterMainstreamStripFlags`, `filterMapWorthyFlags`, `rankMainstreamStrip`; hides `prose_number_gap` from UI |
+| [`lib/delta-engine.ts`](../lib/delta-engine.ts) | `scanDeltas(sessionState) → DeltaScanResult` — Phase 1 metadata + headline rules; L2–L4 composes in later phases |
+| [`lib/disclosure-treatment-rules.ts`](../lib/disclosure-treatment-rules.ts) | Treatment phrase clusters + ASC regex peer-set diff (Phase 2+) |
 | [`lib/open-matters-rules.ts`](../lib/open-matters-rules.ts) | Open-matter keyword buckets + resolution patterns per section |
+| [`lib/mda-structure.ts`](../lib/mda-structure.ts) | MD&A block segmentation (Results, Liquidity, Critical estimates) — internal only |
+| [`lib/mda-driver-lexicon.ts`](../lib/mda-driver-lexicon.ts) | Metric-family driver phrase catalogs + block-scoped match; cross-link payload for drawer |
 | [`lib/asc-extract.ts`](../lib/asc-extract.ts) | Optional thin citation parser — internal only |
 | [`lib/delta-labels.ts`](../lib/delta-labels.ts) | Human copy; no technical terms |
 | [`lib/delta-rank.ts`](../lib/delta-rank.ts) | L0 strip severity + persona preset weight + cap + dedupe |
 | [`lib/delta-register.ts`](../lib/delta-register.ts) | Persona catalogs, `buildPersonaRegister()`, P1/P2/P3 grouping — full hit lists |
-| [`lib/delta-detail.ts`](../lib/delta-detail.ts) | `buildDeltaDetail(flag, sessionState)` — tag rows, excerpts, peer contrast, optional PY/CY diff; lazy fetch orchestration |
-| [`components/compare/DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) | On-click expand: factual what-changed panel; Jump to grid + EDGAR; no LLM |
-| [`components/compare/DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) | L0 headline entry (5–7 cap) + opens drawer / map / register router |
-| [`components/compare/DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) | Persona tabbed register — full hit list, scan buttons, export (Phase 3 Pro) |
-| [`components/compare/SectionDeltaMap.tsx`](../components/compare/SectionDeltaMap.tsx) | L1 section delta map (all section deltas) + coverage footer |
+| [`lib/delta-detail.ts`](../lib/delta-detail.ts) | `buildDeltaDetail(flag, sessionState)` — tag rows, excerpts, peer contrast, optional PY/CY diff; lazy fetch orchestration (Phase 2+) |
+| [`components/compare/DeltaDetailDrawer.tsx`](../components/compare/DeltaDetailDrawer.tsx) | On-click expand: factual what-changed panel; Jump to grid + EDGAR (Phase 2+) |
+| [`components/compare/DeltaRegister.tsx`](../components/compare/DeltaRegister.tsx) | Persona tabbed register — full hit list, scan buttons, export (Phase 2/3) |
+| [`components/compare/DeltaStrip.tsx`](../components/compare/DeltaStrip.tsx) | L0 headline entry (7 cap) — click → grid; +N more + link to map; drawer in Phase 2 |
+| [`components/compare/SectionNav.tsx`](../components/compare/SectionNav.tsx) | Left nav — Sections \| Deltas tabs + embedded `DeltaStrip` |
+| [`components/compare/DeltaReportLinkBar.tsx`](../components/compare/DeltaReportLinkBar.tsx) | L1 compare entry — headline, settling spinner, link to report |
+| [`components/compare/CompareDeltaReport.tsx`](../components/compare/CompareDeltaReport.tsx) | Full delta report page + CSV export |
+| [`components/compare/SectionDeltaMapGrid.tsx`](../components/compare/SectionDeltaMapGrid.tsx) | L1 section × ticker grid + coverage footer |
+| [`docs/DELTA_REGRESSION_FILERS.md`](../docs/DELTA_REGRESSION_FILERS.md) | Golden compare slugs + expected flags — manual/CI regression *(optional follow-up)* |
 | [`backend/sec/xbrl_client.py`](../backend/sec/xbrl_client.py) | **Detection source only** — unchanged public API |
 
 Handoff doc: [`docs/DELTA_ROADMAP.md`](DELTA_ROADMAP.md)
@@ -892,6 +1109,8 @@ Presentation linkbase, ix anchors, segment dimension sync, copy-to-Excel, extens
 - User-facing XBRL education or branding  
 - Hosted ASC codification text (link-out optional)  
 - LLM narrative, treatment inference, or hypothesis copy in the delta detail drawer  
+- Synthesized "key drivers" or *likely due to* summaries (MD&A cross-link shows **excerpts only**)  
+- Guarantee of finding all material issues in a filing (deterministic coverage only)  
 - Universe delta screening  
 - Workiva / issuer rollforward  
 - New Pro SKU for deltas  

@@ -1,5 +1,4 @@
 import { getDevTierForApiHeader } from "@/lib/dev-tier";
-import { agentDebugLog } from "@/lib/debug-log";
 import {
   apiGatewayErrorMessage,
   apiUnreachableBannerMessage,
@@ -113,6 +112,8 @@ export interface FinancialsXbrl {
   }>;
   metrics?: Record<string, XbrlMetricSeries>;
   notes_xbrl?: Record<string, NoteSectionXbrl>;
+  /** True when note disclosures were skipped for a fast headline load. */
+  headline_only?: boolean;
 }
 
 export interface StatementRow {
@@ -305,36 +306,14 @@ async function buildAuthHeaders(
 /** Public GET without waiting on Supabase session (e.g. ticker autocomplete). */
 export async function apiFetchPublic<T>(path: string): Promise<T> {
   const url = `${API_URL}${path}`;
-  const started = Date.now();
   let res: Response;
   try {
     res = await fetch(url, {
       headers: { Accept: "application/json" },
     });
   } catch (err) {
-    // #region agent log
-    agentDebugLog(
-      "lib/api.ts:apiFetchPublic",
-      "fetch failed",
-      {
-        path,
-        apiUrl: API_URL,
-        ms: Date.now() - started,
-        error: err instanceof Error ? err.name : "unknown",
-      },
-      "H1"
-    );
-    // #endregion
     throw err;
   }
-  // #region agent log
-  agentDebugLog(
-    "lib/api.ts:apiFetchPublic",
-    "fetch completed",
-    { path, apiUrl: API_URL, status: res.status, ms: Date.now() - started },
-    res.ok ? "H3" : "H2"
-  );
-  // #endregion
 
   if (!res.ok) {
     let detail: PaywallError | string | Record<string, unknown> = res.statusText;
@@ -380,11 +359,17 @@ export interface ParseStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
+export interface ParseStreamOptions {
+  refreshCache?: boolean;
+  refreshTickers?: string[];
+}
+
 export async function parseFilingsStream(
   tickers: string[],
   fiscalYear: number | undefined,
   callbacks: ParseStreamCallbacks,
-  period?: string
+  period?: string,
+  options?: ParseStreamOptions
 ): Promise<void> {
   const headers = await buildAuthHeaders({ Accept: "application/x-ndjson" });
 
@@ -395,6 +380,8 @@ export async function parseFilingsStream(
       tickers,
       fiscal_year: fiscalYear ?? null,
       period: period ?? null,
+      refresh_cache: options?.refreshCache ?? false,
+      refresh_tickers: options?.refreshTickers ?? null,
     }),
   });
 
@@ -586,11 +573,25 @@ export async function fetchFinancialsBatch(
   }
 }
 
+function escapePlainSectionText(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Render plain-text SEC excerpt when HTML normalization is unavailable. */
+export function plainTextSectionAsHtml(text: string): string {
+  return `<pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-800">${escapePlainSectionText(text)}</pre>`;
+}
+
 export async function fetchSectionHtml(
   ticker: string,
   sectionId: string,
   fiscalYear?: number | null,
-  period?: string | null
+  period?: string | null,
+  filingCacheKey?: string | null
 ): Promise<string> {
   const params = new URLSearchParams({
     ticker: ticker.toUpperCase(),
@@ -599,41 +600,21 @@ export async function fetchSectionHtml(
   });
   if (fiscalYear != null) params.set("fiscal_year", String(fiscalYear));
   if (period?.trim()) params.set("period", period.trim());
+  if (filingCacheKey?.trim()) params.set("cache_key", filingCacheKey.trim());
 
   const url = `/parse/section?${params}`;
-  const started = Date.now();
   try {
     const result = await apiFetch<SectionHtmlResponse>(url);
-    // #region agent log
-    agentDebugLog(
-      "lib/api.ts:fetchSectionHtml",
-      "section html ok",
-      { ticker, fiscalYear, period: period ?? null, ms: Date.now() - started },
-      "H3"
-    );
-    // #endregion
-    return result.html;
+    if (result.html?.trim()) return result.html;
   } catch (err) {
-    // #region agent log
-    agentDebugLog(
-      "lib/api.ts:fetchSectionHtml",
-      "section html failed",
-      {
-        ticker,
-        fiscalYear,
-        period: period ?? null,
-        ms: Date.now() - started,
-        status: err instanceof ApiError ? err.status : null,
-        reason:
-          err instanceof ApiError && typeof err.detail === "object" && err.detail && "reason" in err.detail
-            ? String((err.detail as { reason?: string }).reason)
-            : null,
-      },
-      err instanceof ApiError && err.status === 402 ? "H1" : "H2"
-    );
-    // #endregion
-    throw err;
+    if (!(err instanceof ApiError) || err.status < 500) throw err;
   }
+
+  const text = await fetchSectionText(ticker, sectionId, fiscalYear, period);
+  if (!text.trim()) {
+    throw new ApiError(404, "No excerpt available for this section in the selected filing.");
+  }
+  return plainTextSectionAsHtml(text);
 }
 
 export async function fetchSectionText(
@@ -681,7 +662,6 @@ export async function getAuthMe(): Promise<AuthMe> {
 }
 
 export async function checkApiHealth(): Promise<boolean> {
-  const started = Date.now();
   try {
     const res = await fetch(`${API_URL}/health`, { cache: "no-store" });
     const ok = res.ok;
@@ -690,33 +670,8 @@ export async function checkApiHealth(): Promise<boolean> {
       const body = (await res.json()) as { status?: string };
       statusOk = body.status === "ok";
     }
-    // #region agent log
-    agentDebugLog(
-      "lib/api.ts:checkApiHealth",
-      "health check",
-      {
-        apiUrl: API_URL,
-        httpStatus: res.status,
-        statusOk,
-        ms: Date.now() - started,
-      },
-      statusOk ? "H3" : "H2"
-    );
-    // #endregion
     return statusOk;
-  } catch (err) {
-    // #region agent log
-    agentDebugLog(
-      "lib/api.ts:checkApiHealth",
-      "health fetch failed",
-      {
-        apiUrl: API_URL,
-        ms: Date.now() - started,
-        error: err instanceof Error ? err.name : "unknown",
-      },
-      "H1"
-    );
-    // #endregion
+  } catch {
     return false;
   }
 }

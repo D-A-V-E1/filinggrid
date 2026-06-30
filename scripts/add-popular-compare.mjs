@@ -1,57 +1,81 @@
 /**
- * Append a popular compare slug to lib/seo.ts (POPULAR_COMPARISONS).
+ * Append a popular compare group to data/popular-peer-groups.json.
  *
  * Usage:
- *   node scripts/add-popular-compare.mjs <slug> "<label>"
- *   node scripts/add-popular-compare.mjs aapl-vs-msft "Apple vs Microsoft" --dry-run
+ *   node scripts/add-popular-compare.mjs <section-id> <group-id> <slug> "<label>" TICKER [TICKER...]
+ *   node scripts/add-popular-compare.mjs technology crm-vs-now crm-vs-now "CRM vs ServiceNow" CRM NOW --dry-run
  */
 import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SEO_FILE = path.join(ROOT, "lib", "seo.ts");
+const CATALOG_FILE = path.join(ROOT, "data", "popular-peer-groups.json");
 
 const SLUG_RE = /^[a-z0-9.-]+(-vs-[a-z0-9.-]+)+$/;
+const TICKER_RE = /^[A-Z][A-Z0-9.-]{0,9}$/;
 
 function usage() {
-  console.error(`Usage: node scripts/add-popular-compare.mjs <slug> "<label>" [--dry-run]`);
+  console.error(
+    `Usage: node scripts/add-popular-compare.mjs <section-id> <group-id> <slug> "<label>" TICKER [TICKER...] [--dry-run]`
+  );
   process.exit(1);
 }
 
-const args = process.argv.slice(2).filter((a) => a !== "--dry-run");
 const dryRun = process.argv.includes("--dry-run");
-const [slug, label] = args;
+const args = process.argv.slice(2).filter((a) => a !== "--dry-run");
+const [sectionId, groupId, slug, label, ...tickers] = args;
 
-if (!slug || !label) usage();
+if (!sectionId || !groupId || !slug || !label || tickers.length === 0) usage();
 
 if (!SLUG_RE.test(slug)) {
-  console.error(`Invalid slug "${slug}". Use lowercase tickers separated by -vs- (e.g. crm-vs-now).`);
+  console.error(`Invalid slug "${slug}". Use lowercase tickers separated by -vs-.`);
   process.exit(1);
 }
 
-const src = fs.readFileSync(SEO_FILE, "utf8");
+const normalizedTickers = tickers.map((t) => t.toUpperCase());
+for (const t of normalizedTickers) {
+  if (!TICKER_RE.test(t)) {
+    console.error(`Invalid ticker "${t}".`);
+    process.exit(1);
+  }
+}
 
-if (src.includes(`slug: "${slug}"`)) {
-  console.error(`Slug already exists: ${slug}`);
+const expectedSlug = normalizedTickers.map((t) => t.toLowerCase()).join("-vs-");
+if (slug !== expectedSlug) {
+  console.error(`Slug "${slug}" does not match tickers (expected "${expectedSlug}").`);
   process.exit(1);
 }
 
-const marker = "] as const;";
-const idx = src.lastIndexOf(marker);
-if (idx === -1) {
-  console.error(`Could not find POPULAR_COMPARISONS closing "${marker}" in lib/seo.ts`);
+const catalog = JSON.parse(fs.readFileSync(CATALOG_FILE, "utf8"));
+const section = catalog.sections.find((s) => s.id === sectionId);
+if (!section) {
+  console.error(`Unknown section "${sectionId}". Options: ${catalog.sections.map((s) => s.id).join(", ")}`);
   process.exit(1);
 }
 
-const escapedLabel = label.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-const entry = `  { slug: "${slug}", label: "${escapedLabel}" },\n`;
-const updated = src.slice(0, idx) + entry + src.slice(idx);
+if (section.groups.some((g) => g.id === groupId || g.slug === slug)) {
+  console.error(`Group id or slug already exists: ${groupId} / ${slug}`);
+  process.exit(1);
+}
+
+const today = new Date().toISOString().slice(0, 10);
+const entry = {
+  id: groupId,
+  label,
+  slug,
+  tickers: normalizedTickers,
+  industryTag: sectionId,
+  sicOrSector: "TBD — set GICS/SIC on manual review",
+  lastRefreshed: today,
+};
+
+section.groups.push(entry);
 
 if (dryRun) {
-  console.log("Dry run — would append:\n" + entry);
+  console.log("Dry run — would append:\n" + JSON.stringify(entry, null, 2));
   process.exit(0);
 }
 
-fs.writeFileSync(SEO_FILE, updated, "utf8");
-console.log(`Added ${slug} to POPULAR_COMPARISONS in lib/seo.ts`);
-console.log(`Next: verify /compare/${slug}, commit, deploy, request GSC indexing.`);
+fs.writeFileSync(CATALOG_FILE, JSON.stringify(catalog, null, 2) + "\n", "utf8");
+console.log(`Added ${slug} to section "${sectionId}" in data/popular-peer-groups.json`);
+console.log(`Next: node scripts/refresh-popular-comparisons.mjs, npm test, deploy, GSC indexing.`);

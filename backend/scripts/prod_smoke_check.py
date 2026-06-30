@@ -1,4 +1,4 @@
-"""Production smoke checks — read-only HTTP probes against deployed hosts.
+"""Production smoke checks â€” read-only HTTP probes against deployed hosts.
 
 Usage:
   python scripts/prod_smoke_check.py
@@ -109,7 +109,7 @@ def main() -> int:
     print("\n=== Manual steps (browser) ===")
     print("  1. Open compare with 4 tickers -> paywall")
     print("  2. Sign in (magic link) -> checkout with any email")
-    print("  3. Stripe Dashboard → Webhooks → confirm checkout.session.completed delivered")
+    print("  3. Stripe Dashboard -> Webhooks -> confirm checkout.session.completed delivered")
     print("  4. GET /auth/me -> tier: professional")
     print("  5. /account -> Manage billing -> cancel -> tier returns to free")
     print("  See docs/PRODUCTION_SMOKE_TEST.md for full checklist.")

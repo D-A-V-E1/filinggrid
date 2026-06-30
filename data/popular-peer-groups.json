@@ -1,0 +1,222 @@
+{
+  "catalogVersion": 1,
+  "lastCatalogRefresh": "2026-06-29",
+  "sections": [
+    {
+      "id": "technology",
+      "label": "Technology",
+      "groups": [
+        {
+          "id": "mega-cap-tech",
+          "label": "Mega-cap tech",
+          "slug": "aapl-vs-msft-vs-nvda-vs-googl",
+          "tickers": ["AAPL", "MSFT", "NVDA", "GOOGL"],
+          "industryTag": "technology",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "mag7-triad",
+          "label": "Apple vs Microsoft vs NVIDIA",
+          "slug": "aapl-vs-msft-vs-nvda",
+          "tickers": ["AAPL", "MSFT", "NVDA"],
+          "industryTag": "technology",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "mega-cap-duo",
+          "label": "Apple vs Microsoft",
+          "slug": "aapl-vs-msft",
+          "tickers": ["AAPL", "MSFT"],
+          "industryTag": "technology",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "semiconductors",
+          "label": "NVDA vs AMD vs Intel",
+          "slug": "nvda-vs-amd-vs-intc",
+          "tickers": ["NVDA", "AMD", "INTC"],
+          "industryTag": "semiconductors",
+          "sicOrSector": "SIC 3674 Semiconductors",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "semis-global",
+          "label": "Apple vs NVDA vs TSMC",
+          "slug": "aapl-vs-nvda-vs-tsm",
+          "tickers": ["AAPL", "NVDA", "TSM"],
+          "industryTag": "semiconductors",
+          "sicOrSector": "GICS 45 / ADR 20-F",
+          "lastRefreshed": "2026-06-29"
+        },
+        {
+          "id": "social-search",
+          "label": "Alphabet vs Meta",
+          "slug": "goog-vs-meta",
+          "tickers": ["GOOG", "META"],
+          "industryTag": "internet",
+          "sicOrSector": "GICS 45 Information Technology",
+          "lastRefreshed": "2026-06-29"
+        },
+        {
+          "id": "ecommerce",
+          "label": "Amazon vs Shopify",
+          "slug": "amzn-vs-shop",
+          "tickers": ["AMZN", "SHOP"],
+          "industryTag": "ecommerce",
+          "sicOrSector": "GICS 45 / GICS 25 Consumer Discretionary",
+          "lastRefreshed": "2026-06-29"
+        },
+        {
+          "id": "semicap-equipment",
+          "label": "ASML vs Applied Materials vs Lam Research",
+          "slug": "asml-vs-amat-vs-lrcx",
+          "tickers": ["ASML", "AMAT", "LRCX"],
+          "industryTag": "semicap-equipment",
+          "sicOrSector": "GICS 45 Information Technology / SIC 3559 Special Industry Machinery",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    },
+    {
+      "id": "financials",
+      "label": "Financials",
+      "groups": [
+        {
+          "id": "money-center-banks",
+          "label": "JPM vs Goldman vs Morgan Stanley vs BofA",
+          "slug": "jpm-vs-gs-vs-ms-vs-bac",
+          "tickers": ["JPM", "GS", "MS", "BAC"],
+          "industryTag": "banks",
+          "sicOrSector": "GICS 40 Financials / SIC 6021 National Commercial Banks",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "investment-banks",
+          "label": "JPM vs Goldman vs Morgan Stanley",
+          "slug": "jpm-vs-gs-vs-ms",
+          "tickers": ["JPM", "GS", "MS"],
+          "industryTag": "banks",
+          "sicOrSector": "GICS 40 Financials / SIC 6211 Security Brokers",
+          "lastRefreshed": "2026-06-29"
+        },
+        {
+          "id": "payments",
+          "label": "Visa vs Mastercard vs Amex",
+          "slug": "v-vs-ma-vs-axp",
+          "tickers": ["V", "MA", "AXP"],
+          "industryTag": "payments",
+          "sicOrSector": "GICS 40 Financials / SIC 7389 Business Services",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    },
+    {
+      "id": "healthcare",
+      "label": "Healthcare",
+      "groups": [
+        {
+          "id": "managed-care",
+          "label": "UnitedHealth vs Elevance vs Cigna",
+          "slug": "unh-vs-elv-vs-ci",
+          "tickers": ["UNH", "ELV", "CI"],
+          "industryTag": "managed-care",
+          "sicOrSector": "GICS 35 Health Care / SIC 6324 Hospital & Medical Service Plans",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "pharma",
+          "label": "Johnson & Johnson vs Lilly vs Pfizer",
+          "slug": "jnj-vs-lly-vs-pfe",
+          "tickers": ["JNJ", "LLY", "PFE"],
+          "industryTag": "pharma",
+          "sicOrSector": "GICS 35 Health Care / SIC 2834 Pharmaceutical Preparations",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    },
+    {
+      "id": "energy",
+      "label": "Energy",
+      "groups": [
+        {
+          "id": "oil-majors",
+          "label": "Exxon vs Chevron vs ConocoPhillips",
+          "slug": "xom-vs-cvx-vs-cop",
+          "tickers": ["XOM", "CVX", "COP"],
+          "industryTag": "oil-majors",
+          "sicOrSector": "GICS 10 Energy / SIC 2911 Petroleum Refining",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        }
+      ]
+    },
+    {
+      "id": "consumer",
+      "label": "Consumer",
+      "groups": [
+        {
+          "id": "autos",
+          "label": "Tesla vs Ford vs GM",
+          "slug": "tsla-vs-f-vs-gm",
+          "tickers": ["TSLA", "F", "GM"],
+          "industryTag": "automotive",
+          "sicOrSector": "GICS 25 Consumer Discretionary / SIC 3711 Motor Vehicles",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "beverages",
+          "label": "Coca-Cola vs PepsiCo",
+          "slug": "ko-vs-pep",
+          "tickers": ["KO", "PEP"],
+          "industryTag": "beverages",
+          "sicOrSector": "GICS 30 Consumer Staples / SIC 2080 Beverages",
+          "lastRefreshed": "2026-06-29"
+        },
+        {
+          "id": "big-box-retail",
+          "label": "Walmart vs Target vs Costco",
+          "slug": "wmt-vs-tgt-vs-cost",
+          "tickers": ["WMT", "TGT", "COST"],
+          "industryTag": "retail",
+          "sicOrSector": "GICS 25 Consumer Staples / SIC 5331 Variety Stores",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    },
+    {
+      "id": "industrials",
+      "label": "Industrials",
+      "groups": [
+        {
+          "id": "aerospace-defense",
+          "label": "Boeing vs Lockheed vs RTX",
+          "slug": "ba-vs-lmt-vs-rtx",
+          "tickers": ["BA", "LMT", "RTX"],
+          "industryTag": "aerospace-defense",
+          "sicOrSector": "GICS 20 Industrials / SIC 3721 Aircraft",
+          "lastRefreshed": "2026-06-29",
+          "featured": true
+        },
+        {
+          "id": "airlines",
+          "label": "Delta vs United vs Southwest",
+          "slug": "dal-vs-ual-vs-luv",
+          "tickers": ["DAL", "UAL", "LUV"],
+          "industryTag": "airlines",
+          "sicOrSector": "GICS 20 Industrials / SIC 4512 Air Transportation",
+          "lastRefreshed": "2026-06-29"
+        }
+      ]
+    }
+  ]
+}

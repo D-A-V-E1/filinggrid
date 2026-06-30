@@ -21,19 +21,12 @@ export const DEFAULT_KEYWORDS = [
 ];
 
 /** Popular compare presets surfaced on home and in sitemap. */
-export const POPULAR_COMPARISONS = [
-  { slug: "aapl-vs-msft", label: "Apple vs Microsoft" },
-  { slug: "aapl-vs-msft-vs-nvda", label: "Apple vs Microsoft vs NVIDIA" },
-  { slug: "nvda-vs-amd-vs-intc", label: "NVDA vs AMD vs Intel" },
-  { slug: "jpm-vs-gs-vs-ms", label: "JPM vs Goldman vs Morgan Stanley" },
-  { slug: "aapl-vs-nvda-vs-tsm", label: "Apple vs NVDA vs TSMC" },
-  { slug: "goog-vs-meta", label: "Alphabet vs Meta" },
-  { slug: "amzn-vs-shop", label: "Amazon vs Shopify" },
-  { slug: "tsla-vs-f", label: "Tesla vs Ford" },
-  { slug: "ko-vs-pep", label: "Coca-Cola vs PepsiCo" },
-] as const;
-
-export const POPULAR_COMPARE_SLUGS = POPULAR_COMPARISONS.map((c) => c.slug);
+export {
+  POPULAR_COMPARISONS,
+  POPULAR_COMPARE_SLUGS,
+  POPULAR_PEER_SECTIONS,
+  FEATURED_POPULAR_COMPARISONS,
+} from "@/lib/popular-comparisons";
 
 export function getSiteUrl(): string {
   const url = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

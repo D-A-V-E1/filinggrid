@@ -6,6 +6,7 @@ import pytest
 
 from sec.xbrl_client import (
     _extract_ix_text_block,
+    _format_xbrl_disclosure_fragment,
     extract_note_disclosures,
 )
 
@@ -17,6 +18,19 @@ Fair value intro
 <ix:continuation id="c1">Fair value table detail</ix:continuation>
 <ix:nonNumeric name="us-gaap:RevenueFromContractWithCustomerTextBlock">
 Revenue policy narrative
+</ix:nonNumeric>
+</body></html>
+"""
+
+SAMPLE_TABLE_HTML = """
+<html><body>
+<ix:nonNumeric name="us-gaap:InvestmentsInDebtAndEquitySecuritiesTextBlock">
+<p>Investments summary</p>
+<table>
+<tr><td align="left">Issuance of shares related to business acquisitions</td><td align="right">238,468</td></tr>
+<tr><td align="left">Net income and comprehensive income for the year</td><td align="right">( 10 )</td></tr>
+<tr><td align="left">No activity</td><td align="right">—</td></tr>
+</table>
 </ix:nonNumeric>
 </body></html>
 """
@@ -51,6 +65,30 @@ def test_extract_ix_text_block_with_continuation():
     assert "Fair value table detail" in text
 
 
+def test_format_xbrl_disclosure_fragment_preserves_tables():
+    fragment = """
+    <p>Rollforward</p>
+    <table>
+    <tr><td align="left">Issuance of shares</td><td align="right">238,468</td></tr>
+    <tr><td align="left">Net income</td><td align="right">( 10 )</td></tr>
+    </table>
+    """
+    formatted = _format_xbrl_disclosure_fragment(fragment)
+    assert "<table" in formatted
+    assert "filing-table-wrap" in formatted
+    assert "238,468" in formatted
+    assert "( 10 )" in formatted
+    assert "Issuance of shares" in formatted
+
+
+def test_extract_ix_text_block_preserves_investment_table():
+    text = _extract_ix_text_block(SAMPLE_TABLE_HTML, "InvestmentsInDebtAndEquitySecuritiesTextBlock")
+    assert text is not None
+    assert "<table" in text
+    assert "238,468" in text
+    assert "Issuance of shares related to business acquisitions" in text
+
+
 def test_extract_note_disclosures_includes_html_blocks():
     notes = extract_note_disclosures(
         SAMPLE_FACTS,
@@ -82,9 +120,39 @@ async def test_load_filing_html_for_notes_fetches_when_not_cached():
         patch("filing_store.load_submissions", return_value={"filings": []}),
         patch("sec.xbrl_client.fetch_submissions", new_callable=AsyncMock) as fetch_subs,
         patch("sec.xbrl_client.find_filing", return_value={"accession_no_dash": "0001234567-24-000001"}),
-        patch("sec.xbrl_client.fetch_filing_html", new_callable=AsyncMock, return_value=fake_html) as fetch_html,
+        patch("sec.client.fetch_filing_html", new_callable=AsyncMock, return_value=fake_html) as fetch_html,
     ):
         fetch_subs.return_value = {"filings": []}
         result = await xbrl_client._load_filing_html_for_notes("1234567", 2024)
         assert result == fake_html
         fetch_html.assert_awaited_once()
+
+
+def test_extract_note_disclosures_ifrs_lease_liability():
+    """IFRS concept aliases on note-leases resolve foreign footnote metrics."""
+    ifrs_facts = {
+        "entityName": "Foreign Corp",
+        "facts": {
+            "ifrs-full": {
+                "LeaseLiabilities": {
+                    "label": "Lease liabilities",
+                    "units": {
+                        "USD": [
+                            {
+                                "val": 5_000_000_000,
+                                "fy": 2024,
+                                "fp": "FY",
+                                "end": "2024-12-31",
+                                "form": "20-F",
+                            }
+                        ]
+                    },
+                }
+            }
+        },
+    }
+    notes = extract_note_disclosures(ifrs_facts, None, fiscal_year=2024)
+    assert "note-leases" in notes
+    lease = notes["note-leases"]
+    assert lease["has_data"] is True
+    assert lease["annual_summary"][0]["operating_lease_liability"] == 5_000_000_000

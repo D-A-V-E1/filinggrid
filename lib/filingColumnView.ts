@@ -1,7 +1,28 @@
-import { isNarrativeSection, isXbrlBackedSection } from "./sections";
+import { DELTA_MAP_NOT_FILED_TOOLTIP, formatSectionRowLabel } from "./delta-labels";
+import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "./sections";
 
 export function isFootnoteSection(sectionId: string | null): boolean {
   return sectionId?.startsWith("note-") ?? false;
+}
+
+/** Column empty state when a catalog section is absent from the parse index. */
+export function filingColumnNotFiledHeading(sectionLabel: string): string {
+  const short = formatSectionRowLabel(sectionLabel);
+  return `${short} not in this filing`;
+}
+
+export function filingColumnNotFiledBody(ticker: string): string {
+  return `${ticker} — ${DELTA_MAP_NOT_FILED_TOOLTIP.toLowerCase()}`;
+}
+
+/** Pro tier: load full GAAP line-item tables for the overview and statement sub-sections. */
+export function shouldLoadFullGaapStatements(
+  activeSection: string | null,
+  isPro: boolean,
+  hasFinancials: boolean
+): boolean {
+  if (!activeSection || !isPro || !hasFinancials) return false;
+  return activeSection === "financial-statements" || isGaapStatementSection(activeSection);
 }
 
 /** Resolve compare column content mode for a filing section. */

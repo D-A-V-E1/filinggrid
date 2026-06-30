@@ -109,6 +109,18 @@ def get_filing_structure(cache_key: str) -> dict[str, Any] | None:
         return structure
 
 
+def clear_filing_structure(cache_key: str) -> None:
+    with _lock:
+        _structure.pop(cache_key, None)
+
+
+def evict_parsed_column(cache_key: str) -> None:
+    """Drop in-memory parsed column + structure so disk refetch can proceed."""
+    with _lock:
+        _memory.pop(cache_key, None)
+        _structure.pop(cache_key, None)
+
+
 def find_cache_key(ticker: str, fiscal_year: int | None) -> str | None:
     ticker = ticker.upper()
     with _lock:
@@ -131,4 +143,6 @@ __all__ = [
     "find_cache_key",
     "store_filing_structure",
     "get_filing_structure",
+    "clear_filing_structure",
+    "evict_parsed_column",
 ]

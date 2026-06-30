@@ -1,0 +1,332 @@
+"use client";
+
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import type { FilingColumn, FinancialsXbrl } from "@/lib/api";
+import type { DeltaFlag, DeltaSeverity } from "@/lib/delta-types";
+import { flagsForSection } from "@/lib/delta-engine";
+import { columnHasSectionPresence, columnHasSparseSectionIndex } from "@/lib/section-presence";
+import {
+  cellFlagsTooltip,
+  DELTA_MAP_ALIGNED_LABEL,
+  DELTA_MAP_ALIGNED_TOOLTIP,
+  DELTA_MAP_NOT_FILED_LABEL,
+  DELTA_MAP_NOT_FILED_TOOLTIP,
+  DELTA_MAP_NOT_INDEXED_LABEL,
+  DELTA_MAP_NOT_INDEXED_TOOLTIP,
+  deltaMapRowSummary,
+  deltaRuleBadgeWithIcon,
+  formatSectionRowLabel,
+  sectionGroupLabel,
+} from "@/lib/delta-labels";
+
+export interface SectionDeltaMapGridProps {
+  tickers: string[];
+  catalog: { id: string; label: string }[];
+  columns: FilingColumn[];
+  financialsByTicker?: Record<string, FinancialsXbrl>;
+  flags: DeltaFlag[];
+  onCellClick: (ticker: string, sectionId: string, flag?: DeltaFlag) => void;
+}
+
+const SEVERITY_CELL_TONE: Record<DeltaSeverity, string> = {
+  P1: "border-amber-300/80 bg-amber-50 text-amber-950 shadow-sm shadow-amber-100/50",
+  P2: "border-brand-300/70 bg-brand-50 text-brand-900 shadow-sm shadow-brand-100/40",
+  P3: "border-slate-200 bg-slate-50 text-slate-700",
+};
+
+const SEVERITY_ORDER: Record<DeltaSeverity, number> = { P1: 0, P2: 1, P3: 2 };
+
+function cellHasSection(
+  col: FilingColumn | undefined,
+  sectionId: string,
+  financialsByTicker?: Record<string, FinancialsXbrl>
+): boolean {
+  if (col == null) return false;
+  return columnHasSectionPresence(col, sectionId, financialsByTicker?.[col.ticker]);
+}
+
+function severityTone(severity: DeltaSeverity): string {
+  return SEVERITY_CELL_TONE[severity];
+}
+
+function topFlagForCell(cellFlags: DeltaFlag[]): DeltaFlag | undefined {
+  return [...cellFlags].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])[0];
+}
+
+function rowHeatTone(flags: DeltaFlag[]): string {
+  if (flags.some((f) => f.severity === "P1")) {
+    return "border-l-[3px] border-l-amber-500 bg-gradient-to-r from-amber-50/50 to-transparent";
+  }
+  if (flags.some((f) => f.severity === "P2")) {
+    return "border-l-[3px] border-l-brand-500 bg-gradient-to-r from-brand-50/40 to-transparent";
+  }
+  return "border-l border-l-slate-200";
+}
+
+function TooltipContent({ heading, lines }: { heading: string; lines: string[] }) {
+  return (
+    <div className="space-y-1">
+      <p className="font-medium text-slate-800">{heading}</p>
+      {lines.map((line) => (
+        <p key={line} className="text-slate-600">
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function DeltaMapTooltip({ tip, children }: { tip: ReactNode; children: ReactNode }) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+
+  const show = (target: EventTarget & HTMLElement) => setAnchor(target.getBoundingClientRect());
+  const hide = () => setAnchor(null);
+
+  return (
+    <span
+      className="inline-flex"
+      onMouseEnter={(e) => show(e.currentTarget)}
+      onMouseLeave={hide}
+      onFocus={(e) => show(e.currentTarget)}
+      onBlur={hide}
+    >
+      {children}
+      {anchor &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="pointer-events-none fixed z-[200] w-max max-w-[300px] -translate-x-1/2 -translate-y-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-[11px] leading-snug text-slate-700 shadow-xl"
+            style={{ left: anchor.left + anchor.width / 2, top: anchor.top - 8 }}
+          >
+            {tip}
+          </div>,
+          document.body
+        )}
+    </span>
+  );
+}
+
+function AlignedCell() {
+  return (
+    <span
+      className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 ring-1 ring-brand-200/80"
+      aria-label={DELTA_MAP_ALIGNED_LABEL}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden />
+    </span>
+  );
+}
+
+function NotFiledCell() {
+  return (
+    <span
+      className="inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-400"
+      aria-label={DELTA_MAP_NOT_FILED_LABEL}
+    >
+      —
+    </span>
+  );
+}
+
+function NotIndexedCell() {
+  return (
+    <span
+      className="inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded border border-dashed border-slate-300 bg-slate-100 text-[9px] font-medium text-slate-500"
+      aria-label={DELTA_MAP_NOT_INDEXED_LABEL}
+    >
+      ?
+    </span>
+  );
+}
+
+const cellButtonClass =
+  "whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-semibold transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1";
+
+export default function SectionDeltaMapGrid({
+  tickers,
+  catalog,
+  columns,
+  financialsByTicker,
+  flags,
+  onCellClick,
+}: SectionDeltaMapGridProps) {
+  const columnByTicker = useMemo(() => {
+    const map = new Map<string, FilingColumn>();
+    for (const col of columns) map.set(col.ticker, col);
+    return map;
+  }, [columns]);
+
+  const sectionRows = useMemo(() => {
+    return catalog
+      .map((entry) => {
+        const sectionFlags = flagsForSection(flags, entry.id);
+        if (sectionFlags.length === 0) return null;
+        return { ...entry, flags: sectionFlags };
+      })
+      .filter((row): row is { id: string; label: string; flags: DeltaFlag[] } => row != null);
+  }, [catalog, flags]);
+
+  const groupedSections = useMemo(() => {
+    const groups = new Map<string, typeof sectionRows>();
+    for (const row of sectionRows) {
+      const key = sectionGroupLabel(row.label);
+      const list = groups.get(key) ?? [];
+      list.push(row);
+      groups.set(key, list);
+    }
+    return Array.from(groups.entries());
+  }, [sectionRows]);
+
+  if (sectionRows.length === 0) return null;
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+      <table className="w-full min-w-[520px] border-collapse text-xs">
+        <thead>
+          <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+            <th className="sticky left-0 top-0 z-20 bg-white py-2 pr-3 font-semibold shadow-[0_1px_0_rgb(226_232_240)]">
+              Section
+            </th>
+            {tickers.map((ticker) => (
+              <th
+                key={ticker}
+                className="sticky top-0 z-10 bg-white px-2 py-2 text-center font-mono font-semibold shadow-[0_1px_0_rgb(226_232_240)]"
+              >
+                {ticker}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groupedSections.map(([groupLabel, rows]) => {
+            const groupFlagCount = rows.reduce((n, r) => n + r.flags.length, 0);
+            return (
+              <Fragment key={groupLabel}>
+                <tr className="bg-slate-50/90">
+                  <td
+                    colSpan={tickers.length + 1}
+                    className="sticky left-0 z-10 border-y border-slate-100 px-0 py-1.5 pl-1"
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                      {groupLabel}
+                    </span>
+                    <span className="ml-2 text-[10px] font-normal normal-case text-slate-400">
+                      {rows.length} section{rows.length === 1 ? "" : "s"} · {groupFlagCount} difference
+                      {groupFlagCount === 1 ? "" : "s"}
+                    </span>
+                  </td>
+                </tr>
+                {rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className={`border-b border-slate-100/80 transition-colors hover:bg-slate-50/60 ${rowHeatTone(row.flags)}`}
+                  >
+                    <td className="sticky left-0 z-10 max-w-[200px] bg-white py-2 pr-3">
+                      <p className="truncate font-semibold text-slate-800">
+                        {formatSectionRowLabel(row.label)}
+                      </p>
+                      <p className="truncate text-[10px] text-slate-500">
+                        {deltaMapRowSummary(row.label, row.flags)}
+                      </p>
+                    </td>
+                    {tickers.map((ticker) => {
+                      const col = columnByTicker.get(ticker);
+                      const present = cellHasSection(col, row.id, financialsByTicker);
+                      const sparseIndex = col != null && columnHasSparseSectionIndex(col);
+                      const cellFlags = row.flags.filter((f) => f.ticker === ticker);
+                      const topFlag = topFlagForCell(cellFlags);
+                      const tooltip = cellFlagsTooltip(cellFlags);
+
+                      if (!present && sparseIndex) {
+                        return (
+                          <td key={ticker} className="px-2 py-2 text-center">
+                            <DeltaMapTooltip
+                              tip={
+                                <TooltipContent
+                                  heading={DELTA_MAP_NOT_INDEXED_LABEL}
+                                  lines={[DELTA_MAP_NOT_INDEXED_TOOLTIP]}
+                                />
+                              }
+                            >
+                              <NotIndexedCell />
+                            </DeltaMapTooltip>
+                          </td>
+                        );
+                      }
+
+                      if (!present && cellFlags.some((f) => f.ruleId === "missing_section")) {
+                        const missingTip = cellFlagsTooltip(cellFlags);
+                        return (
+                          <td key={ticker} className="px-2 py-2 text-center">
+                            <DeltaMapTooltip
+                              tip={
+                                missingTip ? (
+                                  <TooltipContent heading={missingTip.heading} lines={missingTip.lines} />
+                                ) : null
+                              }
+                            >
+                              <button
+                                type="button"
+                                onClick={() => onCellClick(ticker, row.id, topFlag)}
+                                className={`${cellButtonClass} border-amber-300/80 bg-amber-50 text-amber-950 shadow-sm shadow-amber-100/50`}
+                              >
+                                ∅ Missing
+                              </button>
+                            </DeltaMapTooltip>
+                          </td>
+                        );
+                      }
+
+                      if (topFlag) {
+                        const badgeLabel =
+                          cellFlags.length > 1
+                            ? `${cellFlags.length} differences`
+                            : deltaRuleBadgeWithIcon(topFlag.ruleId);
+                        return (
+                          <td key={ticker} className="px-2 py-2 text-center">
+                            <DeltaMapTooltip
+                              tip={
+                                tooltip ? (
+                                  <TooltipContent heading={tooltip.heading} lines={tooltip.lines} />
+                                ) : null
+                              }
+                            >
+                              <button
+                                type="button"
+                                onClick={() => onCellClick(ticker, row.id, topFlag)}
+                                className={`${cellButtonClass} ${severityTone(topFlag.severity)}`}
+                              >
+                                {badgeLabel}
+                              </button>
+                            </DeltaMapTooltip>
+                          </td>
+                        );
+                      }
+
+                      return (
+                        <td key={ticker} className="px-2 py-2 text-center">
+                          <DeltaMapTooltip
+                            tip={
+                              <TooltipContent
+                                heading={present ? DELTA_MAP_ALIGNED_LABEL : DELTA_MAP_NOT_FILED_LABEL}
+                                lines={[present ? DELTA_MAP_ALIGNED_TOOLTIP : DELTA_MAP_NOT_FILED_TOOLTIP]}
+                              />
+                            }
+                          >
+                            {present ? <AlignedCell /> : <NotFiledCell />}
+                          </DeltaMapTooltip>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}

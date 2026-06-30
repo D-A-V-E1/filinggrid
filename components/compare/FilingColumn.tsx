@@ -1,10 +1,18 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   fetchFinancialStatements,
   ApiError,
-  fetchSectionHtml,
   formatApiError,
   type FinancialStatementsXbrl,
   type FinancialsXbrl,
@@ -14,13 +22,35 @@ import {
   type XbrlDisclosure,
 } from "@/lib/api";
 import { loadSectionHtml, saveSectionHtml } from "@/lib/parse-cache";
+import {
+  fetchSectionHtmlDeduped,
+  prefetchSectionHtml,
+  readCachedSectionHtml,
+  type SectionHtmlRequest,
+} from "@/lib/section-html";
 import { isGaapStatementSection, isNarrativeSection, isXbrlBackedSection } from "@/lib/sections";
-import { resolveFilingColumnContentMode } from "@/lib/filingColumnView";
+import {
+  filingColumnNotFiledBody,
+  filingColumnNotFiledHeading,
+  resolveFilingColumnContentMode,
+  shouldLoadFullGaapStatements,
+} from "@/lib/filingColumnView";
+import { findCatalogSection, sectionsHaveCatalogSection } from "@/lib/section-presence";
 import { buildSectionFilingUrl } from "@/lib/sec-url";
+import { sanitizeExcerptHtml } from "@/lib/sanitize-excerpt-html";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
-import { agentDebugLog } from "@/lib/debug-log";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
-import { forwardVerticalWheelFromHorizontalScrollContainer } from "@/lib/forward-vertical-wheel";
+import {
+  forwardVerticalWheelFromHorizontalScrollContainer,
+  forwardVerticalWheelToFilingColumnScroll,
+  attachFilingTableWheelForwarding,
+} from "@/lib/forward-vertical-wheel";
+import {
+  getScrollGeneration,
+  resetWindowScroll,
+  scrollFilingColumnToTop,
+  scrollMetricRowIntoViewWhenReady,
+} from "@/lib/filing-column-scroll";
 import FilingViewer from "./FilingViewer";
 
 interface FilingColumnProps {
@@ -46,6 +76,22 @@ interface FilingColumnProps {
   fiscalYearFilter?: number | null;
   isPro?: boolean;
   onPaywall?: (reason: string, message: string) => void;
+  deltaFlagCount?: number;
+  foreignFilerTooltip?: string | null;
+  sectionScrollRequest?: number;
+  /** When true, another column is centering on a metric row — skip window scroll reset. */
+  metricFocusActive?: boolean;
+  focusRowKey?: string | null;
+}
+
+function formatColumnError(error: string): string {
+  if (/Compressed file ended before the end-of-stream/i.test(error)) {
+    return "Filing could not be loaded (corrupted server cache). Use Retry failed columns above.";
+  }
+  if (/Filing cache was corrupted/i.test(error)) {
+    return error;
+  }
+  return error;
 }
 
 function formatSectionLabel(label: string): string {
@@ -112,12 +158,12 @@ interface XbrlPanelProps {
   fiscalYearFilter?: number | null;
   maxFyColumns?: number;
   tableFit?: boolean;
+  highlightRowKey?: string | null;
 }
 
-/** Fewer FY columns when the compare grid is wider so tables stay readable. */
+/** Fewer FY columns as the compare grid adds tickers so tables stay readable in each column. */
 function maxFyColumnsForLayout(columnCount: number): number {
-  if (columnCount >= 4) return 1;
-  if (columnCount >= 3) return 2;
+  if (columnCount >= 3) return 1;
   return 4;
 }
 
@@ -160,6 +206,7 @@ function XbrlMetricsPanel({
   fiscalYearFilter,
   maxFyColumns = 4,
   tableFit = false,
+  highlightRowKey = null,
 }: XbrlPanelProps) {
   const tableRows = pickAnnualRows(annualSummary, fiscalYearFilter, maxFyColumns);
   if (tableRows.length === 0) return null;
@@ -205,7 +252,13 @@ function XbrlMetricsPanel({
           </thead>
           <tbody>
             {visibleRows.map(({ key, label, unit }) => (
-              <tr key={key} className="border-b border-brand-100/80 last:border-0">
+              <tr
+                key={key}
+                data-metric-row={key}
+                className={`border-b border-brand-100/80 last:border-0${
+                  highlightRowKey === key ? " bg-amber-100/90 ring-1 ring-inset ring-amber-300" : ""
+                }`}
+              >
                 <td className="xbrl-metric-line py-1.5 pr-2 text-slate-600">{label}</td>
                 {tableRows.map((r) => {
                   const val = r[key];
@@ -235,6 +288,13 @@ type StatementTab =
   | "balance_sheet"
   | "cash_flow"
   | "stockholders_equity";
+
+const ALL_STATEMENT_TABS: StatementTab[] = [
+  "income_statement",
+  "balance_sheet",
+  "cash_flow",
+  "stockholders_equity",
+];
 
 function formatPeriodLabel(period: FinancialStatementsXbrl["period"]): string {
   if (period.fp === "FY" || period.kind === "annual") {
@@ -358,6 +418,44 @@ function splitDisclosureParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
+function disclosureLooksLikeHtml(text: string): boolean {
+  return /<\s*(table|tr|div[^>]*\bfiling-table-wrap\b)/i.test(text);
+}
+
+function XbrlDisclosureBody({ text }: { text: string }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const isHtml = useMemo(() => disclosureLooksLikeHtml(text), [text]);
+  const safeHtml = useMemo(
+    () => (isHtml ? sanitizeExcerptHtml(text) : ""),
+    [isHtml, text]
+  );
+
+  useEffect(() => {
+    if (!isHtml) return;
+    return attachFilingTableWheelForwarding(contentRef.current);
+  }, [isHtml, safeHtml]);
+
+  if (isHtml) {
+    return (
+      <div
+        ref={contentRef}
+        className="xbrl-disclosure-content filing-content mt-2 min-w-0 max-w-full text-xs leading-snug text-slate-800"
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      />
+    );
+  }
+
+  return (
+    <div className="narrative-content narrative-content--disclosure mt-2">
+      {splitDisclosureParagraphs(text).map((paragraph, i) => (
+        <p key={i} className={i > 0 ? "mt-2" : undefined}>
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function XbrlDisclosuresPanel({ disclosures }: { disclosures: XbrlDisclosure[] }) {
   if (disclosures.length === 0) return null;
 
@@ -366,18 +464,12 @@ function XbrlDisclosuresPanel({ disclosures }: { disclosures: XbrlDisclosure[] }
       <p className="mb-3 font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         XBRL disclosure text
       </p>
-      <div className="space-y-5">
+      <div className="space-y-4">
         {disclosures.map((block) => (
           <section key={`${block.key}-${block.concept}`}>
             <h3 className="font-sans text-sm font-semibold text-slate-900">{block.label}</h3>
             <p className="mt-0.5 font-mono text-[10px] text-slate-400">{block.concept}</p>
-            <div className="narrative-content mt-2">
-              {splitDisclosureParagraphs(block.text).map((paragraph, i) => (
-                <p key={i} className={i > 0 ? "mt-3" : undefined}>
-                  {paragraph}
-                </p>
-              ))}
-            </div>
+            <XbrlDisclosureBody text={block.text} />
           </section>
         ))}
       </div>
@@ -389,15 +481,19 @@ function ExcerptToggleButton({
   label,
   loading,
   onClick,
+  onWarm,
 }: {
   label: string;
   loading: boolean;
   onClick: () => void;
+  onWarm?: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={onWarm}
+      onFocus={onWarm}
       disabled={loading}
       className="mb-3 inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 font-sans text-[11px] font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-60"
     >
@@ -406,12 +502,24 @@ function ExcerptToggleButton({
   );
 }
 
-function HtmlExcerpt({ html }: { html: string }) {
+function HtmlExcerpt({ html, compact = false }: { html: string; compact?: boolean }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const safeHtml = useMemo(() => sanitizeExcerptHtml(html), [html]);
+
+  useEffect(() => {
+    return attachFilingTableWheelForwarding(contentRef.current);
+  }, [safeHtml]);
+
   return (
-    <article className="rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+    <article
+      className={`min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ${
+        compact ? "px-3 py-3" : "px-5 py-5"
+      }`}
+    >
       <div
-        className="filing-content max-w-none font-serif text-sm text-slate-800"
-        dangerouslySetInnerHTML={{ __html: html }}
+        ref={contentRef}
+        className="filing-content filing-content--excerpt w-full min-w-0 max-w-full font-serif text-sm text-slate-800"
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     </article>
   );
@@ -463,10 +571,15 @@ function FilingColumn({
   fiscalYearFilter = null,
   isPro = false,
   onPaywall,
+  deltaFlagCount = 0,
+  foreignFilerTooltip = null,
+  sectionScrollRequest = 0,
+  metricFocusActive = false,
+  focusRowKey = null,
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const isCompact = columnLayout?.density === "compact";
-  const tableFit = isCompact;
+  const tableFit = isCompact || columnCount >= 2;
   const headlineMetricRows = useMemo(() => {
     const base = tableFit ? FINANCIAL_STATEMENT_ROWS_DENSE : FINANCIAL_STATEMENT_ROWS;
     const metrics = financialsXbrl?.metrics;
@@ -486,6 +599,13 @@ function FilingColumn({
   const resolvedFiscalYear =
     fiscalYearFilter ?? financialsXbrl?.fiscal_year_filter ?? fiscalYear ?? null;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bodyTopRef = useRef<HTMLDivElement>(null);
+  const activeSectionRef = useRef(activeSection);
+  activeSectionRef.current = activeSection;
+  const scrollResetActiveRef = useRef(false);
+  const metricScrollGenerationRef = useRef(getScrollGeneration());
+  const resetWindowOnColumnScroll = !metricFocusActive && !focusRowKey;
+  const columnContentKey = activeSection ?? "none";
   const [sectionHtml, setSectionHtml] = useState<string | null>(null);
   const [loadingHtml, setLoadingHtml] = useState(false);
   const [showHtmlExcerpt, setShowHtmlExcerpt] = useState(false);
@@ -494,8 +614,18 @@ function FilingColumn({
   const [loadingStatements, setLoadingStatements] = useState(false);
   const [statementsError, setStatementsError] = useState("");
 
-  const section = activeSection ? sections.find((s) => s.id === activeSection) : sections[0];
+  const section = activeSection
+    ? findCatalogSection(sections, activeSection)
+    : sections[0];
+  const hasSectionInFiling = activeSection
+    ? sectionsHaveCatalogSection(sections, activeSection)
+    : sections.length > 0;
   const isStatementSection = isGaapStatementSection(activeSection);
+  const showFullGaapStatements = shouldLoadFullGaapStatements(
+    activeSection,
+    isPro,
+    financialsXbrl != null
+  );
   const displayLabel = section
     ? formatSectionLabel(section.label)
     : sectionLabel
@@ -541,10 +671,31 @@ function FilingColumn({
 
   const { showSecViewer, showExcerptToggle, xbrlOnly } = resolveFilingColumnContentMode({
     activeSection,
-    hasSectionInFiling: Boolean(section),
+    hasSectionInFiling,
     hasXbrlData,
     isStatementSection,
   });
+
+  const sectionHtmlRequest = useMemo((): SectionHtmlRequest | null => {
+    if (!activeSection || !showExcerptToggle) return null;
+    const compareFiscalYear = fiscalYearFilter ?? null;
+    const { fiscalYear: requestFy, period: requestPeriod } = sectionHtmlRequestParams(
+      period,
+      compareFiscalYear
+    );
+    return {
+      ticker,
+      sectionId: activeSection,
+      fiscalYear: requestFy,
+      period: requestPeriod,
+      filingCacheKey: cacheKey,
+      sessionCacheKey: cacheKey,
+    };
+  }, [activeSection, showExcerptToggle, ticker, period, fiscalYearFilter, cacheKey]);
+
+  const warmSectionHtml = useCallback(() => {
+    if (sectionHtmlRequest) prefetchSectionHtml(sectionHtmlRequest);
+  }, [sectionHtmlRequest]);
 
   const xbrlPanel = useMemo(() => {
     if (!financialsXbrl || !activeSection || !isXbrlBackedSection(activeSection)) return null;
@@ -562,6 +713,7 @@ function FilingColumn({
           fiscalYearFilter={resolvedFiscalYear}
           maxFyColumns={maxFyColumns}
           tableFit={tableFit}
+          highlightRowKey={focusRowKey}
         />
       );
     }
@@ -592,19 +744,141 @@ function FilingColumn({
 
     return (
       <>
-        {disclosuresPanel}
         {metricsPanel}
+        {disclosuresPanel}
       </>
     );
-  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows, xbrlMetricsSubtitle]);
+  }, [financialsXbrl, activeSection, resolvedFiscalYear, maxFyColumns, tableFit, headlineMetricRows, xbrlMetricsSubtitle, focusRowKey]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
     setShowHtmlExcerpt(false);
-    setSectionHtml(null);
     setSectionError("");
     setLoadingHtml(false);
-  }, [activeSection, ticker]);
+
+    if (!activeSection) {
+      setSectionHtml(null);
+      return;
+    }
+
+    const inline = section?.html?.trim();
+    if (inline) {
+      const safe = sanitizeExcerptHtml(inline);
+      setSectionHtml(safe);
+      if (cacheKey) saveSectionHtml(cacheKey, activeSection, safe);
+      return;
+    }
+
+    if (cacheKey) {
+      const cached = loadSectionHtml(cacheKey, activeSection);
+      if (cached) {
+        setSectionHtml(sanitizeExcerptHtml(cached));
+        return;
+      }
+    }
+
+    setSectionHtml(null);
+  }, [activeSection, ticker, cacheKey, section?.html]);
+
+  useLayoutEffect(() => {
+    if (!focusRowKey) return;
+    scrollResetActiveRef.current = false;
+    const generation = getScrollGeneration();
+    metricScrollGenerationRef.current = generation;
+    scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 48, generation);
+  }, [focusRowKey, ticker]);
+
+  useLayoutEffect(() => {
+    if (focusRowKey) {
+      scrollResetActiveRef.current = false;
+      const generation = getScrollGeneration();
+      metricScrollGenerationRef.current = generation;
+      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 24, generation);
+      return;
+    }
+    if (resetWindowOnColumnScroll) resetWindowScroll();
+    scrollFilingColumnToTop(scrollRef.current);
+    scrollResetActiveRef.current = true;
+  }, [activeSection, ticker, sectionScrollRequest, focusRowKey, resetWindowOnColumnScroll]);
+
+  useLayoutEffect(() => {
+    if (!activeSection) return;
+    if (focusRowKey) {
+      scrollResetActiveRef.current = false;
+      const generation = getScrollGeneration();
+      metricScrollGenerationRef.current = generation;
+      scrollMetricRowIntoViewWhenReady(scrollRef.current, focusRowKey, 24, generation);
+      return;
+    }
+    if (resetWindowOnColumnScroll) resetWindowScroll();
+    scrollFilingColumnToTop(scrollRef.current);
+    scrollResetActiveRef.current = true;
+  }, [
+    activeSection,
+    sectionsPending,
+    notesPending,
+    financialsPending,
+    xbrlPanel,
+    sectionHtml,
+    showHtmlExcerpt,
+    loadingHtml,
+    sectionScrollRequest,
+    focusRowKey,
+    resetWindowOnColumnScroll,
+  ]);
+
+  useEffect(() => {
+    if (!activeSection) return;
+    if (focusRowKey) return;
+
+    if (resetWindowOnColumnScroll) resetWindowScroll();
+    scrollFilingColumnToTop(scrollRef.current);
+    const t50 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 50);
+    const t300 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 300);
+    const t1000 = window.setTimeout(() => scrollFilingColumnToTop(scrollRef.current), 1000);
+
+    return () => {
+      window.clearTimeout(t50);
+      window.clearTimeout(t300);
+      window.clearTimeout(t1000);
+    };
+  }, [
+    activeSection,
+    sectionsPending,
+    notesPending,
+    financialsPending,
+    sectionHtml,
+    showHtmlExcerpt,
+    loadingHtml,
+    sectionScrollRequest,
+    focusRowKey,
+    resetWindowOnColumnScroll,
+  ]);
+
+  useEffect(() => {
+    if (focusRowKey) {
+      scrollResetActiveRef.current = false;
+      return;
+    }
+    scrollResetActiveRef.current = true;
+    const scrollEl = scrollRef.current;
+    const bodyEl = bodyTopRef.current;
+    if (!scrollEl || !bodyEl) return;
+
+    const observer = new ResizeObserver(() => {
+      if (!scrollResetActiveRef.current) return;
+      scrollFilingColumnToTop(scrollEl);
+    });
+    observer.observe(bodyEl);
+
+    const stop = window.setTimeout(() => {
+      scrollResetActiveRef.current = false;
+    }, 2500);
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(stop);
+    };
+  }, [activeSection, ticker, sectionScrollRequest, focusRowKey]);
 
   useEffect(() => {
     setFullStatements(null);
@@ -613,7 +887,7 @@ function FilingColumn({
   }, [ticker, resolvedFiscalYear, period, isPro]);
 
   useEffect(() => {
-    if (!isStatementSection || !isPro || !financialsXbrl || fullStatements) {
+    if (!showFullGaapStatements || fullStatements) {
       return;
     }
 
@@ -627,6 +901,22 @@ function FilingColumn({
       })
       .catch((err) => {
         if (!cancelled) {
+          if (err instanceof ApiError && err.isPaywall) {
+            const detail = err.detail;
+            const reason =
+              typeof detail === "object" && detail !== null && "reason" in detail
+                ? String(detail.reason)
+                : "subscription_required";
+            onPaywall?.(
+              reason,
+              formatApiError(
+                err,
+                "Full GAAP financial statements require a Professional subscription."
+              )
+            );
+            setStatementsError("");
+            return;
+          }
           setStatementsError(err instanceof Error ? err.message : "Failed to load statements");
         }
       })
@@ -639,13 +929,12 @@ function FilingColumn({
     };
   }, [
     activeSection,
-    isStatementSection,
-    isPro,
-    financialsXbrl,
+    showFullGaapStatements,
     fullStatements,
     ticker,
     resolvedFiscalYear,
     period,
+    onPaywall,
   ]);
 
   const handleStatementsUpgrade = useCallback(() => {
@@ -660,55 +949,38 @@ function FilingColumn({
 
     if (sectionHtml) {
       setShowHtmlExcerpt(true);
+      scrollFilingColumnToTop(scrollRef.current);
       return;
     }
 
-    if (cacheKey) {
-      const cached = loadSectionHtml(cacheKey, activeSection);
-      if (cached) {
-        setSectionHtml(cached);
-        setShowHtmlExcerpt(true);
-        return;
-      }
+    if (!sectionHtmlRequest) return;
+
+    const requestedSectionId = sectionHtmlRequest.sectionId;
+    const cached = readCachedSectionHtml(sectionHtmlRequest);
+    if (cached) {
+      setSectionHtml(sanitizeExcerptHtml(cached));
+      setShowHtmlExcerpt(true);
+      scrollFilingColumnToTop(scrollRef.current);
+      return;
     }
 
     setLoadingHtml(true);
     setSectionError("");
 
-    const { fiscalYear: requestFy, period: requestPeriod } = sectionHtmlRequestParams(
-      period,
-      resolvedFiscalYear,
-      fiscalYear
-    );
-    // #region agent log
-    agentDebugLog(
-      "FilingColumn.tsx:loadHtmlExcerpt",
-      "section html request",
-      {
-        ticker,
-        activeSection,
-        columnFy: fiscalYear,
-        resolvedFiscalYear,
-        comparePeriod: period ?? null,
-        requestFy,
-        requestPeriod,
-      },
-      "H1"
-    );
-    // #endregion
-
-    fetchSectionHtml(ticker, activeSection, requestFy, requestPeriod)
+    fetchSectionHtmlDeduped(sectionHtmlRequest)
       .then((html) => {
+        if (requestedSectionId !== activeSectionRef.current) return;
         if (!html?.trim()) {
           setSectionError("No excerpt available for this section in the selected filing.");
           setShowHtmlExcerpt(false);
           return;
         }
-        if (cacheKey && html) saveSectionHtml(cacheKey, activeSection, html);
         setSectionHtml(html);
         setShowHtmlExcerpt(true);
+        scrollFilingColumnToTop(scrollRef.current);
       })
       .catch((err) => {
+        if (requestedSectionId !== activeSectionRef.current) return;
         if (err instanceof ApiError && err.isPaywall) {
           const detail = err.detail;
           const reason =
@@ -728,7 +1000,16 @@ function FilingColumn({
           setShowHtmlExcerpt(false);
           return;
         }
-        setSectionError(err instanceof Error ? err.message : "Failed to load excerpt");
+        if (err instanceof ApiError && err.status >= 500) {
+          setSectionError(
+            formatApiError(err, "Could not load the SEC filing excerpt. Please try again in a moment.")
+          );
+          setShowHtmlExcerpt(false);
+          return;
+        }
+        setSectionError(
+          formatApiError(err, "Could not load the SEC filing excerpt. Please try again.")
+        );
         setShowHtmlExcerpt(false);
       })
       .finally(() => setLoadingHtml(false));
@@ -736,11 +1017,7 @@ function FilingColumn({
     activeSection,
     loadingHtml,
     sectionHtml,
-    cacheKey,
-    ticker,
-    fiscalYear,
-    period,
-    resolvedFiscalYear,
+    sectionHtmlRequest,
     onPaywall,
   ]);
 
@@ -748,14 +1025,15 @@ function FilingColumn({
     activeSection === "financial-statements" && (hasXbrlData || financialsPending);
 
   const showStatementBootstrap =
-    isStatementSection && isPro && (loadingStatements || fullStatements != null || financialsPending);
+    showFullGaapStatements && (loadingStatements || fullStatements != null || financialsPending);
 
   if (error) {
     return (
       <div className="compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-white">
         <ColumnHeader ticker={ticker} companyName={companyName} form={null} filingDate={null} fiscalYear={null} />
-        <div className="flex flex-1 items-center justify-center p-6">
-          <p className="text-center text-sm text-red-600">{error}</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6">
+          <p className="text-center text-sm font-medium text-red-700">Could not load filing</p>
+          <p className="text-center text-sm text-red-600">{formatColumnError(error)}</p>
         </div>
       </div>
     );
@@ -767,10 +1045,12 @@ function FilingColumn({
 
   return (
     <div
+      data-compare-ticker={ticker.toUpperCase()}
       className={`compare-column flex h-full min-h-0 flex-col border-r border-slate-200 bg-slate-50/50 last:border-r-0${
         isCompact ? " compare-column--compact" : ""
       }${tableFit ? " compare-column--table-fit" : ""}`}
       style={columnStyle}
+      onWheel={forwardVerticalWheelToFilingColumnScroll}
     >
       <ColumnHeader
         ticker={ticker}
@@ -779,6 +1059,8 @@ function FilingColumn({
         filingDate={filingDate}
         fiscalYear={fiscalYear}
         compact={isCompact}
+        deltaFlagCount={deltaFlagCount}
+        foreignFilerTooltip={foreignFilerTooltip}
       />
 
       <div
@@ -792,23 +1074,32 @@ function FilingColumn({
       </div>
 
       <div
+        key={columnContentKey}
         ref={scrollRef}
+        data-filing-column-scroll=""
         className="filing-column-scroll min-h-0 flex-1 overflow-y-scroll overscroll-y-contain"
       >
-        <div className={`compare-column-body ${isCompact ? "px-3.5 py-3.5" : "px-5 py-5"}`}>
+        <div
+          ref={bodyTopRef}
+          className={`compare-column-body ${isCompact ? "px-3.5 py-3.5" : "px-5 py-5"}`}
+        >
           {xbrlPanel}
 
           {activeSection === "financial-statements" && hasXbrlData && !isPro && (
             <LockedStatementsPanel onUpgrade={handleStatementsUpgrade} />
           )}
 
-          {isStatementSection && isPro && financialsXbrl && (
+          {showFullGaapStatements && (
             <>
               {loadingStatements && !fullStatements && (
                 <div className="mb-4 space-y-2 rounded-lg border border-brand-200 bg-brand-50/40 px-4 py-4 shadow-sm">
                   <div className="h-4 w-2/3 animate-pulse rounded bg-brand-200" />
                   <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
-                  <p className="text-[10px] text-brand-700/70">Loading full GAAP statement…</p>
+                  <p className="text-[10px] text-brand-700/70">
+                    {activeSection === "financial-statements"
+                      ? "Loading full GAAP financial statements…"
+                      : "Loading full GAAP statement…"}
+                  </p>
                 </div>
               )}
               {statementsError && !fullStatements && (
@@ -816,32 +1107,49 @@ function FilingColumn({
                   <p className="text-xs text-red-700">{statementsError}</p>
                 </div>
               )}
-              {fullStatements && activeStatementTable && (
-                <>
-                  <SingleStatementPanel
-                    table={activeStatementTable}
-                    period={fullStatements.period}
-                    title={`Full GAAP — ${displayLabel}`}
-                    fetchMs={fullStatements.fetch_ms}
-                    fromCache={fullStatements.from_cache}
-                    tableFit={tableFit}
-                  />
-                  {activeStatementTable.rows.length === 0 && gaapStatementFilingUrl && (
-                    <FilingViewer
-                      filingUrl={gaapStatementFilingUrl}
-                      sectionLabel={displayLabel}
-                      ticker={ticker}
+              {fullStatements &&
+                (activeSection === "financial-statements" ? (
+                  ALL_STATEMENT_TABS.map((tab) => {
+                    const table = fullStatements.statements[tab];
+                    if (!table?.rows.length) return null;
+                    return (
+                      <SingleStatementPanel
+                        key={tab}
+                        table={table}
+                        period={fullStatements.period}
+                        title={`Full GAAP — ${table.label}`}
+                        fetchMs={fullStatements.fetch_ms}
+                        fromCache={fullStatements.from_cache}
+                        tableFit={tableFit}
+                      />
+                    );
+                  })
+                ) : activeStatementTable ? (
+                  <>
+                    <SingleStatementPanel
+                      table={activeStatementTable}
+                      period={fullStatements.period}
+                      title={`Full GAAP — ${displayLabel}`}
+                      fetchMs={fullStatements.fetch_ms}
+                      fromCache={fullStatements.from_cache}
+                      tableFit={tableFit}
                     />
-                  )}
-                </>
-              )}
+                    {activeStatementTable.rows.length === 0 && gaapStatementFilingUrl && (
+                      <FilingViewer
+                        filingUrl={gaapStatementFilingUrl}
+                        sectionLabel={displayLabel}
+                        ticker={ticker}
+                      />
+                    )}
+                  </>
+                ) : null)}
             </>
           )}
 
           {financialsError &&
           (activeSection === "financial-statements" || isStatementSection) &&
           !xbrlPanel &&
-          !(isStatementSection && fullStatements) ? (
+          !(showFullGaapStatements && fullStatements) ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4">
               <p className="text-sm font-medium text-red-800">Could not load XBRL financials</p>
               <p className="mt-1 text-xs text-red-700">{financialsError}</p>
@@ -858,12 +1166,25 @@ function FilingColumn({
             </div>
           ) : !activeSection && sections.length === 0 && !showFinancialsBootstrap ? (
             <p className="text-sm text-slate-400">Select a section from the left panel.</p>
-          ) : !section && !showFinancialsBootstrap && !showStatementBootstrap ? (
+          ) : sectionsPending &&
+            activeSection &&
+            activeSection !== "financial-statements" &&
+            !isStatementSection ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+              <p className="text-[10px] text-slate-500">Loading filing section…</p>
+            </div>
+          ) : activeSection &&
+            !hasSectionInFiling &&
+            !xbrlPanel &&
+            !showFinancialsBootstrap &&
+            !showStatementBootstrap ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
-              <p className="text-sm font-medium text-slate-500">Not in this filing</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {ticker} did not include this disclosure in the selected period.
+              <p className="text-sm font-medium text-slate-500">
+                {filingColumnNotFiledHeading(displayLabel)}
               </p>
+              <p className="mt-1 text-xs text-slate-400">{filingColumnNotFiledBody(ticker)}</p>
             </div>
           ) : notesPending &&
             activeSection?.startsWith("note-") &&
@@ -873,15 +1194,6 @@ function FilingColumn({
               <div className="h-4 w-full animate-pulse rounded bg-brand-100" />
               <div className="h-4 w-5/6 animate-pulse rounded bg-brand-100" />
               <p className="text-[10px] text-brand-700/70">Loading XBRL footnote data…</p>
-            </div>
-          ) : sectionsPending &&
-            activeSection &&
-            activeSection !== "financial-statements" &&
-            !isStatementSection ? (
-            <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-5 shadow-sm">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
-              <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
-              <p className="text-[10px] text-slate-500">Loading filing section…</p>
             </div>
           ) : showSecViewer ? (
             sectionFilingUrl ? (
@@ -899,6 +1211,7 @@ function FilingColumn({
                     label="View SEC filing excerpt"
                     loading={loadingHtml}
                     onClick={loadHtmlExcerpt}
+                    onWarm={warmSectionHtml}
                   />
                   {isNarrativeSection(activeSection) && sectionFilingUrl && (
                     <EdgarSectionLink filingUrl={sectionFilingUrl} />
@@ -911,7 +1224,7 @@ function FilingColumn({
                   <p className="mb-3 font-sans text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                     SEC filing excerpt
                   </p>
-                  <HtmlExcerpt html={sectionHtml} />
+                  <HtmlExcerpt html={sectionHtml} compact={isCompact} />
                   {isNarrativeSection(activeSection) && sectionFilingUrl && (
                     <EdgarSectionLink filingUrl={sectionFilingUrl} />
                   )}
@@ -940,6 +1253,8 @@ function ColumnHeader({
   filingDate,
   fiscalYear,
   compact = false,
+  deltaFlagCount = 0,
+  foreignFilerTooltip = null,
 }: {
   ticker: string;
   companyName: string;
@@ -947,18 +1262,34 @@ function ColumnHeader({
   filingDate: string | null;
   fiscalYear: number | null;
   compact?: boolean;
+  deltaFlagCount?: number;
+  foreignFilerTooltip?: string | null;
 }) {
+  const heatTone =
+    deltaFlagCount >= 5 ? "bg-amber-100 text-amber-900" : deltaFlagCount >= 2 ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600";
+
   return (
     <header
       className={`column-header-bar shrink-0 border-b border-slate-200 bg-white ${
         compact ? "px-3.5 py-2.5" : "px-5 py-3"
-      }`}
+      }${deltaFlagCount > 0 ? " ring-1 ring-inset ring-amber-200/60" : ""}`}
     >
-      <div className="flex items-baseline gap-2">
+      <div className="flex flex-wrap items-baseline gap-2">
         <span className="font-mono text-lg font-bold text-slate-900">{ticker}</span>
         {form && (
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">
+          <span
+            className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600"
+            title={foreignFilerTooltip ?? undefined}
+          >
             {form}
+          </span>
+        )}
+        {deltaFlagCount > 0 && (
+          <span
+            className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${heatTone}`}
+            title={`${deltaFlagCount} delta${deltaFlagCount === 1 ? "" : "s"} vs peers`}
+          >
+            {deltaFlagCount} Δ
           </span>
         )}
       </div>

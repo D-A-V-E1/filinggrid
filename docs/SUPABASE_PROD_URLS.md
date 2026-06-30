@@ -19,9 +19,14 @@
 4. Remove or keep `http://localhost:3000` entries for local dev (both can coexist).
 5. Save.
 
-## Optional — custom SMTP
+## Magic-link email branding
 
-For magic links from `noreply@peerdisclosures.com`, configure **Project Settings** → **Authentication** → **SMTP**. See [SETUP_RUNBOOK.md](../docs/SETUP_RUNBOOK.md).
+Sign-in emails are configured in Supabase (not in app code). Apply both steps so users see **Peer Disclosures**, not Supabase:
+
+1. **Email template** — Authentication → Email Templates → Magic Link → use [`supabase/templates/magic-link.html`](../supabase/templates/magic-link.html)
+2. **Custom SMTP** — Project Settings → Authentication → SMTP → sender name `Peer Disclosures`, email `noreply@peerdisclosures.com`
+
+Full checklist: [SUPABASE_EMAIL_BRANDING.md](./SUPABASE_EMAIL_BRANDING.md)
 
 ## Verify
 
