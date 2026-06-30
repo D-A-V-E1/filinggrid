@@ -134,3 +134,23 @@ Linux/CI: `bash scripts/pre-promote-check.sh`
 **Output:** `logs/pre-promote-{timestamp}.log` and `-summary.json`. Exit code **1** if any step is **FAIL** (WARN/SKIP are non-blocking).
 
 Steps 8–11 require manual browser verification unless browser automation is added; the harness prints the checklist and marks them WARN.
+
+---
+
+## Merge to main (branch promotion)
+
+After pre-promote passes, merge your feature branch into `main` (triggers Vercel + Render deploys):
+
+```powershell
+npm run promote:main                              # fast pre-promote + merge + push
+npm run promote:main -- -DryRun                   # show steps only (no merge/push)
+npm run promote:main -- -SourceBranch delta-phase-1
+$env:FULL_PRE_PROMOTE='1'; npm run promote:main   # full 16-step gate before merge
+$env:NO_PUSH='1'; npm run promote:main            # merge locally, do not push
+```
+
+Linux/CI: `bash scripts/merge-to-main.sh` (supports `--dry-run`, `--no-push`, `SOURCE_BRANCH`, `SKIP_PRE_PROMOTE=1`).
+
+**Output:** `logs/merge-to-main-{timestamp}.log` and `-summary.json`. Prints post-deploy manual steps and rollback instructions (Vercel, Render, `git revert`).
+
+**Safety:** never force-pushes `main`, never skips git hooks, never updates git config.

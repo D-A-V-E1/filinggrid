@@ -11,7 +11,8 @@
     "refresh-popular-comparisons": "node scripts/refresh-popular-comparisons.mjs",
     "smoke:overnight": "powershell -ExecutionPolicy Bypass -File scripts/overnight-smoke.ps1",
     "check:pre-promote": "powershell -ExecutionPolicy Bypass -File scripts/pre-promote-check.ps1",
-    "check:pre-promote:fast": "powershell -ExecutionPolicy Bypass -Command \"$env:SKIP_OVERNIGHT='1'; & ./scripts/pre-promote-check.ps1\""
+    "check:pre-promote:fast": "powershell -ExecutionPolicy Bypass -Command \"$env:SKIP_OVERNIGHT='1'; & ./scripts/pre-promote-check.ps1\"",
+    "promote:main": "powershell -ExecutionPolicy Bypass -File scripts/merge-to-main.ps1"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
