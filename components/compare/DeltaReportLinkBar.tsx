@@ -81,7 +81,7 @@ export default function DeltaReportLinkBar({
           href={reportHref}
           className="inline-flex shrink-0 items-center justify-center self-end rounded-md border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 sm:self-center"
         >
-          Open delta report
+          View delta report
         </Link>
       </div>
     </section>
