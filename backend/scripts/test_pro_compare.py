@@ -216,7 +216,7 @@ async def audit_group(
                 issues.append(f"sparse notes_xbrl after full: {sparse_notes} (warn)")
 
     status = "PASS" if not [i for i in issues if not i.endswith("(warn)")] else "FAIL"
-    print(f"[{status}] {gid} ΓÇö {label}")
+    print(f"[{status}] {gid} - {label}")
     print(f"       tickers: {', '.join(tickers)}")
     if parse_ok:
         print(f"       parse: {parse_msg}")

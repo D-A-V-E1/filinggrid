@@ -13,6 +13,7 @@ SMOKE_PATH = ROOT / "backend" / "scripts" / "smoke_uncommon_comps.py"
 spec = importlib.util.spec_from_file_location("smoke_uncommon_comps", SMOKE_PATH)
 mod = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
+sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
 
 API = os.environ.get("FILINGGRID_API", mod.API)

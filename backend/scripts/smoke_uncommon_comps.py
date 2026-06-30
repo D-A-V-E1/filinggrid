@@ -207,4 +207,5 @@ async def main():
             f"{r.comp}|{','.join(r.tickers)}|{r.period}|{r.parse}|{r.fin}|{r.errors}|{r.notes}"
         )
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
