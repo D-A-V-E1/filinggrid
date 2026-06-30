@@ -219,6 +219,17 @@ function isSubstantivePreview(text: string, minLen = 40): boolean {
   return true;
 }
 
+/** Item 9 accountant disagreement — not Item 9C HFCAA headings or combined Part II index stubs. */
+function isDisagreementSubstantive(text: string): boolean {
+  const trimmed = text.trim();
+  if (!isSubstantivePreview(trimmed, 30)) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("foreign jurisdictions") && lower.includes("prevent inspections")) return false;
+  if (/^item\s*9c\b/i.test(trimmed) && !/disagreement/i.test(trimmed)) return false;
+  if (/^item\s*9b,\s*9c,\s*1[0-3]/i.test(trimmed)) return false;
+  return true;
+}
+
 function pickNoteFyRow(
   note: NoteSectionXbrl,
   fiscalYear: number | null
@@ -280,6 +291,9 @@ function columnHasTopicPresenceSignal(
   }
 
   if (GOVERNANCE_TOPIC_SECTION_SET.has(sectionId)) {
+    if (sectionId === "disagreements") {
+      return isDisagreementSubstantive(sectionPreview(col, sectionId));
+    }
     return isSubstantivePreview(sectionPreview(col, sectionId));
   }
 
@@ -496,7 +510,7 @@ function scanOpenMattersMetadata(state: DeltaSessionState, flags: DeltaFlag[]): 
   for (const col of state.columns) {
     if (!columnHasSection(col, "disagreements", state)) continue;
     const preview = sectionPreview(col, "disagreements");
-    if (isSubstantivePreview(preview, 30)) {
+    if (isDisagreementSubstantive(preview)) {
       pushFlag(flags, {
         id: flagId("disagreement_reported", col.ticker, "disagreements"),
         ruleId: "disagreement_reported",

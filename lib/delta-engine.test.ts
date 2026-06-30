@@ -264,6 +264,31 @@ describe("scanDeltas governance dedupe", () => {
     expect(flagsByRule(state, "topic_only_peer", "disagreements")).toHaveLength(0);
   });
 
+  it("suppresses disagreement_reported for Item 9C foreign jurisdiction headings", () => {
+    const item9c =
+      "Item 9C. Disclosure Regarding Foreign Jurisdictions that Prevent Inspections";
+    const state = baseState({
+      columns: [
+        column("AAPL", [{ id: "disagreements", preview: item9c }]),
+        column("MSFT", [{ id: "disagreements", preview: item9c }]),
+      ],
+    });
+
+    expect(flagsByRule(state, "disagreement_reported", "disagreements")).toHaveLength(0);
+    expect(flagsByRule(state, "topic_only_peer", "disagreements")).toHaveLength(0);
+  });
+
+  it("suppresses disagreement_reported for combined Item 9B/9C/10 index stubs", () => {
+    const state = baseState({
+      columns: [
+        column("MSFT", [{ id: "disagreements", preview: "Item 9B, 9C, 10, 11, 12, 13" }]),
+        column("AAPL", [{ id: "disagreements", preview: "None." }]),
+      ],
+    });
+
+    expect(flagsByRule(state, "disagreement_reported", "disagreements")).toHaveLength(0);
+  });
+
   it("suppresses topic_only_peer when only_peer_open_staff fired on unresolved-staff", () => {
     const state = baseState({
       columns: [
