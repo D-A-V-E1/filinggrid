@@ -560,7 +560,7 @@ function scanNoteMetricVsMedian(state: DeltaSessionState, flags: DeltaFlag[], co
 
     const label = sectionLabel(state.catalog, sectionId);
 
-    for (const metricKey of metricKeys) {
+    for (const metricKey of Array.from(metricKeys)) {
       const valuesByTicker: Record<string, number> = {};
       for (const col of state.columns) {
         const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
