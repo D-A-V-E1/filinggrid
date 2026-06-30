@@ -1,6 +1,8 @@
 import type { WheelEvent as ReactWheelEvent } from "react";
 
-const DEFAULT_VERTICAL_SCROLL_SELECTOR = ".filing-column-scroll";
+export const FILING_COLUMN_SCROLL_CLASS = "filing-column-scroll";
+const DEFAULT_VERTICAL_SCROLL_SELECTOR = `.${FILING_COLUMN_SCROLL_CLASS}`;
+const COMPARE_COLUMN_SELECTOR = ".compare-column";
 
 function hasHorizontalOverflow(el: HTMLElement): boolean {
   return el.scrollWidth > el.clientWidth + 1;
@@ -20,6 +22,25 @@ function canScrollHorizontally(el: HTMLElement, scrollDelta: number): boolean {
 
   if (scrollDelta < 0) return !atLeft;
   return !atRight;
+}
+
+function verticalWheelDelta(e: Pick<ReactWheelEvent<HTMLElement>, "deltaY" | "shiftKey">): number {
+  return e.shiftKey ? 0 : e.deltaY;
+}
+
+function applyVerticalScrollDelta(
+  scrollEl: HTMLElement,
+  deltaY: number,
+  e: Pick<ReactWheelEvent<HTMLElement>, "preventDefault" | "stopPropagation">
+): boolean {
+  const maxScrollTop = scrollEl.scrollHeight - scrollEl.clientHeight;
+  const nextScrollTop = Math.max(0, Math.min(maxScrollTop, scrollEl.scrollTop + deltaY));
+  if (nextScrollTop === scrollEl.scrollTop) return false;
+
+  scrollEl.scrollTop = nextScrollTop;
+  e.preventDefault();
+  e.stopPropagation();
+  return true;
 }
 
 /**
@@ -76,17 +97,66 @@ export function forwardVerticalWheelFromHorizontalScrollContainer(
     }
   }
 
-  const deltaY = e.shiftKey ? 0 : e.deltaY;
+  const deltaY = verticalWheelDelta(e);
   if (Math.abs(deltaY) < 0.5) return;
 
   const verticalParent = el.closest(verticalScrollSelector) as HTMLElement | null;
   if (!verticalParent) return;
 
-  const maxScrollTop = verticalParent.scrollHeight - verticalParent.clientHeight;
-  const nextScrollTop = Math.max(0, Math.min(maxScrollTop, verticalParent.scrollTop + deltaY));
+  applyVerticalScrollDelta(verticalParent, deltaY, e);
+}
 
-  if (nextScrollTop === verticalParent.scrollTop) return;
+/**
+ * Forward vertical wheel from compare column chrome (header, title bar) to the
+ * column body scroll container. Events inside `.filing-column-scroll` are left
+ * to native scroll or nested horizontal-table forwarders.
+ */
+export function forwardVerticalWheelToFilingColumnScroll(
+  e: ReactWheelEvent<HTMLElement>
+): void {
+  const columnRoot = e.currentTarget;
+  const scrollEl = columnRoot.querySelector<HTMLElement>(DEFAULT_VERTICAL_SCROLL_SELECTOR);
+  if (!scrollEl) return;
 
-  verticalParent.scrollTop = nextScrollTop;
-  e.preventDefault();
+  const target = e.target as Node;
+  if (scrollEl.contains(target) && target !== columnRoot) return;
+
+  const deltaY = verticalWheelDelta(e);
+  if (Math.abs(deltaY) < 0.5) return;
+
+  applyVerticalScrollDelta(scrollEl, deltaY, e);
+}
+
+/**
+ * Forward vertical wheel from the multi-column horizontal strip when the pointer
+ * is over non-scrollable grid chrome, while preserving horizontal column scroll.
+ */
+export function forwardVerticalWheelFromColumnsContainer(
+  e: ReactWheelEvent<HTMLElement>
+): void {
+  const container = e.currentTarget;
+  const target = e.target as HTMLElement;
+
+  if (target.closest(DEFAULT_VERTICAL_SCROLL_SELECTOR)) return;
+
+  if (isHorizontalWheelIntent(container, e)) {
+    const horizontalDelta = e.shiftKey ? e.deltaY : e.deltaX;
+    if (canScrollHorizontally(container, horizontalDelta)) return;
+  }
+
+  const deltaY = verticalWheelDelta(e);
+  if (Math.abs(deltaY) < 0.5) return;
+
+  let column = target.closest<HTMLElement>(COMPARE_COLUMN_SELECTOR);
+  if (!column && typeof document !== "undefined") {
+    column =
+      document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>(COMPARE_COLUMN_SELECTOR) ??
+      null;
+  }
+  if (!column) return;
+
+  const scrollEl = column.querySelector<HTMLElement>(DEFAULT_VERTICAL_SCROLL_SELECTOR);
+  if (!scrollEl) return;
+
+  applyVerticalScrollDelta(scrollEl, deltaY, e);
 }

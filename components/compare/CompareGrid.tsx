@@ -74,6 +74,7 @@ import {
   resetCompareViewScrollWhenReady,
   resetAllFilingColumnScrollsExcept,
 } from "@/lib/filing-column-scroll";
+import { forwardVerticalWheelFromColumnsContainer } from "@/lib/forward-vertical-wheel";
 import { isMetricFocusDeltaFlag } from "@/lib/delta-labels";
 import { computeDeltasSettling, NOTES_UPGRADE_TIMEOUT_MS } from "@/lib/compare-settling";
 import {
@@ -1116,7 +1117,11 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
               >
                 Sections
               </button>
-              <div ref={columnsScrollRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+              <div
+                ref={columnsScrollRef}
+                className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden"
+                onWheel={forwardVerticalWheelFromColumnsContainer}
+              >
                 <div
                   className={`compare-columns-grid grid h-full min-h-0${
                     columnLayout.fixedColumns ? " compare-columns-grid--fixed" : ""

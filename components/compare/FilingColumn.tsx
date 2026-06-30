@@ -40,7 +40,11 @@ import { buildSectionFilingUrl } from "@/lib/sec-url";
 import { sanitizeExcerptHtml } from "@/lib/sanitize-excerpt-html";
 import { displayFormLabel, formFromPeriodId, sectionHtmlRequestParams } from "@/lib/filing-period";
 import type { CompareColumnLayout } from "@/lib/compare-layout";
-import { forwardVerticalWheelFromHorizontalScrollContainer, attachFilingTableWheelForwarding } from "@/lib/forward-vertical-wheel";
+import {
+  forwardVerticalWheelFromHorizontalScrollContainer,
+  forwardVerticalWheelToFilingColumnScroll,
+  attachFilingTableWheelForwarding,
+} from "@/lib/forward-vertical-wheel";
 import {
   getScrollGeneration,
   resetWindowScroll,
@@ -1046,6 +1050,7 @@ function FilingColumn({
         isCompact ? " compare-column--compact" : ""
       }${tableFit ? " compare-column--table-fit" : ""}`}
       style={columnStyle}
+      onWheel={forwardVerticalWheelToFilingColumnScroll}
     >
       <ColumnHeader
         ticker={ticker}
