@@ -441,6 +441,75 @@
     width: 42%;
   }
 
+  /* SEC excerpt tables (HtmlExcerpt): fill compare column, optimize index layouts */
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap {
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt table {
+    @apply text-xs leading-snug;
+  }
+
+  .compare-column--compact .filing-content--excerpt table {
+    font-size: 0.6875rem;
+    line-height: 1.125rem;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt td,
+  .compare-column--table-fit .filing-content--excerpt th {
+    @apply border-slate-200 px-2 py-1;
+    vertical-align: top;
+  }
+
+  .compare-column--compact .filing-content--excerpt td,
+  .compare-column--compact .filing-content--excerpt th {
+    @apply px-1.5 py-0.5;
+  }
+
+  /* Two-column index tables (statement name + page number) */
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > table:not(:has(tr > :nth-child(3))) {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))) tr > :first-child:nth-last-child(2) {
+    width: 82%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    padding-right: 0.75rem;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))) tr > :nth-child(2):last-child {
+    width: 18%;
+    min-width: 2.5rem;
+    max-width: 4rem;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    padding-left: 0.25rem;
+    padding-right: 0.5rem;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))) tr > :nth-child(2):last-child[align="right"] {
+    text-align: right;
+  }
+
+  /* Wide multi-column financial tables: preserve horizontal scroll */
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > table:has(tr > :nth-child(3)) {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt tr td:not(:first-child):not([align="right"]),
+  .compare-column--table-fit .filing-content--excerpt tr th:not(:first-child):not([align="right"]) {
+    min-width: 0;
+  }
+
   .left-pane-panel {
     display: flex;
     min-height: 0;

@@ -514,7 +514,7 @@ function HtmlExcerpt({ html, compact = false }: { html: string; compact?: boolea
     >
       <div
         ref={contentRef}
-        className="filing-content w-full min-w-0 max-w-full font-serif text-sm text-slate-800"
+        className="filing-content filing-content--excerpt w-full min-w-0 max-w-full font-serif text-sm text-slate-800"
         dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     </article>
@@ -575,7 +575,7 @@ function FilingColumn({
 }: FilingColumnProps) {
   const maxFyColumns = maxFyColumnsForLayout(columnCount);
   const isCompact = columnLayout?.density === "compact";
-  const tableFit = isCompact || columnCount >= 3;
+  const tableFit = isCompact || columnCount >= 2;
   const headlineMetricRows = useMemo(() => {
     const base = tableFit ? FINANCIAL_STATEMENT_ROWS_DENSE : FINANCIAL_STATEMENT_ROWS;
     const metrics = financialsXbrl?.metrics;

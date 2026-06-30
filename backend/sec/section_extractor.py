@@ -800,6 +800,17 @@ def _normalize_table_cells(table: Tag) -> None:
         _collapse_inline_text(cell)
 
 
+def _align_index_page_columns(table: Tag) -> None:
+    """Right-align page-number cells in two-column statement index tables."""
+    for row in table.find_all("tr"):
+        cells = row.find_all(["td", "th"])
+        if len(cells) != 2:
+            continue
+        page_text = _normalize_text(cells[1].get_text(" ", strip=True))
+        if _PAGE_ONLY_RE.fullmatch(page_text):
+            cells[1]["align"] = "right"
+
+
 def _row_cell_texts(row: Tag) -> list[str]:
     return [
         _normalize_text(cell.get_text(" ", strip=True))
@@ -923,6 +934,7 @@ def _normalize_excerpt_html(html: str) -> str:
 
     for table in soup.find_all("table"):
         _normalize_table_cells(table)
+        _align_index_page_columns(table)
 
     _strip_noise_table_rows(soup)
 

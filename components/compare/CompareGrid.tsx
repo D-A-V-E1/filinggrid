@@ -17,7 +17,6 @@ import {
   GAAP_STATEMENT_SECTION_IDS,
   getComparableSectionIds,
   mergeProStatementCatalog,
-  resolveDefaultActiveSection,
   DEFAULT_ACTIVE_SECTION,
   FINANCIALS_BOOTSTRAP_CATALOG,
 } from "@/lib/sections";
@@ -76,6 +75,12 @@ import {
 } from "@/lib/filing-column-scroll";
 import { isMetricFocusDeltaFlag } from "@/lib/delta-labels";
 import { computeDeltasSettling, NOTES_UPGRADE_TIMEOUT_MS } from "@/lib/compare-settling";
+import {
+  compareFocusHandled,
+  parseCompareFocusParams,
+  resolveCompareActiveSection,
+  type CompareFocusParams,
+} from "@/lib/compare-focus";
 
 interface CompareGridProps {
   peerSlug: string;
@@ -272,6 +277,11 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     } else if (ids.size === 0 && isBootstrapMode) {
       ids.add(DEFAULT_ACTIVE_SECTION);
     }
+    if (hasFullCatalog) {
+      for (const s of data.section_catalog) {
+        if (s.id.startsWith("note-")) ids.add(s.id);
+      }
+    }
     if (isPro) {
       GAAP_STATEMENT_SECTION_IDS.forEach((id) => ids.add(id));
     }
@@ -377,7 +387,42 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     upgradeFullFinancials,
   ]);
 
+  const compareFocus = useMemo(() => parseCompareFocusParams(searchParams), [searchParams]);
+
+  const syncSectionFromFocus = useCallback(
+    (
+      focus: CompareFocusParams,
+      columns: FilingColumn[],
+      sectionCatalog: ParseResponse["section_catalog"]
+    ) => {
+      const navigable = getComparableSectionIds(columns);
+      const catalogIds = mergeProStatementCatalog(sectionCatalog, isProRef.current).map((s) => s.id);
+      const resolved = resolveCompareActiveSection(navigable, catalogIds, focus.section);
+      setActiveSection(resolved);
+      if (!compareFocusHandled(focus, resolved)) return;
+
+      focusHandledRef.current = true;
+      const normalizedTicker = focus.ticker?.toUpperCase() ?? null;
+      if (focus.row && normalizedTicker) {
+        bumpScrollGeneration();
+        resetAllFilingColumnScrollsExcept(normalizedTicker);
+        setSectionFocusTicker(normalizedTicker);
+        setSectionFocusRowKey(focus.row);
+        scrollTickerColumnIntoViewWhenReady(normalizedTicker);
+        return;
+      }
+
+      setSectionFocusTicker(null);
+      setSectionFocusRowKey(null);
+      setSectionScrollRequest((n) => n + 1);
+      if (normalizedTicker) scrollTickerColumnIntoViewWhenReady(normalizedTicker);
+      requestAnimationFrame(() => resetCompareViewScrollWhenReady());
+    },
+    [scrollTickerColumnIntoViewWhenReady]
+  );
+
   const loadFilings = useCallback((options?: { refreshTickers?: string[]; force?: boolean }) => {
+    const focus = parseCompareFocusParams(searchParams);
     const warm = peekCompareSession(cacheKey);
     if (
       !options?.force &&
@@ -392,7 +437,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       setError(warm.error);
       setSectionsParseError(warm.sectionsParseError);
       upgradedFullFinancialsRef.current = new Set(warm.upgradedTickers);
-      setActiveSection(resolveDefaultActiveSection(getComparableSectionIds(warm.data.columns)));
+      syncSectionFromFocus(focus, warm.data.columns, warm.data.section_catalog);
       return;
     }
 
@@ -404,7 +449,13 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     focusHandledRef.current = false;
     setSectionFocusTicker(null);
     setSectionFocusRowKey(null);
-    setActiveSection(DEFAULT_ACTIVE_SECTION);
+    setActiveSection(
+      resolveCompareActiveSection(
+        [],
+        FINANCIALS_BOOTSTRAP_CATALOG.map((s) => s.id),
+        focus.section
+      )
+    );
     setError("");
     setSectionsParseError("");
     setFinancialsByTicker({});
@@ -477,7 +528,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     const cached = loadParseMeta(cacheKey, period);
     if (cached && hasSectionIndex(cached)) {
       setData(cached);
-      setActiveSection(resolveDefaultActiveSection(getComparableSectionIds(cached.columns)));
+      syncSectionFromFocus(focus, cached.columns, cached.section_catalog);
       startHeadlineFinancials();
       return;
     }
@@ -504,6 +555,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
             setData((prev) =>
               prev ? { ...prev, section_catalog: sectionCatalogIn, parsed_at: at } : prev
             );
+            if (focus.section) syncSectionFromFocus(focus, columns, sectionCatalogIn);
           },
           onColumnMeta: (column) => {
             if (loadId !== loadIdRef.current) return;
@@ -539,8 +591,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
                 section_catalog: sectionCatalog.length > 0 ? sectionCatalog : prev.section_catalog,
               };
             });
-            const navigable = getComparableSectionIds(columns);
-            setActiveSection((prev) => prev ?? resolveDefaultActiveSection(navigable));
+            syncSectionFromFocus(focus, columns, sectionCatalog);
           },
           onDone: () => {
             if (loadId !== loadIdRef.current) return;
@@ -551,6 +602,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
               stateless: false,
             };
             setData(merged);
+            syncSectionFromFocus(focus, columns, sectionCatalog);
             if (hasSectionIndex(merged)) saveParseMeta(cacheKey, merged);
           },
         }, period, {
@@ -590,7 +642,15 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
         }
       }
     })();
-  }, [buildPlaceholderColumn, cacheKey, tickers, resolvedFiscalYear, period]);
+  }, [
+    buildPlaceholderColumn,
+    cacheKey,
+    tickers,
+    resolvedFiscalYear,
+    period,
+    searchParams,
+    syncSectionFromFocus,
+  ]);
 
   // Free tier allows 3 columns — start SEC fetch before /auth/me returns to avoid a serial waterfall.
   const canLoadBeforeAuth = tickers.length <= 3;
@@ -783,14 +843,21 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   ]);
 
   useEffect(() => {
-    if (focusHandledRef.current || !data || availableSectionIds.size === 0) return;
-    const section = searchParams.get("section");
-    const ticker = searchParams.get("ticker");
-    const row = searchParams.get("row");
-    if (!section) return;
-    focusHandledRef.current = true;
-    handleSectionSelect(section, ticker ?? undefined, row ?? undefined);
-  }, [data, availableSectionIds.size, searchParams, handleSectionSelect]);
+    focusHandledRef.current = false;
+  }, [compareFocus.section, compareFocus.ticker, compareFocus.row]);
+
+  useEffect(() => {
+    if (!apiWarmupDone || compareLoadKeyRef.current !== cacheKey) return;
+    if (focusHandledRef.current || !data) return;
+    if (!compareFocus.section) return;
+    syncSectionFromFocus(compareFocus, data.columns, data.section_catalog);
+  }, [
+    apiWarmupDone,
+    cacheKey,
+    data,
+    compareFocus,
+    syncSectionFromFocus,
+  ]);
 
   const handlePaywall = useCallback(
     (reason: string, message: string) => {

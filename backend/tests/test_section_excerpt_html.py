@@ -142,6 +142,19 @@ def test_realistic_ixbrl_table_fragment():
     assert "style=" not in normalized
 
 
+def test_aligns_page_numbers_in_two_column_index_rows():
+    html = (
+        "<table>"
+        "<tr><td>Consolidated Statements of Operations</td><td>42</td></tr>"
+        "<tr><td>Consolidated Balance Sheets</td><td>44</td></tr>"
+        "</table>"
+    )
+    normalized = _normalize_excerpt_html(html)
+    assert 'align="right"' in normalized
+    assert normalized.count('align="right"') == 2
+    assert "Consolidated Statements of Operations" in normalized
+
+
 def test_strips_page_number_and_toc_noise_rows():
     html = (
         "<table>"

@@ -136,29 +136,39 @@ describe("columnHasSectionPresence xbrl fallback", () => {
     expect(columnHasReliableSectionPresence(epsColumn, "note-eps", epsDisclosureFinancials)).toBe(true);
   });
 
-  it("detects disclosure text when has_data is false but text blocks exist", () => {
-    const note = {
-      section_id: "note-revenue",
-      label: "Revenue",
-      has_data: false,
-      metrics: {},
+  it("detects note-contingencies from XBRL disclosures when parse index omits tagged amounts", () => {
+    const purchaseObligations =
+      "The Company had aggregate purchase obligations of $45.2 billion expected to be paid over the next several years.";
+    const column = col([{ id: "note-contingencies", preview: purchaseObligations }], "10-Q");
+    const financials = {
+      ticker: "AAPL",
+      cik: "0",
+      entity_name: "Apple",
+      fiscal_year_filter: 2026,
+      source: "sec_ixbrl_filing",
+      from_cache: false,
       annual_summary: [],
-      disclosures: [
-        {
-          key: "revenue_text",
-          label: "Revenue recognition",
-          concept: "RevenueFromContractWithCustomerTextBlock",
-          text: "We recognize passenger revenue when transportation is provided.",
+      notes_xbrl: {
+        "note-contingencies": {
+          section_id: "note-contingencies",
+          label: "Commitments & Contingencies",
+          has_data: false,
+          metrics: {},
+          annual_summary: [],
+          disclosures: [
+            {
+              key: "commitments",
+              label: "Commitments and contingencies",
+              concept: "CommitmentsAndContingenciesDisclosureTextBlock",
+              text: purchaseObligations,
+            },
+          ],
         },
-      ],
+      },
     };
-    expect(noteSectionHasXbrlContent(note)).toBe(true);
-    expect(
-      financialsHaveCatalogSection(
-        { ...epsDisclosureFinancials, notes_xbrl: { "note-revenue": note } },
-        "note-revenue"
-      )
-    ).toBe(true);
+
+    expect(financialsHaveCatalogSection(financials, "note-contingencies")).toBe(true);
+    expect(columnHasReliableSectionPresence(column, "note-contingencies", financials)).toBe(true);
   });
 });
 

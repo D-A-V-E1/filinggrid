@@ -147,6 +147,44 @@ describe("scanDeltas topic presence", () => {
     expect(flagsByRule(state, "topic_only_peer", "note-impairment")).toHaveLength(0);
   });
 
+  it("suppresses topic_only_peer on note-contingencies when peer has disclosure text but no tagged amounts", () => {
+    const purchaseObligations =
+      "The Company had aggregate purchase obligations of $45.2 billion, including supplier commitments and capital expenditures, expected to be paid over the next several years.";
+
+    const state = baseState({
+      columns: [
+        column("MSFT", [{ id: "note-contingencies", preview: LONG_NARRATIVE }]),
+        column("AAPL", [{ id: "note-contingencies", preview: purchaseObligations }]),
+      ],
+      period: "interim-2026-Q2-10-Q",
+      fiscalYear: 2026,
+      financialsByTicker: {
+        MSFT: {
+          ticker: "MSFT",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2026,
+          source: "sec_ixbrl_filing",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithMetrics("note-contingencies", 2026, { loss_contingency: 2_500_000_000 }),
+        },
+        AAPL: {
+          ticker: "AAPL",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2026,
+          source: "sec_ixbrl_filing",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithDisclosures("note-contingencies", purchaseObligations),
+        },
+      },
+    });
+
+    expect(flagsByRule(state, "topic_only_peer", "note-contingencies")).toHaveLength(0);
+  });
+
   it("flags topic_only_peer when one peer has non-zero note metrics", () => {
     const state = baseState({
       columns: [

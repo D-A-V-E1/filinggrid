@@ -220,6 +220,16 @@ function columnHasTopicPresenceSignal(
   sectionId: string,
   state: DeltaSessionState
 ): boolean {
+  // Contingencies are mostly narrative (purchase obligations, litigation) — align with
+  // missing_section / UI: XBRL disclosure text or substantive parse preview counts.
+  if (sectionId === "note-contingencies") {
+    return columnHasReliableSectionPresence(
+      col,
+      sectionId,
+      state.financialsByTicker[col.ticker]
+    );
+  }
+
   if (isDollarEventNoteSection(sectionId)) {
     const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
     if (!note) return false;
