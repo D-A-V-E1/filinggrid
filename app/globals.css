@@ -422,58 +422,21 @@
     white-space: nowrap;
   }
 
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap {
-    width: 100%;
-  }
-
-  /* Two-column disclosure tables (label + amount): fixed split in narrow compare columns */
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > table:not(:has(tr > :nth-child(3))) {
-    width: 100%;
-    min-width: 0;
-    table-layout: fixed;
-  }
-
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr td:first-child,
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr th:first-child {
-    width: 58%;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-    white-space: normal;
-  }
-
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr td[align="right"],
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr th[align="right"] {
-    width: 42%;
-  }
-
-  /* Wide multi-column footnote tables: horizontal scroll instead of column collapse */
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > table:has(tr > :nth-child(3)) {
-    width: max-content;
-    min-width: 100%;
-    table-layout: auto;
-  }
-
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr td:first-child,
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr th:first-child {
-    width: auto;
-    min-width: 6rem;
-    overflow-wrap: normal;
-    word-break: normal;
-    white-space: normal;
-  }
-
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr td:not(:first-child):not([align="right"]),
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr th:not(:first-child):not([align="right"]) {
-    min-width: 0;
-  }
-
-  /* SEC excerpt tables (HtmlExcerpt): fill compare column, optimize index layouts */
+  /*
+   * Compare-grid SEC tables (normalized HTML has no border attr).
+   * Wide = 3+ columns or colspan; narrow = 2-col index / label+amount only.
+   */
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap,
   .compare-column--table-fit .filing-content--excerpt .filing-table-wrap {
     width: 100%;
+    overflow-x: auto;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap {
     margin-bottom: 0.75rem;
   }
 
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table,
   .compare-column--table-fit .filing-content--excerpt table {
     @apply text-xs leading-snug;
   }
@@ -483,25 +446,99 @@
     line-height: 1.125rem;
   }
 
-  .compare-column--table-fit .filing-content--excerpt td,
-  .compare-column--table-fit .filing-content--excerpt th {
+  /* Borderless cells: row separators + light zebra (no full grid) */
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap td,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap th,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap td,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap th {
+    border-width: 0;
+    border-bottom-width: 1px;
     @apply border-slate-200 px-2 py-1;
     vertical-align: top;
   }
 
-  .compare-column--compact .filing-content--excerpt td,
-  .compare-column--compact .filing-content--excerpt th {
+  .compare-column--compact .filing-content--excerpt .filing-table-wrap td,
+  .compare-column--compact .filing-content--excerpt .filing-table-wrap th,
+  .compare-column--compact .xbrl-disclosure-content.filing-content .filing-table-wrap td,
+  .compare-column--compact .xbrl-disclosure-content.filing-content .filing-table-wrap th {
     @apply px-1.5 py-0.5;
   }
 
-  /* Two-column index tables (statement name + page number) */
-  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > table:not(:has(tr > :nth-child(3))) {
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap tr:last-child td,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap tr:last-child th,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap tr:last-child td,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap tr:last-child th {
+    border-bottom-width: 0;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap tbody tr:nth-child(even) td,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap tbody tr:nth-child(even) th,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > tr:nth-child(even) td,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > tr:nth-child(even) th,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap tbody tr:nth-child(even) td,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap tbody tr:nth-child(even) th,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > tr:nth-child(even) td,
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > tr:nth-child(even) th {
+    @apply bg-slate-50/70;
+  }
+
+  /* Two-column disclosure tables (label + amount): fixed split in narrow compare columns */
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) {
     width: 100%;
     min-width: 0;
     table-layout: fixed;
   }
 
-  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))) tr > :first-child:nth-last-child(2) {
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) tr td:first-child,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) tr th:first-child {
+    width: 58%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) tr td[align="right"],
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) tr th[align="right"] {
+    width: 42%;
+  }
+
+  /* Wide multi-column footnote tables: horizontal scroll instead of column collapse */
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr td:first-child,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr th:first-child {
+    width: auto;
+    min-width: 6rem;
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: normal;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr td:not(:first-child):not([align="right"]),
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr th:not(:first-child):not([align="right"]) {
+    min-width: 0;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr td[align="right"]:not(:first-child),
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr th[align="right"]:not(:first-child) {
+    min-width: 3.25rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Two-column index tables (statement name + page number) */
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) tr > :first-child:nth-last-child(2) {
     width: 82%;
     min-width: 0;
     overflow-wrap: anywhere;
@@ -510,7 +547,7 @@
     padding-right: 0.75rem;
   }
 
-  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))) tr > :nth-child(2):last-child {
+  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) tr > :nth-child(2):last-child {
     width: 18%;
     min-width: 2.5rem;
     max-width: 4rem;
@@ -521,20 +558,27 @@
     padding-right: 0.5rem;
   }
 
-  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))) tr > :nth-child(2):last-child[align="right"] {
+  .compare-column--table-fit .filing-content--excerpt table:not(:has(tr > :nth-child(3))):not(:has(td[colspan]:not([colspan="1"]))):not(:has(th[colspan]:not([colspan="1"]))) tr > :nth-child(2):last-child[align="right"] {
     text-align: right;
   }
 
   /* Wide multi-column financial tables: preserve horizontal scroll */
-  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > table:has(tr > :nth-child(3)) {
+  .compare-column--table-fit .filing-content--excerpt .filing-table-wrap > table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) {
     width: max-content;
     min-width: 100%;
     table-layout: auto;
   }
 
-  .compare-column--table-fit .filing-content--excerpt tr td:not(:first-child):not([align="right"]),
-  .compare-column--table-fit .filing-content--excerpt tr th:not(:first-child):not([align="right"]) {
+  .compare-column--table-fit .filing-content--excerpt table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr td:not(:first-child):not([align="right"]),
+  .compare-column--table-fit .filing-content--excerpt table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr th:not(:first-child):not([align="right"]) {
     min-width: 0;
+  }
+
+  .compare-column--table-fit .filing-content--excerpt table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr td[align="right"]:not(:first-child),
+  .compare-column--table-fit .filing-content--excerpt table:is(:has(tr > :nth-child(3)), :has(td[colspan]:not([colspan="1"])), :has(th[colspan]:not([colspan="1"]))) tr th[align="right"]:not(:first-child) {
+    min-width: 3.25rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   .left-pane-panel {
