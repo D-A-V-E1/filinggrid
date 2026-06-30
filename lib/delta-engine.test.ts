@@ -291,6 +291,144 @@ describe("scanDeltas governance dedupe", () => {
   });
 });
 
+describe("scanDeltas note metric vs median", () => {
+  it("flags note_metric_vs_median when one peer has high lease liability", () => {
+    const state = baseState({
+      catalog: [{ id: "note-leases", label: "Note — Leases" }],
+      columns: [
+        column("MSFT", [{ id: "note-leases", preview: "Lease disclosures." }]),
+        column("AAPL", [{ id: "note-leases", preview: "Lease disclosures." }]),
+      ],
+      financialsByTicker: {
+        MSFT: {
+          ticker: "MSFT",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2024,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithMetrics("note-leases", 2024, { operating_lease_liability: 20_000_000_000 }),
+        },
+        AAPL: {
+          ticker: "AAPL",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2024,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithMetrics("note-leases", 2024, { operating_lease_liability: 5_000_000_000 }),
+        },
+      },
+    });
+
+    const flags = flagsByRule(state, "note_metric_vs_median", "note-leases");
+    expect(flags.some((f) => f.ticker === "MSFT" && f.rowKey === "operating_lease_liability")).toBe(true);
+  });
+
+  it("suppresses note_metric_vs_median when metrics not comparable (mixed filers)", () => {
+    const state = baseState({
+      catalog: [{ id: "note-leases", label: "Note — Leases" }],
+      columns: [
+        column("MSFT", [{ id: "note-leases", preview: "Leases." }], "10-K"),
+        column("TSM", [{ id: "note-leases", preview: "Leases." }], "20-F"),
+      ],
+      tickers: ["MSFT", "TSM"],
+      financialsByTicker: {
+        MSFT: {
+          ticker: "MSFT",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2024,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithMetrics("note-leases", 2024, { operating_lease_liability: 20_000_000_000 }),
+        },
+        TSM: {
+          ticker: "TSM",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2024,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithMetrics("note-leases", 2024, { operating_lease_liability: 5_000_000_000 }),
+        },
+      },
+    });
+
+    expect(flagsByRule(state, "note_metric_vs_median")).toHaveLength(0);
+  });
+
+  it("uses XBRL disclosure text for contingency_open_emphasis when present", () => {
+    const xbrlContingencyText =
+      "A material loss contingency is reasonably possible. The matter is under investigation and we are unable to estimate the range of loss at this time.";
+    const shortPreview = "Standard indemnification provisions only.";
+
+    const msftNote = noteWithMetrics("note-contingencies", 2024, { loss_contingency: 1_000_000 })![
+      "note-contingencies"
+    ]!;
+
+    const state = baseState({
+      tickers: ["MSFT", "AAPL", "GOOG"],
+      columns: [
+        column("MSFT", [{ id: "note-contingencies", preview: shortPreview }]),
+        column("AAPL", [{ id: "note-contingencies", preview: "loss contingency accrual only" }]),
+        column("GOOG", [{ id: "note-contingencies", preview: "loss contingency accrual only" }]),
+      ],
+      financialsByTicker: {
+        MSFT: {
+          ticker: "MSFT",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2024,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: {
+            "note-contingencies": {
+              ...msftNote,
+              disclosures: [
+                {
+                  key: "contingencies",
+                  label: "Contingencies",
+                  concept: "CommitmentsAndContingenciesDisclosureTextBlock",
+                  text: xbrlContingencyText,
+                },
+              ],
+            },
+          },
+        },
+        AAPL: {
+          ticker: "AAPL",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2024,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithMetrics("note-contingencies", 2024, { loss_contingency: 500_000 }),
+        },
+        GOOG: {
+          ticker: "GOOG",
+          cik: "",
+          entity_name: "",
+          fiscal_year_filter: 2024,
+          source: "sec_companyfacts",
+          from_cache: false,
+          annual_summary: [],
+          notes_xbrl: noteWithMetrics("note-contingencies", 2024, { loss_contingency: 500_000 }),
+        },
+      },
+    });
+
+    const flags = flagsByRule(state, "contingency_open_emphasis", "note-contingencies");
+    expect(flags.some((f) => f.ticker === "MSFT")).toBe(true);
+  });
+});
+
 describe("scanDeltas contingency emphasis", () => {
   it("suppresses contingency_open_emphasis on note-contingencies without notes_xbrl", () => {
     const contingencyText =

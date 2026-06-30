@@ -10,7 +10,11 @@ export const HEADLINE_STRIP_RESERVE = 2;
 /** Cap missing-section pills so one peer's catalog gaps do not fill the strip. */
 export const MISSING_SECTION_STRIP_CAP = 3;
 
-const HEADLINE_STRIP_RULES = new Set<DeltaRuleId>(["headline_vs_median", "headline_only_peer"]);
+const HEADLINE_STRIP_RULES = new Set<DeltaRuleId>([
+  "headline_vs_median",
+  "headline_only_peer",
+  "note_metric_vs_median",
+]);
 
 /** Headline movers + material one-time / governance signals — default strip only. */
 const MAINSTREAM_STRIP_RULES = new Set<DeltaRuleId>([
@@ -22,6 +26,7 @@ const MAINSTREAM_STRIP_RULES = new Set<DeltaRuleId>([
   "only_peer_open_staff",
   "disagreement_reported",
   "contingency_open_emphasis",
+  "note_metric_vs_median",
 ]);
 
 /** topic_only_peer is strip-eligible only on high-signal sections (events / open matters). */

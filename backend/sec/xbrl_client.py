@@ -943,6 +943,63 @@ NOTE_SECTION_METRICS: dict[str, list[dict[str, Any]]] = {
     ],
 }
 
+# IFRS-full concept names appended to note metric candidates (foreign 20-F / 6-K footnotes).
+_IFRS_NOTE_CONCEPT_ALIASES: dict[str, list[str]] = {
+    "RevenueFromContractWithCustomerExcludingAssessedTax": ["Revenue"],
+    "Revenues": ["Revenue"],
+    "SalesRevenueNet": ["Revenue"],
+    "ContractWithCustomerLiability": ["ContractLiabilities", "CurrentContractLiabilities"],
+    "DeferredRevenueCurrent": ["CurrentContractLiabilities"],
+    "DeferredRevenueNoncurrent": ["NoncurrentContractLiabilities"],
+    "OperatingLeaseLiability": ["LeaseLiabilities", "NoncurrentLeaseLiabilities"],
+    "OperatingLeaseLiabilityNoncurrent": ["NoncurrentLeaseLiabilities"],
+    "FinanceLeaseLiability": ["NoncurrentLeaseLiabilities"],
+    "OperatingLeaseRightOfUseAsset": ["RightofUseAssets"],
+    "FinanceLeaseRightOfUseAsset": ["RightofUseAssets"],
+    "GoodwillImpairmentLoss": ["ImpairmentLossesOnGoodwill"],
+    "RestructuringCharges": ["RestructuringCosts"],
+    "RestructuringCosts": ["RestructuringCosts"],
+    "SegmentReportingSegmentAssets": ["SegmentAssets"],
+    "SegmentReportingInformationOperatingIncomeLoss": ["SegmentProfitLoss"],
+    "AssetImpairmentCharges": ["ImpairmentLossRecognisedInProfitOrLoss"],
+    "ImpairmentOfIntangibleAssetsExcludingGoodwill": ["ImpairmentLossRecognisedInProfitOrLoss"],
+    "LossContingencyAccrualCarryingValueCurrent": ["Provisions", "CurrentProvisions"],
+    "LongTermDebt": ["NoncurrentBorrowings", "Borrowings"],
+    "LongTermDebtNoncurrent": ["NoncurrentBorrowings"],
+    "ShortTermBorrowings": ["CurrentBorrowings"],
+    "ShareBasedCompensation": ["ShareBasedPaymentExpense"],
+    "AllocatedShareBasedCompensationExpense": ["ShareBasedPaymentExpense"],
+    "IncomeTaxExpenseBenefit": ["IncomeTaxExpenseContinuingOperations"],
+    "DeferredIncomeTaxAssetsNet": ["DeferredTaxAssets"],
+    "DeferredIncomeTaxLiabilitiesNet": ["DeferredTaxLiabilities"],
+    "PaymentsToAcquireBusinessesNetOfCashAcquired": [
+        "CashFlowsUsedInObtainingControlOfSubsidiariesOrOtherBusinesses"
+    ],
+    "StockholdersEquity": ["Equity"],
+    "EarningsPerShareBasic": ["BasicEarningsLossPerShare"],
+    "EarningsPerShareDiluted": ["DilutedEarningsLossPerShare"],
+    "InventoryNet": ["Inventories"],
+    "PropertyPlantAndEquipmentNet": ["PropertyPlantAndEquipment"],
+    "AccountsReceivableNetCurrent": ["TradeAndOtherCurrentReceivables"],
+    "CashAndCashEquivalentsAtCarryingValue": ["CashAndCashEquivalents"],
+}
+
+
+def _with_ifrs_note_aliases(concepts: list[str]) -> list[str]:
+    expanded = list(concepts)
+    seen = set(expanded)
+    for name in concepts:
+        for alias in _IFRS_NOTE_CONCEPT_ALIASES.get(name, []):
+            if alias not in seen:
+                expanded.append(alias)
+                seen.add(alias)
+    return expanded
+
+
+for _section_metrics in NOTE_SECTION_METRICS.values():
+    for _metric in _section_metrics:
+        _metric["concepts"] = _with_ifrs_note_aliases(_metric["concepts"])
+
 # Note section id -> narrative text block definitions (key, label, candidate us-gaap concepts)
 NOTE_SECTION_TEXT_BLOCKS: dict[str, list[dict[str, Any]]] = {
     "note-summary-policies": [

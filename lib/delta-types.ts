@@ -13,6 +13,7 @@ export type DeltaRuleId =
   | "only_peer_open_staff"
   | "disagreement_reported"
   | "contingency_open_emphasis"
+  | "note_metric_vs_median"
   | "metrics_not_comparable_mixed_filers"
   | "prose_number_gap";
 

@@ -20,6 +20,7 @@ import {
   DEFAULT_ACTIVE_SECTION,
   FINANCIALS_BOOTSTRAP_CATALOG,
 } from "@/lib/sections";
+import { xbrlNoteSectionsWithTaggedData } from "@/lib/section-presence";
 import {
   clearParseMeta,
   clearColumnSectionCaches,
@@ -285,8 +286,11 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     if (isPro) {
       GAAP_STATEMENT_SECTION_IDS.forEach((id) => ids.add(id));
     }
+    for (const sectionId of xbrlNoteSectionsWithTaggedData(financialsByTicker)) {
+      ids.add(sectionId);
+    }
     return ids;
-  }, [data, isBootstrapMode, isPro]);
+  }, [data, isBootstrapMode, isPro, financialsByTicker]);
 
   const navigableCatalog = useMemo(() => {
     if (!data) return FINANCIALS_BOOTSTRAP_CATALOG;
@@ -395,7 +399,11 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       columns: FilingColumn[],
       sectionCatalog: ParseResponse["section_catalog"]
     ) => {
-      const navigable = getComparableSectionIds(columns);
+      const navigable = getComparableSectionIds(
+        columns,
+        undefined,
+        xbrlNoteSectionsWithTaggedData(financialsByTicker)
+      );
       const catalogIds = mergeProStatementCatalog(sectionCatalog, isProRef.current).map((s) => s.id);
       const resolved = resolveCompareActiveSection(navigable, catalogIds, focus.section);
       setActiveSection(resolved);
@@ -418,7 +426,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       if (normalizedTicker) scrollTickerColumnIntoViewWhenReady(normalizedTicker);
       requestAnimationFrame(() => resetCompareViewScrollWhenReady());
     },
-    [scrollTickerColumnIntoViewWhenReady]
+    [scrollTickerColumnIntoViewWhenReady, financialsByTicker]
   );
 
   const loadFilings = useCallback((options?: { refreshTickers?: string[]; force?: boolean }) => {

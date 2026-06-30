@@ -1,7 +1,11 @@
 import type { DeltaFlag, DeltaRuleId, DeltaSeverity } from "@/lib/delta-types";
 import { rankMainstreamStrip } from "@/lib/delta-surface";
 
-const METRIC_FOCUS_RULE_IDS = new Set<DeltaRuleId>(["headline_vs_median", "headline_only_peer"]);
+const METRIC_FOCUS_RULE_IDS = new Set<DeltaRuleId>([
+  "headline_vs_median",
+  "headline_only_peer",
+  "note_metric_vs_median",
+]);
 
 /** Delta flags that should center the filing column on a highlighted metric row. */
 export function isMetricFocusDeltaFlag(flag: DeltaFlag): boolean {
@@ -59,6 +63,20 @@ export function disagreementReportedLabel(ticker: string): string {
 
 export function contingencyEmphasisLabel(ticker: string, sectionLabel: string): string {
   return `${ticker} — heavy ${sectionLabel.toLowerCase()} language vs peers`;
+}
+
+export function noteMetricVsMedianLabel(
+  ticker: string,
+  sectionLabel: string,
+  metricKey: string,
+  direction: "high" | "low"
+): string {
+  const metric = metricLabel(metricKey);
+  const section = sectionLabel.toLowerCase();
+  if (direction === "high") {
+    return `${ticker} ${metric.toLowerCase()} in ${section} well above peer median`;
+  }
+  return `${ticker} ${metric.toLowerCase()} in ${section} well below peer median`;
 }
 
 export const MIXED_FILER_BANNER =
@@ -131,6 +149,13 @@ export const DELTA_MAP_BADGE_CONFIG: DeltaMapBadgeConfig[] = [
     badgeLabel: "Legal focus",
     icon: "§",
     subtitle: "Heavier litigation or contingency language vs peers",
+    severity: "P2",
+  },
+  {
+    ruleId: "note_metric_vs_median",
+    badgeLabel: "Footnote outlier",
+    icon: "↕",
+    subtitle: "Tagged footnote amount well above or below peer median",
     severity: "P2",
   },
   {

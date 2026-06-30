@@ -19,6 +19,7 @@ import {
   METRICS_NOT_COMPARABLE_LABEL,
   missingSectionLabel,
   MIXED_FILER_BANNER,
+  noteMetricVsMedianLabel,
   onlyPeerOpenStaffLabel,
   openStaffCommentsLabel,
   topicOnlyPeerLabel,
@@ -52,6 +53,20 @@ const TOPIC_PRESENCE_SECTIONS = [
 ] as const;
 
 const CONTINGENCY_SECTIONS = ["legal-proceedings", "note-contingencies"] as const;
+
+/** Footnote sections where tagged amounts support peer median comparison (Phase 1.5). */
+const NOTE_METRIC_DELTA_SECTIONS = [
+  "note-leases",
+  "note-revenue",
+  "note-goodwill",
+  "note-restructuring",
+  "note-segments",
+  "note-impairment",
+  "note-debt",
+  "note-stock-comp",
+  "note-contingencies",
+  "note-acquisitions",
+] as const;
 
 const CONTINGENCY_KEYWORDS = [
   "reasonably possible",
@@ -181,6 +196,22 @@ function sectionPreview(col: FilingColumn, sectionId: string): string {
   return catalogSectionPreview(col, sectionId);
 }
 
+/** XBRL disclosure text when present; otherwise parse index preview (no extra API calls). */
+function sectionTextForKeywordScan(
+  col: FilingColumn,
+  sectionId: string,
+  state: DeltaSessionState
+): string {
+  const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
+  const disclosureText = note?.disclosures
+    ?.map((d) => d.text)
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  if (disclosureText) return disclosureText;
+  return sectionPreview(col, sectionId);
+}
+
 function isSubstantivePreview(text: string, minLen = 40): boolean {
   const trimmed = text.trim();
   if (trimmed.length < minLen) return false;
@@ -208,6 +239,18 @@ function hasNonZeroNoteMetricsForFy(note: NoteSectionXbrl, fiscalYear: number | 
     if (typeof val === "number" && Number.isFinite(val) && val !== 0) return true;
   }
   return false;
+}
+
+function noteMetricValueForFy(
+  note: NoteSectionXbrl,
+  metricKey: string,
+  fiscalYear: number | null
+): number | null {
+  const row = pickNoteFyRow(note, fiscalYear);
+  if (!row) return null;
+  const val = row[metricKey];
+  if (typeof val !== "number" || !Number.isFinite(val) || val === 0) return null;
+  return val;
 }
 
 function isDollarEventNoteSection(sectionId: string): boolean {
@@ -473,8 +516,8 @@ function scanContingencyEmphasis(state: DeltaSessionState, flags: DeltaFlag[]): 
     for (const col of state.columns) {
       if (!columnHasSection(col, sectionId, state)) continue;
       if (!columnEligibleForContingencyEmphasis(col, sectionId, state)) continue;
-      const preview = sectionPreview(col, sectionId);
-      const hits = keywordHits(preview, CONTINGENCY_KEYWORDS);
+      const text = sectionTextForKeywordScan(col, sectionId, state);
+      const hits = keywordHits(text, CONTINGENCY_KEYWORDS);
       if (hits > 0) hitsByTicker[col.ticker] = hits;
     }
     const tickers = Object.keys(hitsByTicker);
@@ -496,6 +539,70 @@ function scanContingencyEmphasis(state: DeltaSessionState, flags: DeltaFlag[]): 
           label: contingencyEmphasisLabel(ticker, label),
           metadata: { hits, median: med },
         });
+      }
+    }
+  }
+}
+
+function scanNoteMetricVsMedian(state: DeltaSessionState, flags: DeltaFlag[], comparable: boolean): void {
+  if (!comparable) return;
+
+  const { high: highMult, low: lowMult } = headlineVsMedianThresholds(state.period);
+
+  for (const sectionId of NOTE_METRIC_DELTA_SECTIONS) {
+    const metricKeys = new Set<string>();
+    for (const col of state.columns) {
+      const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
+      if (!note?.has_data) continue;
+      for (const key of Object.keys(note.metrics)) metricKeys.add(key);
+    }
+    if (metricKeys.size === 0) continue;
+
+    const label = sectionLabel(state.catalog, sectionId);
+
+    for (const metricKey of metricKeys) {
+      const valuesByTicker: Record<string, number> = {};
+      for (const col of state.columns) {
+        const note = state.financialsByTicker[col.ticker]?.notes_xbrl?.[sectionId];
+        if (!note) continue;
+        const val = noteMetricValueForFy(note, metricKey, state.fiscalYear);
+        if (val == null) continue;
+        valuesByTicker[col.ticker] = val;
+      }
+
+      const tickers = Object.keys(valuesByTicker);
+      if (tickers.length < 2) continue;
+
+      const values = Object.values(valuesByTicker);
+      const med = median(values);
+      if (med == null || med === 0) continue;
+
+      for (const [ticker, value] of Object.entries(valuesByTicker)) {
+        if (value > med * highMult) {
+          pushFlag(flags, {
+            id: flagId("note_metric_vs_median", ticker, sectionId, metricKey),
+            ruleId: "note_metric_vs_median",
+            level: "L1",
+            severity: "P2",
+            ticker,
+            sectionId,
+            rowKey: metricKey,
+            label: noteMetricVsMedianLabel(ticker, label, metricKey, "high"),
+            metadata: { metric: metricKey, value, median: med, sectionLabel: label },
+          });
+        } else if (value < med * lowMult && value !== med) {
+          pushFlag(flags, {
+            id: flagId("note_metric_vs_median", ticker, sectionId, metricKey),
+            ruleId: "note_metric_vs_median",
+            level: "L1",
+            severity: "P2",
+            ticker,
+            sectionId,
+            rowKey: metricKey,
+            label: noteMetricVsMedianLabel(ticker, label, metricKey, "low"),
+            metadata: { metric: metricKey, value, median: med, sectionLabel: label },
+          });
+        }
       }
     }
   }
@@ -588,6 +695,7 @@ export function scanDeltas(state: DeltaSessionState): DeltaScanResult {
   scanMissingSections(state, flags, catalogOrder);
   scanTopicPresence(state, flags);
   scanHeadlineMetrics(state, flags, comparable);
+  scanNoteMetricVsMedian(state, flags, comparable);
   scanOpenMattersMetadata(state, flags);
   scanContingencyEmphasis(state, flags);
   scanProseNumberGap(state, flags);

@@ -120,6 +120,20 @@ export function columnHasCatalogSection(col: FilingColumn, sectionId: string): b
   return sectionsHaveCatalogSection(col.sections, sectionId);
 }
 
+/** Note section IDs with tagged FY amounts (`has_data`) across loaded financials — for nav when parse index omits the note. */
+export function xbrlNoteSectionsWithTaggedData(
+  financialsByTicker: Record<string, FinancialsXbrl | undefined>
+): string[] {
+  const ids = new Set<string>();
+  for (const fin of Object.values(financialsByTicker)) {
+    if (!fin?.notes_xbrl) continue;
+    for (const [sectionId, note] of Object.entries(fin.notes_xbrl)) {
+      if (note.has_data) ids.add(sectionId);
+    }
+  }
+  return Array.from(ids);
+}
+
 /** True when XBRL note data includes tagged amounts or disclosure text blocks. */
 export function noteSectionHasXbrlContent(note: NoteSectionXbrl | undefined): boolean {
   if (!note) return false;

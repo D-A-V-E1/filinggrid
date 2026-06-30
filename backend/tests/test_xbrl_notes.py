@@ -126,3 +126,33 @@ async def test_load_filing_html_for_notes_fetches_when_not_cached():
         result = await xbrl_client._load_filing_html_for_notes("1234567", 2024)
         assert result == fake_html
         fetch_html.assert_awaited_once()
+
+
+def test_extract_note_disclosures_ifrs_lease_liability():
+    """IFRS concept aliases on note-leases resolve foreign footnote metrics."""
+    ifrs_facts = {
+        "entityName": "Foreign Corp",
+        "facts": {
+            "ifrs-full": {
+                "LeaseLiabilities": {
+                    "label": "Lease liabilities",
+                    "units": {
+                        "USD": [
+                            {
+                                "val": 5_000_000_000,
+                                "fy": 2024,
+                                "fp": "FY",
+                                "end": "2024-12-31",
+                                "form": "20-F",
+                            }
+                        ]
+                    },
+                }
+            }
+        },
+    }
+    notes = extract_note_disclosures(ifrs_facts, None, fiscal_year=2024)
+    assert "note-leases" in notes
+    lease = notes["note-leases"]
+    assert lease["has_data"] is True
+    assert lease["annual_summary"][0]["operating_lease_liability"] == 5_000_000_000

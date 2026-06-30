@@ -13,6 +13,7 @@ import {
   noteSectionHasXbrlContent,
   sectionsHaveCatalogSection,
   shouldSuppressMissingSection,
+  xbrlNoteSectionsWithTaggedData,
 } from "@/lib/section-presence";
 
 function col(
@@ -241,5 +242,39 @@ describe("shouldSuppressMissingSection", () => {
   it("treats amended 10-K/A as domestic annual form", () => {
     expect(shouldSuppressMissingSection(col([], "10-K/A"), "business", "annual-2024")).toBe(false);
     expect(shouldSuppressMissingSection(col([], "20-F/A"), "controls")).toBe(true);
+  });
+});
+
+describe("xbrlNoteSectionsWithTaggedData", () => {
+  it("returns note section ids where has_data is true", () => {
+    const ids = xbrlNoteSectionsWithTaggedData({
+      MSFT: {
+        ticker: "MSFT",
+        cik: "",
+        entity_name: "",
+        fiscal_year_filter: 2024,
+        source: "sec_companyfacts",
+        from_cache: false,
+        annual_summary: [],
+        notes_xbrl: {
+          "note-leases": {
+            section_id: "note-leases",
+            label: "Leases",
+            has_data: true,
+            metrics: { operating_lease_liability: { label: "OLL", concept: "OperatingLeaseLiability" } },
+            annual_summary: [{ fy: 2024, operating_lease_liability: 1_000_000 }],
+          },
+          "note-eps": {
+            section_id: "note-eps",
+            label: "EPS",
+            has_data: false,
+            metrics: {},
+            annual_summary: [],
+            disclosures: [{ key: "eps", label: "EPS", concept: "EarningsPerShareTextBlock", text: "Basic EPS..." }],
+          },
+        },
+      },
+    });
+    expect(ids).toEqual(["note-leases"]);
   });
 });

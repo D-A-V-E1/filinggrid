@@ -16,6 +16,7 @@ const PRESET_WEIGHTS: Record<DeltaPreset, Partial<Record<DeltaFlag["ruleId"], nu
     only_peer_open_staff: 6,
     disagreement_reported: 5,
     contingency_open_emphasis: 4,
+    note_metric_vs_median: 5,
     metrics_not_comparable_mixed_filers: 1,
     prose_number_gap: 2,
   },
@@ -25,6 +26,7 @@ const PRESET_WEIGHTS: Record<DeltaPreset, Partial<Record<DeltaFlag["ruleId"], nu
     topic_only_peer: 6,
     missing_section: 4,
     contingency_open_emphasis: 7,
+    note_metric_vs_median: 6,
     open_staff_comments: 5,
   },
   reporting: {
@@ -40,6 +42,7 @@ const PRESET_WEIGHTS: Record<DeltaPreset, Partial<Record<DeltaFlag["ruleId"], nu
     open_staff_comments: 8,
     only_peer_open_staff: 8,
     prose_number_gap: 6,
+    note_metric_vs_median: 5,
     headline_vs_median: 3,
   },
 };
