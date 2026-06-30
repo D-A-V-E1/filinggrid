@@ -114,6 +114,14 @@ export function countMainstreamFlagsByTicker(flags: DeltaFlag[]): Record<string,
   return counts;
 }
 
+export function countMapWorthyFlagsByTicker(flags: DeltaFlag[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const flag of filterMapWorthyFlags(flags)) {
+    counts[flag.ticker] = (counts[flag.ticker] ?? 0) + 1;
+  }
+  return counts;
+}
+
 /** Material cells for the section delta map — not exhaustive footnote noise. */
 export function isMapWorthyFlag(flag: DeltaFlag): boolean {
   if (flag.metadata?.rollupCount != null) return false;

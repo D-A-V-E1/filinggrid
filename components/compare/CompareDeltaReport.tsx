@@ -73,7 +73,9 @@ export default function CompareDeltaReport({
     generatedAt,
   ]);
 
-  const displayFlagCount = Math.max(session.mapFlags.length, session.mapFlagCountFloor);
+  const displayFlagCount = session.deltasSettling
+    ? Math.max(session.mapFlags.length, session.mapFlagCountFloor)
+    : session.mapFlags.length;
   const headline = session.deltasSettling
     ? DELTA_MAP_HEADLINE_SCANNING
     : deltaMapHeadline(displayFlagCount, session.mapCoverage.sectionsWithDeltas);
@@ -121,8 +123,9 @@ export default function CompareDeltaReport({
             <DeltaCountBadge
               count={session.mapFlags.length}
               loading={session.deltasSettling}
-              hasFlags={session.mapFlags.length > 0}
+              hasFlags={session.mapFlags.length > 0 || session.mapFlagCountFloor > 0}
               countFloor={session.mapFlagCountFloor}
+              resetKey={session.cacheKey}
             />
             <div className="min-w-0 flex-1 space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">

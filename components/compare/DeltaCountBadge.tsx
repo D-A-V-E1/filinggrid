@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface DeltaCountBadgeProps {
   count: number;
@@ -9,6 +9,8 @@ export interface DeltaCountBadgeProps {
   loading?: boolean;
   /** Monotonic floor — survives remounts when passed from session store. */
   countFloor?: number;
+  /** When this changes (e.g. compare cache key), internal monotonic state resets. */
+  resetKey?: string;
 }
 
 /** Monotonic display count for delta badges — exported for unit tests. */
@@ -18,8 +20,13 @@ export function monotonicDeltaDisplayCount(
   loading: boolean,
   countFloor: number
 ): number {
-  if (!loading && count === 0) return 0;
-  return Math.max(prev, count, countFloor);
+  if (loading) {
+    if (count === 0 && countFloor === 0) return 0;
+    return Math.max(prev, count, countFloor);
+  }
+  if (count > 0) return count;
+  if (countFloor > 0) return countFloor;
+  return 0;
 }
 
 export default function DeltaCountBadge({
@@ -27,8 +34,17 @@ export default function DeltaCountBadge({
   hasFlags,
   loading = false,
   countFloor = 0,
+  resetKey,
 }: DeltaCountBadgeProps) {
-  const [displayCount, setDisplayCount] = useState(() => Math.max(count, countFloor));
+  const [displayCount, setDisplayCount] = useState(count);
+  const resetKeyRef = useRef(resetKey);
+
+  useEffect(() => {
+    if (resetKey !== resetKeyRef.current) {
+      resetKeyRef.current = resetKey;
+      setDisplayCount(count);
+    }
+  }, [resetKey, count]);
 
   useEffect(() => {
     setDisplayCount((prev) => monotonicDeltaDisplayCount(prev, count, loading, countFloor));

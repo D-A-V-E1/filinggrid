@@ -3,12 +3,18 @@ import type { WheelEvent as ReactWheelEvent } from "react";
 export const FILING_COLUMN_SCROLL_CLASS = "filing-column-scroll";
 const DEFAULT_VERTICAL_SCROLL_SELECTOR = `.${FILING_COLUMN_SCROLL_CLASS}`;
 const COMPARE_COLUMN_SELECTOR = ".compare-column";
+const HORIZONTAL_WHEEL_TRAP_SELECTOR = ".xbrl-metrics-scroll, .filing-table-wrap";
+
+type WheelControlEvent = Pick<
+  ReactWheelEvent<HTMLElement>,
+  "deltaX" | "deltaY" | "shiftKey" | "preventDefault" | "stopPropagation" | "defaultPrevented"
+>;
 
 function hasHorizontalOverflow(el: HTMLElement): boolean {
   return el.scrollWidth > el.clientWidth + 1;
 }
 
-function isHorizontalWheelIntent(el: HTMLElement, e: ReactWheelEvent<HTMLElement>): boolean {
+function isHorizontalWheelIntent(el: HTMLElement, e: Pick<ReactWheelEvent<HTMLElement>, "deltaX" | "deltaY" | "shiftKey">): boolean {
   if (e.shiftKey) return true;
   if (!hasHorizontalOverflow(el)) return false;
   return Math.abs(e.deltaX) > Math.abs(e.deltaY);
@@ -22,6 +28,14 @@ function canScrollHorizontally(el: HTMLElement, scrollDelta: number): boolean {
 
   if (scrollDelta < 0) return !atLeft;
   return !atRight;
+}
+
+function shouldReserveWheelForHorizontalScroll(
+  trap: HTMLElement,
+  e: Pick<ReactWheelEvent<HTMLElement>, "deltaX" | "deltaY" | "shiftKey">
+): boolean {
+  const horizontalDelta = e.shiftKey ? e.deltaY : e.deltaX;
+  return isHorizontalWheelIntent(trap, e) && canScrollHorizontally(trap, horizontalDelta);
 }
 
 function verticalWheelDelta(e: Pick<ReactWheelEvent<HTMLElement>, "deltaY" | "shiftKey">): number {
@@ -43,6 +57,24 @@ function applyVerticalScrollDelta(
   return true;
 }
 
+function forwardVerticalWheelFromTrapBubble(
+  scrollEl: HTMLElement,
+  target: Node,
+  e: WheelControlEvent
+): void {
+  if (e.defaultPrevented) return;
+  if (typeof (target as HTMLElement).closest !== "function") return;
+
+  const trap = (target as HTMLElement).closest<HTMLElement>(HORIZONTAL_WHEEL_TRAP_SELECTOR);
+  if (!trap) return;
+  if (shouldReserveWheelForHorizontalScroll(trap, e)) return;
+
+  const deltaY = verticalWheelDelta(e);
+  if (Math.abs(deltaY) < 0.5) return;
+
+  applyVerticalScrollDelta(scrollEl, deltaY, e);
+}
+
 /**
  * Attach wheel forwarding to filing excerpt table scroll wrappers (rendered via innerHTML).
  */
@@ -59,7 +91,9 @@ export function attachFilingTableWheelForwarding(root: HTMLElement | null): () =
         deltaX: e.deltaX,
         deltaY: e.deltaY,
         shiftKey: e.shiftKey,
+        defaultPrevented: e.defaultPrevented,
         preventDefault: () => e.preventDefault(),
+        stopPropagation: () => e.stopPropagation(),
       } as Parameters<typeof forwardVerticalWheelFromHorizontalScrollContainer>[0];
 
       const before = wrap.scrollLeft;
@@ -109,7 +143,8 @@ export function forwardVerticalWheelFromHorizontalScrollContainer(
 /**
  * Forward vertical wheel from compare column chrome (header, title bar) to the
  * column body scroll container. Events inside `.filing-column-scroll` are left
- * to native scroll or nested horizontal-table forwarders.
+ * to native scroll unless they bubbled from a horizontal overflow trap that
+ * could not scroll vertically.
  */
 export function forwardVerticalWheelToFilingColumnScroll(
   e: ReactWheelEvent<HTMLElement>
@@ -119,7 +154,10 @@ export function forwardVerticalWheelToFilingColumnScroll(
   if (!scrollEl) return;
 
   const target = e.target as Node;
-  if (scrollEl.contains(target) && target !== columnRoot) return;
+  if (scrollEl.contains(target) && target !== columnRoot) {
+    forwardVerticalWheelFromTrapBubble(scrollEl, target, e);
+    return;
+  }
 
   const deltaY = verticalWheelDelta(e);
   if (Math.abs(deltaY) < 0.5) return;
@@ -137,7 +175,11 @@ export function forwardVerticalWheelFromColumnsContainer(
   const container = e.currentTarget;
   const target = e.target as HTMLElement;
 
-  if (target.closest(DEFAULT_VERTICAL_SCROLL_SELECTOR)) return;
+  const columnScroll = target.closest<HTMLElement>(DEFAULT_VERTICAL_SCROLL_SELECTOR);
+  if (columnScroll) {
+    forwardVerticalWheelFromTrapBubble(columnScroll, target, e);
+    return;
+  }
 
   if (isHorizontalWheelIntent(container, e)) {
     const horizontalDelta = e.shiftKey ? e.deltaY : e.deltaX;

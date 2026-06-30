@@ -23,18 +23,24 @@ import { hasSectionIndex, loadParseMeta, parseMetaCacheKey, saveParseMeta, saveP
 import {
   bumpMapFlagCountFloor,
   peekCompareSession,
+  resetMapFlagCountFloor,
   saveCompareSession,
   setActiveCompareLoadKey,
   shouldSkipCompareReload,
 } from "@/lib/compare-session-store";
 import { useAuth } from "@/hooks/useAuth";
+import { useCompareInputCommit } from "@/hooks/useCompareInputCommit";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import { compareUrlLimitMessage } from "@/lib/tier-limits";
 import { isLocalDevHost } from "@/lib/api-environment";
 import { fiscalYearFromPeriod, type ComparePeriod } from "@/lib/filing-period";
 import { scanDeltas } from "@/lib/delta-engine";
 import { filterMapWorthyFlags, mapWorthyCoverage } from "@/lib/delta-surface";
-import { computeDeltasSettling, NOTES_UPGRADE_TIMEOUT_MS } from "@/lib/compare-settling";
+import {
+  computeDeltasSettling,
+  isDeltaScanCatchUp,
+  NOTES_UPGRADE_TIMEOUT_MS,
+} from "@/lib/compare-settling";
 
 export interface UseCompareSessionOptions {
   tickers: string[];
@@ -50,6 +56,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     [period, fiscalYear]
   );
   const cacheKey = useMemo(() => parseMetaCacheKey(tickers, comparePeriod), [tickers, comparePeriod]);
+  const { inputsPending, commitKey } = useCompareInputCommit(cacheKey);
   const warmSession = useMemo(() => peekCompareSession(cacheKey), [cacheKey]);
 
   const [data, setData] = useState<ParseResponse | null>(() => warmSession?.data ?? null);
@@ -139,7 +146,12 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
 
   const deferredFinancialsByTicker = useDeferredValue(financialsByTicker);
 
+  useEffect(() => {
+    resetMapFlagCountFloor(cacheKey);
+  }, [cacheKey]);
+
   const loadFilings = useCallback((options?: { force?: boolean }) => {
+    resetMapFlagCountFloor(cacheKey);
     const warm = peekCompareSession(cacheKey);
     if (
       !options?.force &&
@@ -365,14 +377,17 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     if (shouldSkipCompareReload(cacheKey)) {
       compareLoadKeyRef.current = cacheKey;
       loadFilings();
+      commitKey();
       return;
     }
     compareLoadKeyRef.current = cacheKey;
     setActiveCompareLoadKey(cacheKey);
     loadFilings();
+    commitKey();
   }, [
     loadFilings,
     cacheKey,
+    commitKey,
     apiWarmupDone,
     slugError,
     authLoading,
@@ -461,7 +476,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
   }, [loadingSections, tickers, financialsByTicker, upgradeFullFinancials]);
 
   const deltaScan = useMemo(() => {
-    if (!data || tickers.length === 0) return null;
+    if (inputsPending || !data || tickers.length === 0) return null;
     return scanDeltas({
       tickers,
       columns: data.columns,
@@ -473,6 +488,7 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
       isPro,
     });
   }, [
+    inputsPending,
     data,
     tickers,
     navigableCatalog,
@@ -488,43 +504,51 @@ export function useCompareSession({ tickers, fiscalYear, period, slugError }: Us
     return filterMapWorthyFlags(deltaScan.flags);
   }, [deltaScan]);
 
-  const mapFlagCountFloor = useMemo(() => bumpMapFlagCountFloor(cacheKey, mapFlags.length), [cacheKey, mapFlags.length]);
-
-  const mapCoverage = useMemo(() => {
-    if (!deltaScan) return { flagCount: 0, sectionsWithDeltas: 0 };
-    return mapWorthyCoverage(deltaScan.flags);
-  }, [deltaScan]);
+  const scanFlagCountFloor = useMemo(
+    () => (inputsPending ? 0 : bumpMapFlagCountFloor(cacheKey, mapFlags.length)),
+    [inputsPending, cacheKey, mapFlags.length]
+  );
 
   const canShowCompare = Boolean(data && data.columns.length > 0);
   const loading = loadingFinancials || loadingSections || !apiWarmupDone;
   const financialsDeferredPending = financialsByTicker !== deferredFinancialsByTicker;
 
-  const deltasSettling = useMemo(
-    () =>
-      computeDeltasSettling({
-        financialsDeferredPending,
-        data,
-        loadingSections,
-        loadingFinancials,
-        loadingTickersCount: loadingTickers.length,
-        tickers,
-        financialsByTicker,
-        financialsErrors,
-        upgradingNotesTickers,
-        notesUpgradeStartedAt: notesUpgradeStartedAtRef.current,
-      }),
-    [
+  const deltasSettling = useMemo(() => {
+    if (inputsPending) return true;
+    const base = computeDeltasSettling({
       financialsDeferredPending,
       data,
       loadingSections,
       loadingFinancials,
-      loadingTickers.length,
+      loadingTickersCount: loadingTickers.length,
       tickers,
       financialsByTicker,
       financialsErrors,
       upgradingNotesTickers,
-    ]
-  );
+      notesUpgradeStartedAt: notesUpgradeStartedAtRef.current,
+    });
+    return base || isDeltaScanCatchUp(mapFlags.length, scanFlagCountFloor);
+  }, [
+    inputsPending,
+    financialsDeferredPending,
+    data,
+    loadingSections,
+    loadingFinancials,
+    loadingTickers.length,
+    tickers,
+    financialsByTicker,
+    financialsErrors,
+    upgradingNotesTickers,
+    mapFlags.length,
+    scanFlagCountFloor,
+  ]);
+
+  const mapFlagCountFloor = deltasSettling ? scanFlagCountFloor : mapFlags.length;
+
+  const mapCoverage = useMemo(() => {
+    if (!deltaScan) return { flagCount: 0, sectionsWithDeltas: 0 };
+    return mapWorthyCoverage(deltaScan.flags);
+  }, [deltaScan]);
 
   useEffect(() => {
     if (!data) return;

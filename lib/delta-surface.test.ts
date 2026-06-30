@@ -5,7 +5,9 @@ import {
   MAINSTREAM_STRIP_CAP,
   MISSING_SECTION_STRIP_CAP,
   countMainstreamStripFlags,
+  countMapWorthyFlagsByTicker,
   filterMainstreamStripFlags,
+  filterMapWorthyFlags,
   isMainstreamStripFlag,
   rankMainstreamStrip,
 } from "@/lib/delta-surface";
@@ -158,5 +160,24 @@ describe("rankMainstreamStrip", () => {
       MISSING_SECTION_STRIP_CAP
     );
     expect(strip.some((f) => f.ruleId === "open_staff_comments")).toBe(true);
+  });
+});
+
+describe("countMapWorthyFlagsByTicker", () => {
+  it("sums per-ticker counts to the map-worthy total", () => {
+    const flags = [
+      flag({ ruleId: "headline_vs_median", ticker: "AAPL", sectionId: "financial-statements", level: "L0" }),
+      flag({ ruleId: "missing_section", ticker: "AAPL", sectionId: "note-leases", severity: "P2" }),
+      flag({ ruleId: "open_staff_comments", ticker: "MSFT", sectionId: "unresolved-staff", severity: "P1" }),
+      flag({ ruleId: "topic_only_peer", ticker: "NVDA", sectionId: "note-impairment" }),
+      flag({ ruleId: "prose_number_gap", ticker: "NVDA", sectionId: "note-revenue", severity: "P2" }),
+    ];
+    const worthy = filterMapWorthyFlags(flags);
+    const byTicker = countMapWorthyFlagsByTicker(flags);
+    const sum = Object.values(byTicker).reduce((n, c) => n + c, 0);
+    expect(sum).toBe(worthy.length);
+    expect(byTicker.AAPL).toBe(2);
+    expect(byTicker.MSFT).toBe(1);
+    expect(byTicker.NVDA).toBe(1);
   });
 });

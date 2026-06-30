@@ -23,6 +23,8 @@ interface DeltaReportLinkBarProps {
   settling?: boolean;
   /** Monotonic count floor from session store — survives remounts. */
   countFloor?: number;
+  /** Resets badge monotonic state when compare inputs change. */
+  resetKey?: string;
 }
 
 export default function DeltaReportLinkBar({
@@ -34,14 +36,17 @@ export default function DeltaReportLinkBar({
   sectionsWithDeltas,
   settling = false,
   countFloor = 0,
+  resetKey,
 }: DeltaReportLinkBarProps) {
-  const displayFlagCount = Math.max(flags.length, countFloor);
+  const displayFlagCount = settling
+    ? Math.max(flags.length, countFloor)
+    : flags.length;
   const headline = settling
     ? DELTA_MAP_HEADLINE_SCANNING
     : deltaMapHeadline(displayFlagCount, sectionsWithDeltas);
   const insightTeaser = settling ? null : deltaMapInsightTeaser(flags);
   const reportHref = deltaReportPath(peerSlug, period);
-  const hasFlags = flags.length > 0;
+  const hasFlags = flags.length > 0 || countFloor > 0;
 
   return (
     <section
@@ -57,8 +62,9 @@ export default function DeltaReportLinkBar({
           <DeltaCountBadge
             count={flags.length}
             loading={settling}
-            hasFlags={flags.length > 0}
+            hasFlags={hasFlags}
             countFloor={countFloor}
+            resetKey={resetKey}
           />
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-700">

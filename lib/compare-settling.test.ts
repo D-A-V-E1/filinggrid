@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDeltasSettling, NOTES_UPGRADE_TIMEOUT_MS } from "./compare-settling";
+import { computeDeltasSettling, isDeltaScanCatchUp, NOTES_UPGRADE_TIMEOUT_MS } from "./compare-settling";
 import type { FinancialsXbrl } from "./api";
 
 const headlineFin: FinancialsXbrl = {
@@ -78,5 +78,30 @@ describe("computeDeltasSettling", () => {
         notesUpgradeStartedAt: new Map(),
       })
     ).toBe(false);
+  });
+
+  it("does not block settling when upgrade ticker lacks a start timestamp", () => {
+    expect(
+      computeDeltasSettling({
+        financialsDeferredPending: false,
+        data: { columns: [{ ticker: "XOM" }] },
+        loadingSections: false,
+        loadingFinancials: false,
+        loadingTickersCount: 0,
+        tickers: ["XOM"],
+        financialsByTicker: { XOM: headlineFin },
+        financialsErrors: {},
+        upgradingNotesTickers: new Set(["XOM"]),
+        notesUpgradeStartedAt: new Map(),
+      })
+    ).toBe(false);
+  });
+});
+
+describe("isDeltaScanCatchUp", () => {
+  it("is true while map flags are below the session floor", () => {
+    expect(isDeltaScanCatchUp(10, 32)).toBe(true);
+    expect(isDeltaScanCatchUp(32, 32)).toBe(false);
+    expect(isDeltaScanCatchUp(0, 0)).toBe(false);
   });
 });

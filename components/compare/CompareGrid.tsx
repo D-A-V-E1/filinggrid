@@ -35,12 +35,14 @@ import {
   bumpMapFlagCountFloor,
   clearCompareSession,
   peekCompareSession,
+  resetMapFlagCountFloor,
   saveCompareSession,
   setActiveCompareLoadKey,
   shouldSkipCompareReload,
 } from "@/lib/compare-session-store";
 import { resolveFilingUrl } from "@/lib/sec-url";
 import { useAuth } from "@/hooks/useAuth";
+import { useCompareInputCommit } from "@/hooks/useCompareInputCommit";
 import { useEffectiveTier } from "@/hooks/useEffectiveTier";
 import { compareUrlLimitMessage } from "@/lib/tier-limits";
 import { isDevTierToggleEnabled, shouldShowDevTierUI } from "@/lib/dev-tier";
@@ -59,7 +61,7 @@ import { scanDeltas, foreignFilerTooltip } from "@/lib/delta-engine";
 import {
   MAINSTREAM_STRIP_CAP,
   MAINSTREAM_STRIP_TAGLINE,
-  countMainstreamFlagsByTicker,
+  countMapWorthyFlagsByTicker,
   countMainstreamStripFlags,
   filterMapWorthyFlags,
   mapWorthyCoverage,
@@ -76,7 +78,7 @@ import {
 } from "@/lib/filing-column-scroll";
 import { forwardVerticalWheelFromColumnsContainer } from "@/lib/forward-vertical-wheel";
 import { isMetricFocusDeltaFlag } from "@/lib/delta-labels";
-import { computeDeltasSettling, NOTES_UPGRADE_TIMEOUT_MS } from "@/lib/compare-settling";
+import { computeDeltasSettling, isDeltaScanCatchUp, NOTES_UPGRADE_TIMEOUT_MS } from "@/lib/compare-settling";
 import {
   compareFocusHandled,
   parseCompareFocusParams,
@@ -107,6 +109,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     () => parseMetaCacheKey(tickers, comparePeriod),
     [tickers, comparePeriod]
   );
+  const { inputsPending, commitKey } = useCompareInputCommit(cacheKey);
   const [data, setData] = useState<ParseResponse | null>(() => peekCompareSession(cacheKey)?.data ?? null);
   const [loadingFinancials, setLoadingFinancials] = useState(false);
   const [loadingTickers, setLoadingTickers] = useState<string[]>([]);
@@ -432,6 +435,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const loadFilings = useCallback((options?: { refreshTickers?: string[]; force?: boolean }) => {
     const focus = parseCompareFocusParams(searchParams);
+    resetMapFlagCountFloor(cacheKey);
     const warm = peekCompareSession(cacheKey);
     if (
       !options?.force &&
@@ -661,6 +665,10 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     syncSectionFromFocus,
   ]);
 
+  useEffect(() => {
+    resetMapFlagCountFloor(cacheKey);
+  }, [cacheKey]);
+
   // Free tier allows 3 columns — start SEC fetch before /auth/me returns to avoid a serial waterfall.
   const canLoadBeforeAuth = tickers.length <= 3;
   const deferredFinancialsByTicker = useDeferredValue(financialsByTicker);
@@ -691,14 +699,17 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     if (shouldSkipCompareReload(cacheKey)) {
       compareLoadKeyRef.current = cacheKey;
       loadFilings();
+      commitKey();
       return;
     }
     compareLoadKeyRef.current = cacheKey;
     setActiveCompareLoadKey(cacheKey);
     loadFilings();
+    commitKey();
   }, [
     loadFilings,
     cacheKey,
+    commitKey,
     apiWarmupDone,
     slugError,
     authLoading,
@@ -711,7 +722,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
   ]);
 
   const deltaScan = useMemo(() => {
-    if (!data || tickers.length === 0) return null;
+    if (inputsPending || !data || tickers.length === 0) return null;
     return scanDeltas({
       tickers,
       columns: data.columns,
@@ -723,6 +734,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
       isPro,
     });
   }, [
+    inputsPending,
     data,
     tickers,
     navigableCatalog,
@@ -769,7 +781,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const mainstreamHeat = useMemo(() => {
     if (!deltaScan) return {};
-    return countMainstreamFlagsByTicker(deltaScan.flags);
+    return countMapWorthyFlagsByTicker(deltaScan.flags);
   }, [deltaScan]);
 
   const mapFlags = useMemo(() => {
@@ -777,9 +789,9 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
     return filterMapWorthyFlags(deltaScan.flags);
   }, [deltaScan]);
 
-  const mapFlagCountFloor = useMemo(
-    () => bumpMapFlagCountFloor(cacheKey, mapFlags.length),
-    [cacheKey, mapFlags.length]
+  const scanFlagCountFloor = useMemo(
+    () => (inputsPending ? 0 : bumpMapFlagCountFloor(cacheKey, mapFlags.length)),
+    [inputsPending, cacheKey, mapFlags.length]
   );
 
   const mapCoverage = useMemo(() => {
@@ -801,32 +813,37 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
 
   const financialsDeferredPending = financialsByTicker !== deferredFinancialsByTicker;
 
-  const deltasSettling = useMemo(
-    () =>
-      computeDeltasSettling({
-        financialsDeferredPending,
-        data,
-        loadingSections,
-        loadingFinancials,
-        loadingTickersCount: loadingTickers.length,
-        tickers,
-        financialsByTicker,
-        financialsErrors,
-        upgradingNotesTickers,
-        notesUpgradeStartedAt: notesUpgradeStartedAtRef.current,
-      }),
-    [
+  const deltasSettling = useMemo(() => {
+    if (inputsPending) return true;
+    const base = computeDeltasSettling({
       financialsDeferredPending,
       data,
       loadingSections,
       loadingFinancials,
-      loadingTickers.length,
+      loadingTickersCount: loadingTickers.length,
       tickers,
       financialsByTicker,
       financialsErrors,
       upgradingNotesTickers,
-    ]
-  );
+      notesUpgradeStartedAt: notesUpgradeStartedAtRef.current,
+    });
+    return base || isDeltaScanCatchUp(mapFlags.length, scanFlagCountFloor);
+  }, [
+    inputsPending,
+    financialsDeferredPending,
+    data,
+    loadingSections,
+    loadingFinancials,
+    loadingTickers.length,
+    tickers,
+    financialsByTicker,
+    financialsErrors,
+    upgradingNotesTickers,
+    mapFlags.length,
+    scanFlagCountFloor,
+  ]);
+
+  const mapFlagCountFloor = deltasSettling ? scanFlagCountFloor : mapFlags.length;
 
   useEffect(() => {
     if (!data) return;
@@ -981,6 +998,7 @@ export default function CompareGrid({ peerSlug, tickers, fiscalYear, period, slu
             sectionsWithDeltas={mapCoverage.sectionsWithDeltas}
             settling={deltasSettling}
             countFloor={mapFlagCountFloor}
+            resetKey={cacheKey}
           />
         </div>
       )}

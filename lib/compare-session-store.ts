@@ -42,14 +42,24 @@ export function peekCompareSession(cacheKey: string): CompareSessionSnapshot | u
 
 export function saveCompareSession(cacheKey: string, snapshot: CompareSessionSnapshot): void {
   const prev = sessions.get(cacheKey);
+  const floor = snapshot.settled
+    ? snapshot.mapFlagCountFloor
+    : Math.max(prev?.mapFlagCountFloor ?? 0, snapshot.mapFlagCountFloor);
   sessions.set(cacheKey, {
     ...snapshot,
-    mapFlagCountFloor: Math.max(prev?.mapFlagCountFloor ?? 0, snapshot.mapFlagCountFloor),
+    mapFlagCountFloor: floor,
   });
 }
 
 export function getMapFlagCountFloor(cacheKey: string): number {
   return sessions.get(cacheKey)?.mapFlagCountFloor ?? 0;
+}
+
+export function resetMapFlagCountFloor(cacheKey: string): void {
+  const existing = sessions.get(cacheKey);
+  if (existing) {
+    existing.mapFlagCountFloor = 0;
+  }
 }
 
 export function bumpMapFlagCountFloor(cacheKey: string, count: number): number {
@@ -73,6 +83,15 @@ export function bumpMapFlagCountFloor(cacheKey: string, count: number): number {
     }
   }
   return next;
+}
+
+/** Snap floor to the settled count — clears stale monotonic peaks from prior scans. */
+export function snapMapFlagCountFloor(cacheKey: string, count: number): number {
+  const existing = sessions.get(cacheKey);
+  if (existing) {
+    existing.mapFlagCountFloor = count;
+  }
+  return count;
 }
 
 export function clearCompareSession(cacheKey: string): void {

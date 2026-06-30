@@ -33,10 +33,17 @@ export function computeDeltasSettling(input: DeltasSettlingInput): boolean {
 
     if (!input.upgradingNotesTickers.has(upper)) continue;
     const started = input.notesUpgradeStartedAt.get(upper);
-    if (started == null || now - started < NOTES_UPGRADE_TIMEOUT_MS) {
+    // Missing timestamp means upgrade state is stale — do not block settling forever.
+    if (started == null) continue;
+    if (now - started < NOTES_UPGRADE_TIMEOUT_MS) {
       return true;
     }
   }
 
   return false;
+}
+
+/** True while map flag count has not caught up to the monotonic session floor. */
+export function isDeltaScanCatchUp(mapFlagCount: number, mapFlagCountFloor: number): boolean {
+  return mapFlagCountFloor > 0 && mapFlagCount < mapFlagCountFloor;
 }
