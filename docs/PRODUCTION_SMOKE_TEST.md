@@ -115,3 +115,22 @@ Stop launch if any of:
 - [ ] Support inbox for billing questions
 
 See also [GO_LIVE_CHECKLIST.md § Post-launch](./GO_LIVE_CHECKLIST.md#post-launch).
+
+---
+
+## Pre-promote checklist (branch promotion)
+
+Run before merging a feature branch (e.g. `delta-phase-1`) to production:
+
+```powershell
+npm run check:pre-promote          # full 16-step gate
+npm run check:pre-promote:fast     # SKIP_OVERNIGHT=1 (lighter step 2)
+```
+
+Linux/CI: `bash scripts/pre-promote-check.sh`
+
+**Env vars:** `API_URL` (default prod Render API), `APP_URL`, `SKIP_BROWSER=1`, `SKIP_OVERNIGHT=1`, `FULL_OVERNIGHT=1` (delegates step 2 to `smoke:overnight`), `BRANCH`, `COMMIT`, `FILINGGRID_THROTTLE_S`.
+
+**Output:** `logs/pre-promote-{timestamp}.log` and `-summary.json`. Exit code **1** if any step is **FAIL** (WARN/SKIP are non-blocking).
+
+Steps 8–11 require manual browser verification unless browser automation is added; the harness prints the checklist and marks them WARN.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   compareFocusPath,
   comparePath,
   downloadDeltaReportCsv,
+  isDeltaReportDownloadReady,
 } from "@/lib/delta-report";
 import type { DeltaFlag } from "@/lib/delta-types";
 import { useComparePeriodLabel } from "@/hooks/useComparePeriodLabel";
@@ -42,36 +43,21 @@ export default function CompareDeltaReport({
   const router = useRouter();
   const session = useCompareSession({ tickers, fiscalYear, period, slugError });
   const periodLabel = useComparePeriodLabel(tickers, session.comparePeriod);
-  const [generatedAt] = useState(() => new Date().toISOString());
+  const [reportGeneratedAt, setReportGeneratedAt] = useState<string | null>(null);
 
-  const snapshot = useMemo(() => {
-    if (!session.data || session.mapFlags.length === 0) return null;
-    return buildDeltaReportSnapshot({
-      peerSlug,
-      tickers,
-      period: session.comparePeriod,
-      periodLabel,
-      flags: session.mapFlags,
-      scannedSections: session.deltaScan?.coverage.scannedSections ?? 0,
-      sectionsWithDeltas: session.mapCoverage.sectionsWithDeltas,
-      catalog: session.navigableCatalog,
-      columns: session.data.columns,
-      financialsByTicker: session.financialsByTicker,
-      generatedAt,
-    });
-  }, [
-    peerSlug,
-    tickers,
-    session.comparePeriod,
-    periodLabel,
-    session.mapFlags,
-    session.deltaScan,
-    session.mapCoverage,
-    session.navigableCatalog,
-    session.data,
-    session.financialsByTicker,
-    generatedAt,
-  ]);
+  useEffect(() => {
+    if (session.deltasSettling || session.mapFlags.length === 0) {
+      setReportGeneratedAt(null);
+      return;
+    }
+    setReportGeneratedAt(new Date().toISOString());
+  }, [session.cacheKey, session.deltasSettling, session.mapFlags.length]);
+
+  const canDownload = isDeltaReportDownloadReady({
+    deltasSettling: session.deltasSettling,
+    mapFlagsCount: session.mapFlags.length,
+    hasData: Boolean(session.data),
+  });
 
   const displayFlagCount = session.deltasSettling
     ? Math.max(session.mapFlags.length, session.mapFlagCountFloor)
@@ -97,9 +83,34 @@ export default function CompareDeltaReport({
   );
 
   const handleDownload = useCallback(() => {
-    if (!snapshot) return;
+    if (!canDownload || !session.data) return;
+    const snapshot = buildDeltaReportSnapshot({
+      peerSlug,
+      tickers,
+      period: session.comparePeriod,
+      periodLabel,
+      flags: session.mapFlags,
+      scannedSections: session.deltaScan?.coverage.scannedSections ?? 0,
+      sectionsWithDeltas: session.mapCoverage.sectionsWithDeltas,
+      catalog: session.navigableCatalog,
+      columns: session.data.columns,
+      financialsByTicker: session.financialsByTicker,
+      generatedAt: new Date().toISOString(),
+    });
     downloadDeltaReportCsv(snapshot);
-  }, [snapshot]);
+  }, [
+    canDownload,
+    peerSlug,
+    tickers,
+    periodLabel,
+    session.data,
+    session.comparePeriod,
+    session.mapFlags,
+    session.deltaScan,
+    session.mapCoverage,
+    session.navigableCatalog,
+    session.financialsByTicker,
+  ]);
 
   if (slugError) {
     return (
@@ -152,7 +163,9 @@ export default function CompareDeltaReport({
                   ? "Scanning sections for differences…"
                   : `Scanned ${scannedCount} section${scannedCount === 1 ? "" : "s"} across ${tickers.length} peers`}
                 <span className="text-slate-400"> · </span>
-                Generated {new Date(generatedAt).toLocaleString()}
+                {reportGeneratedAt
+                  ? `Generated ${new Date(reportGeneratedAt).toLocaleString()}`
+                  : "Report pending scan"}
               </p>
             </div>
           </div>
@@ -166,7 +179,7 @@ export default function CompareDeltaReport({
             <button
               type="button"
               onClick={handleDownload}
-              disabled={!snapshot}
+              disabled={!canDownload}
               className="rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 shadow-sm transition hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Download CSV

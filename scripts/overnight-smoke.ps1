@@ -89,6 +89,7 @@ Invoke-Phase "D" "prod_smoke_check.py" {
 }
 
 Invoke-Phase "E" "popular comp API smoke" {
+  $env:FILINGGRID_FY = "2025"
   & $py (Join-Path $RepoRoot "backend\scripts\test_pro_compare.py") 2>&1 | Tee-Object -FilePath $LogFile -Append
 }
 

@@ -19,7 +19,9 @@ spec.loader.exec_module(mod)
 API = os.environ.get("FILINGGRID_API", mod.API)
 THROTTLE_S = float(os.environ.get("FILINGGRID_THROTTLE_S", "5"))
 MAX_SCENARIOS = int(os.environ.get("OVERNIGHT_UNCOMMON_COUNT", "9"))
-USE_LATEST_FY = os.environ.get("FILINGGRID_FY", "latest").lower() in ("", "latest", "null", "none")
+_fy_raw = os.environ.get("FILINGGRID_FY", "latest").strip().lower()
+USE_LATEST_FY = _fy_raw in ("", "latest", "null", "none")
+FY_OVERRIDE: int | None = None if USE_LATEST_FY else int(_fy_raw)
 
 SCENARIOS = mod.SCENARIOS[:MAX_SCENARIOS]
 
@@ -27,13 +29,13 @@ SCENARIOS = mod.SCENARIOS[:MAX_SCENARIOS]
 async def main() -> int:
     import httpx
 
-    print(f"API={API} scenarios={len(SCENARIOS)} latest_fy={USE_LATEST_FY}")
+    print(f"API={API} scenarios={len(SCENARIOS)} fy_override={FY_OVERRIDE}")
     fails = 0
     warns = 0
     async with httpx.AsyncClient(timeout=300.0) as client:
         for sc in SCENARIOS:
             tickers = [t.upper() for t in sc["tickers"]]
-            fy = None if USE_LATEST_FY else sc.get("fiscal_year", mod.FISCAL_YEAR)
+            fy = FY_OVERRIDE
             period = sc.get("period")
             headers = {"Accept": "application/x-ndjson"} if sc.get("no_pro") else mod.HEADERS
             await asyncio.sleep(THROTTLE_S)

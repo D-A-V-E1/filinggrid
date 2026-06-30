@@ -212,15 +212,65 @@
     margin-bottom: 0;
   }
 
-  .filing-content div:not(.filing-table-wrap) {
+  .filing-content p,
+  .filing-content li,
+  .filing-content div:not(.filing-table-wrap):not(:has(*)) {
     white-space: pre-line;
   }
 
+  .filing-content div:not(.filing-table-wrap):has(*) {
+    white-space: normal;
+  }
+
   .filing-content br {
+    display: inline;
+    line-height: inherit;
+  }
+
+  .filing-content p br + br,
+  .filing-content li br + br {
     display: block;
     margin-bottom: 0.625rem;
     content: "";
     line-height: 0;
+  }
+
+  .filing-content table br,
+  .filing-content td br,
+  .filing-content th br {
+    display: none;
+  }
+
+  .filing-content--excerpt > div:not(.filing-table-wrap):not(.excerpt-fin-line) {
+    margin-bottom: 0.375rem;
+  }
+
+  .filing-content--excerpt .excerpt-fin-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.125rem 0.75rem;
+    margin-bottom: 0.125rem;
+    line-height: 1.4;
+  }
+
+  .filing-content--excerpt .excerpt-fin-label {
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+
+  .filing-content--excerpt .excerpt-fin-values {
+    display: inline-flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .filing-content--excerpt .excerpt-fin-amt {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .filing-table-wrap {

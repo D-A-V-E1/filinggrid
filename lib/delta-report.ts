@@ -50,6 +50,15 @@ export function comparePath(slug: string, period: ComparePeriod): string {
   return query ? `/compare/${slug}?${query}` : `/compare/${slug}`;
 }
 
+/** True when delta report CSV can reflect a settled scan (not mid-input or catch-up). */
+export function isDeltaReportDownloadReady(input: {
+  deltasSettling: boolean;
+  mapFlagsCount: number;
+  hasData: boolean;
+}): boolean {
+  return !input.deltasSettling && input.hasData && input.mapFlagsCount > 0;
+}
+
 export function buildDeltaReportSnapshot(input: {
   peerSlug: string;
   tickers: string[];

@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from dataclasses import dataclass, field
 
 import httpx
 
-API = "https://peerdisclosures-api.onrender.com"
+API = os.environ.get(
+    "FILINGGRID_API",
+    os.environ.get("NEXT_PUBLIC_API_URL", "https://peerdisclosures-api.onrender.com"),
+)
 HEADERS = {"Accept": "application/x-ndjson", "X-Dev-Tier": "professional"}
 FISCAL_YEAR = 2024
 THROTTLE_S = 1.5
@@ -17,7 +21,7 @@ SCENARIOS = [
     {"comp": "reit-net-lease", "tickers": ["O", "SPG", "PLD"], "fiscal_year": 2024, "period": None, "notes": "REIT trio"},
     {"comp": "utilities-regulated", "tickers": ["NEE", "DUK", "SO"], "fiscal_year": 2024, "period": None, "notes": "utilities"},
     {"comp": "biotech-vaccine-ish", "tickers": ["MRNA", "BNTX", "SRPT"], "fiscal_year": 2024, "period": None, "notes": "biotech one-offs"},
-    {"comp": "adr-eu-us-mix", "tickers": ["SAP", "ASML", "ORCL"], "fiscal_year": 2024, "period": None, "notes": "ASML in catalog; swap ASML->SIEGY"},
+    {"comp": "adr-eu-us-mix", "tickers": ["SAP", "NVO", "ORCL"], "fiscal_year": 2024, "period": None, "notes": "EU 20-F ADRs + US 10-K (not in popular catalog)"},
     {"comp": "mining-adr", "tickers": ["VALE", "RIO", "FCX"], "fiscal_year": 2024, "period": None, "notes": "Brazil/Chile ADR + US"},
     {"comp": "space-smallcap", "tickers": ["RKLB", "ASTS"], "fiscal_year": 2024, "period": None, "notes": "2-col speculative"},
     {"comp": "telecom", "tickers": ["TMUS", "VZ", "T"], "fiscal_year": 2024, "period": None, "notes": "wireline/wireless"},
@@ -34,13 +38,6 @@ SCENARIOS = [
     {"comp": "obscure-retail-duo", "tickers": ["PRPL", "LOVE"], "fiscal_year": 2024, "period": None, "notes": "small cap retail"},
     {"comp": "free-tier-402-probe", "tickers": ["O", "SPG", "PLD", "EQIX"], "fiscal_year": 2024, "period": None, "notes": "4-ticker no pro header", "no_pro": True},
 ]
-
-# fix adr-eu: remove ASML (in popular catalog)
-for s in SCENARIOS:
-    if s["comp"] == "adr-eu-us-mix":
-        s["tickers"] = ["SAP", "SIEGY", "ORCL"]
-        s["notes"] = "German ADR + US software"
-
 
 @dataclass
 class Row:

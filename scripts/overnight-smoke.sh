@@ -39,7 +39,7 @@ run_phase A "npm test" npm test
 run_phase B "npm run build" npm run build
 run_phase C "backend pytest" bash -c "cd backend && $PY -m pytest tests/test_section_excerpt_html.py tests/test_xbrl_notes.py tests/test_xbrl_ifrs.py -q"
 run_phase D "prod_smoke_check" "$PY" backend/scripts/prod_smoke_check.py
-run_phase E "popular comp API" "$PY" backend/scripts/test_pro_compare.py
+run_phase E "popular comp API" env FILINGGRID_FY=2025 "$PY" backend/scripts/test_pro_compare.py
 if [[ -f scripts/delta-accuracy-smoke.test.ts ]]; then
   run_phase F "delta vitest" npx vitest run scripts/delta-accuracy-smoke.test.ts --testTimeout=900000
 else

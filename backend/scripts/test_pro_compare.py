@@ -15,7 +15,7 @@ API = os.environ.get(
     os.environ.get("NEXT_PUBLIC_API_URL", "http://localhost:8000"),
 )
 HEADERS_PRO = {"Accept": "application/x-ndjson", "X-Dev-Tier": "professional"}
-_fy_raw = os.environ.get("FILINGGRID_FY", "latest")
+_fy_raw = os.environ.get("FILINGGRID_FY", "2025")
 if _fy_raw.lower() in ("", "latest", "null", "none"):
     FISCAL_YEAR: int | None = None
 else:
@@ -150,9 +150,12 @@ async def smoke_full_upgrade(
         if head.get("notes_keys", 0) > 0 and head.get("headline_only") is not True:
             full_info[ticker] = head
             continue
+        params = {"headline_only": "false"}
+        if fiscal_year is not None:
+            params["fiscal_year"] = fiscal_year
         r = await client.get(
             f"{API}/filings/{ticker}/financials",
-            params={"fiscal_year": fiscal_year, "headline_only": "false"},
+            params=params,
             headers=HEADERS_PRO,
         )
         if r.status_code != 200:
