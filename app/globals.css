@@ -393,8 +393,6 @@
 
   .xbrl-disclosure-content.filing-content table {
     @apply text-[11px];
-    width: 100%;
-    max-width: 100%;
     table-layout: auto;
   }
 
@@ -403,8 +401,8 @@
   }
 
   .xbrl-disclosure-content.filing-content .filing-table-wrap > table {
-    width: 100%;
-    min-width: 0;
+    width: max-content;
+    min-width: 100%;
   }
 
   .xbrl-disclosure-content.filing-content td,
@@ -424,21 +422,50 @@
     white-space: nowrap;
   }
 
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content table {
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap {
+    width: 100%;
+  }
+
+  /* Two-column disclosure tables (label + amount): fixed split in narrow compare columns */
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > table:not(:has(tr > :nth-child(3))) {
+    width: 100%;
+    min-width: 0;
     table-layout: fixed;
   }
 
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr td:first-child,
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr th:first-child {
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr td:first-child,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr th:first-child {
     width: 58%;
+    min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;
     white-space: normal;
   }
 
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr td[align="right"],
-  .compare-column--table-fit .xbrl-disclosure-content.filing-content tr th[align="right"] {
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr td[align="right"],
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:not(:has(tr > :nth-child(3))) tr th[align="right"] {
     width: 42%;
+  }
+
+  /* Wide multi-column footnote tables: horizontal scroll instead of column collapse */
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content .filing-table-wrap > table:has(tr > :nth-child(3)) {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr td:first-child,
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr th:first-child {
+    width: auto;
+    min-width: 6rem;
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: normal;
+  }
+
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr td:not(:first-child):not([align="right"]),
+  .compare-column--table-fit .xbrl-disclosure-content.filing-content table:has(tr > :nth-child(3)) tr th:not(:first-child):not([align="right"]) {
+    min-width: 0;
   }
 
   /* SEC excerpt tables (HtmlExcerpt): fill compare column, optimize index layouts */
