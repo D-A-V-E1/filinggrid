@@ -9,6 +9,8 @@ import {
   columnParseFailed,
   financialsHaveCatalogSection,
   financialsNotesXbrlPending,
+  isGovernanceHeadingStub,
+  isGovernanceSectionSubstantive,
   isSubstantiveSectionPreview,
   noteSectionHasXbrlContent,
   sectionsHaveCatalogSection,
@@ -220,7 +222,42 @@ describe("columnHasReliableSectionPresence", () => {
     expect(isSubstantiveSectionPreview(long)).toBe(true);
     expect(columnHasReliableSectionPresence(column, "note-leases")).toBe(true);
   });
+
+  it("treats governance heading-only stubs as absent for missing_section peer count", () => {
+    const item9aStub = col([{ id: "controls", preview: "Item 9A." }], "10-K");
+    const item9cStub = col(
+      [
+        {
+          id: "controls",
+          preview: "Item 9C. Disclosure Regarding Foreign Jurisdictions that Prevent Inspections",
+        },
+      ],
+      "10-K"
+    );
+    const titleOnly = col([{ id: "controls", preview: "Item 9A. Controls and Procedures" }], "10-K");
+    const narrative = col([{ id: "controls", preview: LONG_GOVERNANCE_NARRATIVE }], "10-K");
+
+    expect(isGovernanceHeadingStub("Item 9A.")).toBe(true);
+    expect(isGovernanceHeadingStub("Item 9C. Disclosure Regarding Foreign Jurisdictions that Prevent Inspections")).toBe(
+      true
+    );
+    expect(columnHasReliableSectionPresence(item9aStub, "controls")).toBe(false);
+    expect(columnHasReliableSectionPresence(item9cStub, "controls")).toBe(false);
+    expect(columnHasReliableSectionPresence(titleOnly, "controls")).toBe(false);
+    expect(columnHasReliableSectionPresence(narrative, "controls")).toBe(true);
+  });
+
+  it("aligns disagreements substantive check with HFCAA heading exclusion", () => {
+    const item9c =
+      "Item 9C. Disclosure Regarding Foreign Jurisdictions that Prevent Inspections";
+    expect(isGovernanceSectionSubstantive("disagreements", item9c)).toBe(false);
+    expect(isGovernanceSectionSubstantive("disagreements", "Item 9B, 9C, 10, 11, 12, 13")).toBe(false);
+    expect(isGovernanceSectionSubstantive("disagreements", LONG_GOVERNANCE_NARRATIVE)).toBe(true);
+  });
 });
+
+const LONG_GOVERNANCE_NARRATIVE =
+  "Management concluded that internal control over financial reporting was effective as of the end of the period covered by this report.";
 
 describe("shouldSuppressMissingSection", () => {
   it("suppresses parse-failed columns", () => {

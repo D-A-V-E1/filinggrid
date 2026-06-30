@@ -1284,4 +1284,38 @@ describe("scanDeltas missing_section reliability", () => {
     expect(flags[0].ticker).toBe("AMD");
     expect(flags[0].severity).toBe("P1");
   });
+
+  it("does not flag missing_section when peers only have governance heading stubs", () => {
+    const item9c =
+      "Item 9C. Disclosure Regarding Foreign Jurisdictions that Prevent Inspections";
+    const state = baseState({
+      tickers: ["GOOG", "META", "MSFT"],
+      catalog: [{ id: "controls", label: "Item 9A — Controls & Procedures" }],
+      columns: [
+        column("GOOG", [{ id: "controls", preview: item9c }]),
+        column("META", [{ id: "controls", preview: item9c }]),
+        column("MSFT", [{ id: "controls", preview: "Item 9A." }]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section", "controls")).toHaveLength(0);
+  });
+
+  it("flags missing_section when peers have substantive controls and one has heading stub only", () => {
+    const state = baseState({
+      tickers: ["MSFT", "AAPL", "NVDA"],
+      catalog: [{ id: "controls", label: "Item 9A — Controls & Procedures" }],
+      columns: [
+        column("MSFT", [{ id: "controls", preview: "Item 9A." }]),
+        column("AAPL", [{ id: "controls", preview: LONG_NARRATIVE }]),
+        column("NVDA", [{ id: "controls", preview: LONG_NARRATIVE }]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    expect(flagsByRule(state, "missing_section", "controls").map((f) => f.ticker)).toEqual(["MSFT"]);
+  });
 });

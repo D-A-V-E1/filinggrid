@@ -159,6 +159,42 @@ export function financialsNotesXbrlPending(
 const NONE_PREVIEW_PATTERNS =
   /^(none\.?|not applicable\.?|n\/a\.?|no unresolved|there are no|not required)/i;
 
+/** Governance sections where heading-only Item stubs must not count as reliable presence. */
+export const GOVERNANCE_SECTION_IDS = new Set([
+  "unresolved-staff",
+  "controls",
+  "disagreements",
+]);
+
+/** Item heading / catalog label without narrative body — not reliable section presence. */
+export function isGovernanceHeadingStub(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  // Bare Item labels: "Item 9.", "Item 9A."
+  if (/^item\s*\d+[a-z]?\.?\s*$/i.test(trimmed)) return true;
+  const lower = trimmed.toLowerCase();
+  // Item 9C HFCAA headings (often mis-indexed under disagreements or controls)
+  if (lower.includes("foreign jurisdictions") && lower.includes("prevent inspections")) return true;
+  if (/^item\s*9c\b/i.test(trimmed) && !/disagreement/i.test(trimmed)) return true;
+  // Combined Part II index stubs
+  if (/^item\s*9b,\s*9c,\s*1[0-3]/i.test(trimmed)) return true;
+  // Catalog title only — standard Item label with no narrative body
+  if (/^item\s*9a\.?\s*controls\s*(and|&)\s*procedures\.?\s*$/i.test(trimmed)) return true;
+  if (/^item\s*9\.?\s*disagreements\s*(with|on)\s*accountants\.?\s*$/i.test(trimmed)) return true;
+  if (/^item\s*1b\.?\s*(unresolved\s*staff\s*comments?)?\.?\s*$/i.test(trimmed)) return true;
+  return false;
+}
+
+/** Material governance preview — aligns with disagreement HFCAA filters and heading-stub exclusion. */
+export function isGovernanceSectionSubstantive(sectionId: string, text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (NONE_PREVIEW_PATTERNS.test(trimmed)) return false;
+  if (isGovernanceHeadingStub(trimmed)) return false;
+  const minLen = sectionId === "disagreements" ? 30 : 40;
+  return trimmed.length >= minLen;
+}
+
 /** Non-empty parse preview — excludes indexer stubs and boilerplate "none" filings. */
 export function isSubstantiveSectionPreview(text: string, minLen = 25): boolean {
   const trimmed = text.trim();
@@ -202,7 +238,11 @@ export function columnHasReliableSectionPresence(
 ): boolean {
   if (financialsHaveCatalogSection(financials, sectionId)) return true;
   if (!columnHasCatalogSection(col, sectionId)) return false;
-  return isSubstantiveSectionPreview(catalogSectionPreview(col, sectionId));
+  const preview = catalogSectionPreview(col, sectionId);
+  if (GOVERNANCE_SECTION_IDS.has(sectionId)) {
+    return isGovernanceSectionSubstantive(sectionId, preview);
+  }
+  return isSubstantiveSectionPreview(preview);
 }
 
 /**
