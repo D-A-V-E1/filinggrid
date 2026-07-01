@@ -154,3 +154,19 @@ Linux/CI: `bash scripts/merge-to-main.sh` (supports `--dry-run`, `--no-push`, `S
 **Output:** `logs/merge-to-main-{timestamp}.log` and `-summary.json`. Prints post-deploy manual steps and rollback instructions (Vercel, Render, `git revert`).
 
 **Safety:** never force-pushes `main`, never skips git hooks, never updates git config.
+
+---
+
+## Post-deploy cache pre-warm
+
+After API deploy (Render), warm disk cache for popular compare tickers and large 20-F ADRs so first user loads are fast:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts/prewarm_cache.py --dry-run   # list jobs only
+.\.venv\Scripts\python.exe scripts/prewarm_cache.py              # latest FY, ~36 tickers
+.\.venv\Scripts\python.exe scripts/prewarm_cache.py --tickers AAPL TSM ASML
+.\.venv\Scripts\python.exe scripts/prewarm_cache.py --fiscal-year 2025   # pin FY2025
+```
+
+Runs locally against SEC via the parser (no HTTP to prod API). Expect several minutes; throttled to respect SEC fair-access. See also [PRODUCTION_DEPLOY.md § Phase 7](./PRODUCTION_DEPLOY.md#phase-7--sec-edgar).
