@@ -81,6 +81,10 @@ class SectionHtmlResponse(BaseModel):
     cache_key: str | None = None
 
 
+# Pre-extracted during index build so spot-check /compare hits disk cache like risk-factors.
+_PRECACHE_SECTION_IDS = ("risk-factors", "mda")
+
+
 @dataclass
 class _ResolvedFiling:
     ticker: str
@@ -287,12 +291,72 @@ async def _resolve_column_filing(
         )
 
 
+def _precache_priority_sections_sync(
+    html_bytes: bytes,
+    structure: dict[str, Any],
+    sections: list[dict[str, Any]],
+) -> dict[str, str]:
+    from sec.section_extractor import _safe_normalize_excerpt_html
+
+    index_ids = {s["id"] for s in sections}
+    precached: dict[str, str] = {}
+    for section_id in _PRECACHE_SECTION_IDS:
+        if section_id not in index_ids:
+            continue
+        raw = extract_section_html(html_bytes, section_id, structure)
+        if not raw:
+            continue
+        stored = _safe_normalize_excerpt_html(raw)
+        if stored:
+            precached[section_id] = stored
+    return precached
+
+
+async def _ensure_priority_sections_cached(resolved: _ResolvedFiling) -> None:
+    """Fill disk section cache for hot sections when index exists but HTML was never extracted."""
+    if not resolved.cache_key or not resolved.sections:
+        return
+    ticker = resolved.column.ticker
+    fiscal_year = resolved.column.fiscal_year
+    index_ids = {s["id"] for s in resolved.sections}
+    needed = [
+        sid
+        for sid in _PRECACHE_SECTION_IDS
+        if sid in index_ids and not find_section_html(ticker, sid, fiscal_year)
+    ]
+    if not needed:
+        return
+
+    cik = resolved.column.cik
+    accession = resolved.filing.get("accession_no_dash", "")
+    from filing_store import load_filing_html, load_filing_report_html
+
+    html_bytes = load_filing_report_html(cik, accession) or load_filing_html(cik, accession)
+    if not html_bytes:
+        return
+
+    structure = get_filing_structure(resolved.cache_key)
+
+    def _run() -> dict[str, str]:
+        nonlocal structure
+        if structure is None:
+            structure = _prepare_filing_structure(html_bytes)
+        return _precache_priority_sections_sync(html_bytes, structure, resolved.sections)
+
+    precached = await asyncio.to_thread(_run)
+    if structure is not None:
+        store_filing_structure(resolved.cache_key, structure)
+    for section_id, html in precached.items():
+        store_section_html(resolved.cache_key, section_id, html)
+
+
 async def _build_section_index(
     resolved: _ResolvedFiling,
     *,
     refresh_cache: bool = False,
 ) -> tuple[ColumnResult, list[dict[str, Any]], bool]:
     if resolved.sections is not None and not refresh_cache:
+        await _ensure_priority_sections_cached(resolved)
         return resolved.column, resolved.sections, resolved.from_cache
 
     accession = resolved.filing.get("accession_no_dash", "")
@@ -306,13 +370,16 @@ async def _build_section_index(
                 force_refresh=refresh_cache or attempt > 0,
             )
 
-            def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+            def _build_section_index_sync() -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, str]]:
                 structure = _prepare_filing_structure(html_bytes)
                 sections = _sections_from_structure(structure, include_html=False)
-                return sections, structure
+                precached = _precache_priority_sections_sync(html_bytes, structure, sections)
+                return sections, structure, precached
 
-            sections, structure = await asyncio.to_thread(_build_section_index_sync)
+            sections, structure, precached = await asyncio.to_thread(_build_section_index_sync)
             store_filing_structure(resolved.cache_key, structure)
+            for section_id, html in precached.items():
+                store_section_html(resolved.cache_key, section_id, html)
             del html_bytes
 
             column = resolved.column.model_copy(update={"sections": sections})
@@ -668,7 +735,6 @@ async def _extract_and_cache_section(
     from filing_store import load_filing_html, load_filing_report_html
 
     html_bytes = load_filing_report_html(cik, accession) or load_filing_html(cik, accession)
-    html_from_disk = html_bytes is not None
     if not html_bytes:
         ticker_map = await fetch_ticker_map()
         resolved = await resolve_ticker(ticker, ticker_map)
@@ -680,7 +746,7 @@ async def _extract_and_cache_section(
         if cache_key:
             clear_filing_structure(cache_key)
 
-    structure = get_filing_structure(cache_key) if cache_key and html_from_disk else None
+    structure = get_filing_structure(cache_key) if cache_key else None
     if structure is None:
         structure = await asyncio.to_thread(_prepare_filing_structure, html_bytes)
         if cache_key:

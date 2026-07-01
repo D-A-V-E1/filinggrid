@@ -48,10 +48,13 @@ def get_section(ticker: str, section_id: str, retry_502: bool = True) -> tuple[s
                 continue
             return "FAIL", f"HTTP {exc.code}: {exc.read()[:120]!r}"
         except Exception as exc:
-            if attempt < attempts - 1 and "timed out" in str(exc).lower():
+            msg = str(exc)
+            if "timed out" in msg.lower():
+                return "FAIL", msg
+            if attempt < attempts - 1:
                 time.sleep(RETRY_BACKOFF_S * (2**attempt))
                 continue
-            return "FAIL", str(exc)
+            return "FAIL", msg
     return "FAIL", "exhausted retries"
 
 

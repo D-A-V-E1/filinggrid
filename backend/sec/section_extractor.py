@@ -899,6 +899,18 @@ def _wrap_tables_for_display(soup: BeautifulSoup) -> None:
 
 
 _MAX_SECTION_HTML_BYTES = 2_000_000
+# Above this size, full table/text normalization is too slow for large-bank MD&A excerpts.
+_LIGHT_NORMALIZE_BYTES = 400_000
+
+
+def _light_normalize_excerpt_html(html: str) -> str:
+    """Strip embedded resources only — fast path for very large section excerpts."""
+    soup = BeautifulSoup(html, "html.parser")
+    _strip_embedded_resources(soup)
+    body = soup.body
+    if body:
+        return "".join(str(child) for child in body.children).strip()
+    return str(soup).strip()
 
 
 def _safe_normalize_excerpt_html(html: str | None) -> str | None:
@@ -908,14 +920,20 @@ def _safe_normalize_excerpt_html(html: str | None) -> str | None:
     stripped = html.strip()
     if not stripped:
         return None
-    if len(stripped.encode("utf-8", errors="replace")) > _MAX_SECTION_HTML_BYTES:
+    byte_len = len(stripped.encode("utf-8", errors="replace"))
+    if byte_len > _MAX_SECTION_HTML_BYTES:
         return None
     if len(stripped) < 5:
         return stripped
+    if byte_len > _LIGHT_NORMALIZE_BYTES:
+        try:
+            return _light_normalize_excerpt_html(stripped)
+        except Exception:
+            return stripped
     try:
         return _normalize_excerpt_html(stripped)
     except Exception:
-        return stripped if len(stripped.encode("utf-8", errors="replace")) <= _MAX_SECTION_HTML_BYTES else None
+        return stripped
 
 
 def _normalize_excerpt_html(html: str) -> str:
