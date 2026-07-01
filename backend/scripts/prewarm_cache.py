@@ -15,7 +15,20 @@ if str(_BACKEND) not in sys.path:
 from filing_parser import ParseRequest, parse_filings
 from sec.client import close_http_client
 
-DEFAULT_TICKERS = ["AAPL", "NVDA", "TSM", "MSFT", "AMD", "INTC", "JPM", "GS"]
+DEFAULT_TICKERS = [
+    "AAPL",
+    "NVDA",
+    "TSM",
+    "MSFT",
+    "AMD",
+    "INTC",
+    "JPM",
+    "GS",
+    # Popular ADRs — large 20-F filings that need warm disk cache on cold API.
+    "ASML",
+    "SAP",
+    "NVO",
+]
 MAX_CONCURRENT = 3
 
 

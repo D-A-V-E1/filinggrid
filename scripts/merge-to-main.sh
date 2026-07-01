@@ -220,7 +220,18 @@ else
   run_git pull --ff-only origin "$MAIN_BRANCH" || abort "pull main failed"
   add_step "pull-main" "PASS" "ff-only"
 
+  ahead="$(git rev-list --count "$MAIN_BRANCH..$SOURCE_BRANCH" 2>/dev/null || echo 0)"
+  if [[ "$ahead" == "0" ]]; then
+    abort "Source branch '$SOURCE_BRANCH' has no commits ahead of $MAIN_BRANCH; nothing to merge"
+  fi
+  add_step "merge-preflight" "PASS" "$ahead commit(s) ahead"
+
+  main_before_merge="$(git rev-parse HEAD)"
   run_git merge --no-ff -m "$MERGE_MSG" "$SOURCE_BRANCH" || abort "merge failed"
+  main_after_merge="$(git rev-parse HEAD)"
+  if [[ "$main_after_merge" == "$main_before_merge" ]]; then
+    abort "Merge did not advance $MAIN_BRANCH (source may already be merged)"
+  fi
   MERGE_COMMIT="$(git rev-parse --short HEAD)"
   add_step "merge" "PASS" "commit=$MERGE_COMMIT"
 
@@ -229,8 +240,14 @@ else
     add_step "push" "SKIP" "NO_PUSH=1"
     PUSH_RESULT="no-push"
   else
+    remote_before="$(git rev-parse "origin/$MAIN_BRANCH")"
     run_git push origin "$MAIN_BRANCH" || abort "push failed"
-    add_step "push" "PASS" "origin/main updated"
+    run_git fetch origin "$MAIN_BRANCH" || abort "fetch after push failed"
+    remote_after="$(git rev-parse "origin/$MAIN_BRANCH")"
+    if [[ "$remote_after" == "$remote_before" ]]; then
+      abort "Push did not advance origin/$MAIN_BRANCH (still at $remote_before)"
+    fi
+    add_step "push" "PASS" "origin/$MAIN_BRANCH ${remote_before:0:7} -> ${remote_after:0:7}"
     PUSH_RESULT="pushed"
   fi
 fi

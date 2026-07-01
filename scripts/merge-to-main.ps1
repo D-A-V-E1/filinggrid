@@ -215,7 +215,18 @@ try {
     Invoke-Git pull --ff-only origin $MainBranch
     Add-Step "pull-main" "PASS" "ff-only"
 
+    $ahead = (git rev-list --count "$MainBranch..$SourceBranch" 2>$null).Trim()
+    if ($ahead -eq "0") {
+      throw "Source branch '$SourceBranch' has no commits ahead of $MainBranch; nothing to merge"
+    }
+    Add-Step "merge-preflight" "PASS" "$ahead commit(s) ahead"
+
+    $mainBeforeMerge = (git rev-parse HEAD).Trim()
     Invoke-Git merge --no-ff -m $mergeMsg $SourceBranch
+    $mainAfterMerge = (git rev-parse HEAD).Trim()
+    if ($mainAfterMerge -eq $mainBeforeMerge) {
+      throw "Merge did not advance $MainBranch (source may already be merged)"
+    }
     $mergeCommit = (git rev-parse --short HEAD).Trim()
     Add-Step "merge" "PASS" "commit=$mergeCommit"
 
@@ -224,8 +235,14 @@ try {
       Add-Step "push" "SKIP" "NO_PUSH=1"
       $pushResult = "no-push"
     } else {
+      $remoteBefore = (git rev-parse "origin/$MainBranch").Trim()
       Invoke-Git push origin $MainBranch
-      Add-Step "push" "PASS" "origin/$MainBranch updated"
+      Invoke-Git fetch origin $MainBranch
+      $remoteAfter = (git rev-parse "origin/$MainBranch").Trim()
+      if ($remoteAfter -eq $remoteBefore) {
+        throw "Push did not advance origin/$MainBranch (still at $remoteBefore)"
+      }
+      Add-Step "push" "PASS" "origin/$MainBranch $remoteBefore -> $remoteAfter"
       $pushResult = "pushed"
     }
   }

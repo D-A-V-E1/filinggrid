@@ -444,25 +444,46 @@ async def parse_filings_stream(request: ParseRequest) -> AsyncIterator[str]:
             pending_html.append(outcome)
 
     # Phase 2: download HTML and build section indexes for uncached tickers.
-    html_tasks = {
-        asyncio.create_task(
-            _build_section_index(
-                item,
-                refresh_cache=_should_refresh_ticker(item.ticker, request),
+    for item in pending_html:
+        yield json.dumps(
+            {
+                "type": "section_index_pending",
+                "ticker": item.ticker,
+                "cache_key": item.cache_key,
+            }
+        ) + "\n"
+
+    if pending_html:
+        html_tasks = {
+            asyncio.create_task(
+                _build_section_index(
+                    item,
+                    refresh_cache=_should_refresh_ticker(item.ticker, request),
+                )
             )
-        ): item.ticker
-        for item in pending_html
-    }
-    for task in asyncio.as_completed(html_tasks):
-        column, sections_full, from_cache = await task
-        cache_key = column.cache_key
-        if cache_key and sections_full:
-            payload = _build_column_result(
-                column, sections_full, cache_key, from_cache=from_cache, include_html=False
+            for item in pending_html
+        }
+        pending_tasks = set(html_tasks)
+        while pending_tasks:
+            done, pending_tasks = await asyncio.wait(
+                pending_tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=10.0,
             )
-        else:
-            payload = column
-        yield json.dumps({"type": "column", "column": payload.model_dump()}) + "\n"
+            if not done:
+                # Keep the HTTP stream alive during slow 20-F HTML download/index builds.
+                yield json.dumps({"type": "ping"}) + "\n"
+                continue
+            for task in done:
+                column, sections_full, from_cache = await task
+                cache_key = column.cache_key
+                if cache_key and sections_full:
+                    payload = _build_column_result(
+                        column, sections_full, cache_key, from_cache=from_cache, include_html=False
+                    )
+                else:
+                    payload = column
+                yield json.dumps({"type": "column", "column": payload.model_dump()}) + "\n"
 
     yield json.dumps({"type": "done", "parsed_at": parsed_at}) + "\n"
 
