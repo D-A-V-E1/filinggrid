@@ -7,6 +7,7 @@ import {
   columnHasReliableSectionPresence,
   columnHasSectionPresence,
   columnParseFailed,
+  columnSectionIndexPending,
   financialsHaveCatalogSection,
   financialsNotesXbrlPending,
   isGovernanceHeadingStub,
@@ -258,6 +259,25 @@ describe("columnHasReliableSectionPresence", () => {
 
 const LONG_GOVERNANCE_NARRATIVE =
   "Management concluded that internal control over financial reporting was effective as of the end of the period covered by this report.";
+
+describe("columnSectionIndexPending", () => {
+  it("is true when form and cache_key are set but section index is empty", () => {
+    const pending = {
+      ...col([], "20-F"),
+      cache_key: "ASML:2025:000162828026011378",
+      sections: [],
+      error: null,
+    };
+    expect(columnSectionIndexPending(pending)).toBe(true);
+    expect(columnEligibleForMissingSectionGap(pending, "mda")).toBe(false);
+    expect(shouldSuppressMissingSection(pending, "mda")).toBe(true);
+  });
+
+  it("is false once sections load or parse failed", () => {
+    expect(columnSectionIndexPending(col([{ id: "mda", preview: "x".repeat(40) }], "20-F"))).toBe(false);
+    expect(columnSectionIndexPending({ ...col([], "20-F"), error: "timeout" })).toBe(false);
+  });
+});
 
 describe("shouldSuppressMissingSection", () => {
   it("suppresses parse-failed columns", () => {

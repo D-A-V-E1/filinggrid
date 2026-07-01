@@ -99,10 +99,13 @@ function formatSectionLabel(label: string): string {
 }
 
 function formatMetricValue(value: number, unit?: string): string {
-  if (unit === "USD/shares" || unit === "pure") {
+  if (unit === "pure") {
     if (Math.abs(value) < 1 && Math.abs(value) > 0) {
       return `${(value * 100).toFixed(1)}%`;
     }
+    return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  if (unit === "USD/shares") {
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   const normalized = unit?.toUpperCase();

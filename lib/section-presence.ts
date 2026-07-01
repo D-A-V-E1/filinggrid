@@ -254,6 +254,7 @@ export function columnEligibleForMissingSectionGap(
   financials?: FinancialsXbrl
 ): boolean {
   if (columnParseFailed(col)) return false;
+  if (columnSectionIndexPending(col)) return false;
   if (financialsNotesXbrlPending(financials, sectionId)) return false;
   if (
     sectionId.startsWith("note-") &&
@@ -285,6 +286,18 @@ export function columnParseFailed(col: FilingColumn): boolean {
   return Boolean(col.error);
 }
 
+/**
+ * Filing headers resolved (column_meta) but section index not yet loaded —
+ * e.g. slow 20-F HTML parse or stream closed before phase-2 column event.
+ * Not a catalog gap vs peers.
+ */
+export function columnSectionIndexPending(col: FilingColumn): boolean {
+  if (columnParseFailed(col)) return false;
+  if (col.sections.length > 0) return false;
+  // column_meta emits cache_key + filing headers before phase-2 section index.
+  return Boolean(col.cache_key && col.form);
+}
+
 /** Skip missing_section when foreign/interim form norms explain the gap vs domestic peers. */
 export function shouldSuppressMissingSection(
   col: FilingColumn,
@@ -292,6 +305,7 @@ export function shouldSuppressMissingSection(
   period?: string
 ): boolean {
   if (columnParseFailed(col)) return true;
+  if (columnSectionIndexPending(col)) return true;
   const form = resolveColumnForm(col, period);
   if (isForeignForm(form) && FOREIGN_OPTIONAL_SECTION_IDS.has(sectionId)) return true;
   if (isInterimPeriod(period) && INTERIM_OPTIONAL_SECTION_IDS.has(sectionId)) return true;

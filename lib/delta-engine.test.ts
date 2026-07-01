@@ -903,6 +903,48 @@ describe("scanDeltas foreign filer section alignment", () => {
     expect(flagsByRule(state, "metrics_not_comparable_mixed_filers")).toHaveLength(1);
     expect(flagsByRule(state, "headline_vs_median")).toHaveLength(0);
   });
+
+  it("ASML-style 20-F column_meta without section index: no missing_section vs domestic peers", () => {
+    const catalog = [
+      { id: "mda", label: "Item 7 — MD&A" },
+      { id: "market-risk", label: "Item 7A — Market Risk" },
+      { id: "note-pension", label: "Note — Pension" },
+      { id: "note-contingencies", label: "Note — Commitments & Contingencies" },
+      { id: "note-recent-standards", label: "Note — Recent Accounting Pronouncements" },
+    ];
+    const asmlPending: FilingColumn = {
+      ...column("ASML", [], "20-F"),
+      form: "20-F",
+      cache_key: "ASML:2025:000162828026011378",
+      sections: [],
+    };
+    const state = baseState({
+      catalog,
+      tickers: ["ASML", "AMAT", "LRCX"],
+      columns: [
+        asmlPending,
+        column("AMAT", [
+          { id: "mda", preview: LONG_NARRATIVE },
+          { id: "market-risk", preview: LONG_NARRATIVE },
+          { id: "note-pension", preview: LONG_NARRATIVE },
+          { id: "note-contingencies", preview: LONG_NARRATIVE },
+          { id: "note-recent-standards", preview: LONG_NARRATIVE },
+        ]),
+        column("LRCX", [
+          { id: "mda", preview: LONG_NARRATIVE },
+          { id: "market-risk", preview: LONG_NARRATIVE },
+          { id: "note-contingencies", preview: LONG_NARRATIVE },
+          { id: "note-recent-standards", preview: LONG_NARRATIVE },
+        ]),
+      ],
+      period: "annual-2025",
+      fiscalYear: 2025,
+    });
+
+    for (const sectionId of catalog.map((c) => c.id)) {
+      expect(flagsByRule(state, "missing_section", sectionId)).toHaveLength(0);
+    }
+  });
 });
 
 describe("mega-cap note presence (live parse index patterns)", () => {
