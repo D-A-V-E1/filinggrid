@@ -12,6 +12,9 @@ import urllib.request
 API = os.environ.get("FILINGGRID_API", "https://peerdisclosures-api.onrender.com").rstrip("/")
 HEADERS = {"Accept": "application/json", "X-Dev-Tier": "professional"}
 THROTTLE_S = float(os.environ.get("FILINGGRID_THROTTLE_S", "5"))
+REQUEST_TIMEOUT = float(os.environ.get("FILINGGRID_TIMEOUT", "600"))
+MAX_HTTP_RETRIES = int(os.environ.get("FILINGGRID_HTTP_RETRIES", "3"))
+RETRY_BACKOFF_S = float(os.environ.get("FILINGGRID_RETRY_BACKOFF_S", "8"))
 
 TICKERS = ["AAPL", "MSFT", "NVDA", "JPM", "XOM"]
 SECTIONS = ["risk-factors", "mda"]
@@ -24,10 +27,11 @@ def get_section(ticker: str, section_id: str, retry_502: bool = True) -> tuple[s
         "format": "html",
     }
     url = f"{API}/parse/section?{urllib.parse.urlencode(params)}"
-    for attempt in range(2 if retry_502 else 1):
+    attempts = MAX_HTTP_RETRIES if retry_502 else 1
+    for attempt in range(attempts):
         req = urllib.request.Request(url, headers=HEADERS)
         try:
-            with urllib.request.urlopen(req, timeout=300) as resp:
+            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
                 body = resp.read().decode()
                 if resp.status != 200:
                     return "FAIL", f"HTTP {resp.status}"
@@ -39,11 +43,14 @@ def get_section(ticker: str, section_id: str, retry_502: bool = True) -> tuple[s
         except urllib.error.HTTPError as exc:
             if exc.code == 402:
                 return "WARN", "402 paywall (expected on some FY)"
-            if exc.code in (502, 503, 504) and attempt == 0 and retry_502:
-                time.sleep(8)
+            if exc.code in (500, 502, 503, 504) and attempt < attempts - 1:
+                time.sleep(RETRY_BACKOFF_S * (2**attempt))
                 continue
             return "FAIL", f"HTTP {exc.code}: {exc.read()[:120]!r}"
         except Exception as exc:
+            if attempt < attempts - 1 and "timed out" in str(exc).lower():
+                time.sleep(RETRY_BACKOFF_S * (2**attempt))
+                continue
             return "FAIL", str(exc)
     return "FAIL", "exhausted retries"
 

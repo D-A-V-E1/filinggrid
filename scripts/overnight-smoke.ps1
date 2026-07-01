@@ -93,6 +93,9 @@ Invoke-Phase "E" "popular comp API smoke" {
   & $py (Join-Path $RepoRoot "backend\scripts\test_pro_compare.py") 2>&1 | Tee-Object -FilePath $LogFile -Append
 }
 
+Write-Log "Cool-down 45s before Phase F (post popular-comp load)"
+Start-Sleep -Seconds 45
+
 $deltaTest = Join-Path $RepoRoot "scripts\delta-accuracy-smoke.test.ts"
 if (Test-Path $deltaTest) {
   Invoke-Phase "F" "delta-accuracy-smoke vitest" {
@@ -102,6 +105,9 @@ if (Test-Path $deltaTest) {
   Write-Log "Phase F WARN - delta-accuracy-smoke.test.ts missing"
   [void]$Summary.Add([pscustomobject]@{ phase = "F"; name = "delta-accuracy-smoke"; status = "WARN"; seconds = 0; detail = "file missing" })
 }
+
+Write-Log "Cool-down 45s before Phase G (post delta vitest load)"
+Start-Sleep -Seconds 45
 
 Invoke-Phase "G" "section excerpt spot-check" {
   & $py (Join-Path $RepoRoot "scripts\overnight_section_spotcheck.py") 2>&1 | Tee-Object -FilePath $LogFile -Append

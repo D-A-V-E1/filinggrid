@@ -15,6 +15,7 @@ from parse_cache import (
     clear_filing_structure,
     evict_parsed_column,
     find_cache_key,
+    find_section_html,
     get_filing_structure,
     load_parsed_column,
     make_cache_key,
@@ -557,6 +558,14 @@ async def get_section_html(
 
     if want_html:
         html = _section_html_from_parsed_cache(resolved_cache_key, section_id)
+        if html is None:
+            cached_html = find_section_html(ticker, section_id, fiscal_year)
+            if cached_html:
+                from sec.section_extractor import _safe_normalize_excerpt_html
+
+                html = _safe_normalize_excerpt_html(cached_html)
+                if html and resolved_cache_key:
+                    store_section_html(resolved_cache_key, section_id, html)
 
     if (want_html and html is None) or want_text:
         extracted_html, extracted_text, resolved_cache_key = await _extract_and_cache_section(

@@ -16,6 +16,9 @@ API = os.environ.get(
 HEADERS = {"Accept": "application/x-ndjson", "X-Dev-Tier": "professional"}
 FISCAL_YEAR = 2024
 THROTTLE_S = 1.5
+RETRYABLE_STATUS = frozenset({502, 503, 504})
+MAX_HTTP_RETRIES = int(os.environ.get("FILINGGRID_HTTP_RETRIES", "3"))
+RETRY_BACKOFF_S = float(os.environ.get("FILINGGRID_RETRY_BACKOFF_S", "8"))
 
 SCENARIOS = [
     {"comp": "reit-net-lease", "tickers": ["O", "SPG", "PLD"], "fiscal_year": 2024, "period": None, "notes": "REIT trio"},
@@ -54,13 +57,32 @@ async def throttle():
     await asyncio.sleep(THROTTLE_S)
 
 
+async def _request_with_retry(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    **kwargs,
+) -> httpx.Response:
+    last: httpx.Response | None = None
+    for attempt in range(MAX_HTTP_RETRIES):
+        if method == "post":
+            last = await client.post(url, **kwargs)
+        else:
+            last = await client.get(url, **kwargs)
+        if last.status_code not in RETRYABLE_STATUS or attempt >= MAX_HTTP_RETRIES - 1:
+            return last
+        await asyncio.sleep(RETRY_BACKOFF_S * (2**attempt))
+    assert last is not None
+    return last
+
+
 async def smoke_parse(client: httpx.AsyncClient, tickers, fy, period, headers) -> tuple[str, str]:
     body = {"tickers": tickers}
     if fy is not None:
         body["fiscal_year"] = fy
     if period:
         body["period"] = period
-    r = await client.post(f"{API}/parse/stream", json=body, headers=headers)
+    r = await _request_with_retry(client, "post", f"{API}/parse/stream", json=body, headers=headers)
     if r.status_code == 402:
         return "402", "paywall/limit"
     if r.status_code != 200:
@@ -97,7 +119,9 @@ async def smoke_fin(client: httpx.AsyncClient, tickers, fy, period, headline_onl
     body = {"tickers": tickers, "fiscal_year": fy, "headline_only": headline_only}
     if period:
         body["period"] = period
-    r = await client.post(f"{API}/filings/financials/batch", json=body, headers=HEADERS)
+    r = await _request_with_retry(
+        client, "post", f"{API}/filings/financials/batch", json=body, headers=HEADERS
+    )
     if r.status_code != 200:
         return f"HTTP{r.status_code}", (r.text or "")[:180]
     loaded = {}
@@ -105,6 +129,10 @@ async def smoke_fin(client: httpx.AsyncClient, tickers, fy, period, headline_onl
         if not line.strip():
             continue
         row = json.loads(line)
+        if row.get("type") == "error":
+            t = str(row.get("ticker", "")).upper()
+            loaded[t] = {"error": str(row.get("message", "unknown"))[:100]}
+            continue
         if row.get("type") != "financial":
             continue
         t = str(row.get("ticker", "")).upper()
@@ -186,9 +214,11 @@ async def main():
                 print(f"    fin: {fdet}")
         if first_fin_ticker:
             await throttle()
-            r = await client.get(
+            r = await _request_with_retry(
+                client,
+                "get",
                 f"{API}/filings/{first_fin_ticker}/financials",
-                params={"fiscal_year": FISCAL_YEAR, "headline_only": "false"},
+                params={"fiscal_year": FISCAL_YEAR, "headline_only": False},
                 headers=HEADERS,
             )
             print(f"\nGET full financials {first_fin_ticker}: HTTP {r.status_code}")

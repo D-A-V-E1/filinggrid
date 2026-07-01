@@ -40,11 +40,15 @@ run_phase B "npm run build" npm run build
 run_phase C "backend pytest" bash -c "cd backend && $PY -m pytest tests/test_section_excerpt_html.py tests/test_xbrl_notes.py tests/test_xbrl_ifrs.py -q"
 run_phase D "prod_smoke_check" "$PY" backend/scripts/prod_smoke_check.py
 run_phase E "popular comp API" env FILINGGRID_FY=2025 "$PY" backend/scripts/test_pro_compare.py
+log "Cool-down 45s before Phase F (post popular-comp load)"
+sleep 45
 if [[ -f scripts/delta-accuracy-smoke.test.ts ]]; then
   run_phase F "delta vitest" npx vitest run scripts/delta-accuracy-smoke.test.ts --testTimeout=900000
 else
   log "Phase F WARN - missing delta test"
 fi
+log "Cool-down 45s before Phase G (post delta vitest load)"
+sleep 45
 run_phase G "section spot-check" "$PY" scripts/overnight_section_spotcheck.py
 OVERNIGHT_UNCOMMON_COUNT=9 run_phase H "uncommon subset" "$PY" scripts/overnight_uncommon_subset.py
 log "Phase I WARN - skipped test-launch-scenarios (local servers)"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -68,8 +69,8 @@ PREWARM_TICKERS = [
     "ORCL",
 ]
 
-MAX_CONCURRENT = 3
-THROTTLE_S = 5.0
+MAX_CONCURRENT = int(os.environ.get("PREWARM_MAX_CONCURRENT", "2"))
+THROTTLE_S = float(os.environ.get("PREWARM_THROTTLE_S", "5.0"))
 DEFAULT_FISCAL_YEARS: list[int | None] = [None]  # latest filing; pass --fiscal-year 2025 to pin
 
 

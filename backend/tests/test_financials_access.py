@@ -43,3 +43,20 @@ def test_batch_financials_allows_four_tickers_on_free_tier():
             headers={"X-Dev-Tier": "free"},
         )
         assert res.status_code == 200, res.text
+
+
+def test_batch_financials_stream_surfaces_per_ticker_errors():
+    async def mock_stream(*_args, **_kwargs):
+        yield '{"type":"start","tickers":["BA","LMT","RTX"]}\n'
+        yield '{"type":"error","ticker":"BA","message":"timeout"}\n'
+        yield '{"type":"financial","ticker":"LMT","financials":{"annual_summary":[{"fy":2025}],"notes_xbrl":{}}}\n'
+        yield '{"type":"done"}\n'
+
+    with patch("main.fetch_tickers_financials_stream", side_effect=mock_stream):
+        res = client.post(
+            "/filings/financials/batch",
+            json={"tickers": ["BA", "LMT", "RTX"], "fiscal_year": 2025, "headline_only": True},
+        )
+        assert res.status_code == 200, res.text
+        assert "BA" in res.text
+        assert "error" in res.text

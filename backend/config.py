@@ -77,6 +77,12 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("APP_URL", "FRONTEND_URL"),
     )
 
+    # Heavy endpoint concurrency cap (parse stream, financials batch, section excerpt)
+    max_concurrent_heavy: int = Field(
+        default=3,
+        validation_alias=AliasChoices("MAX_CONCURRENT_PARSE", "max_concurrent_heavy"),
+    )
+
     # CORS
     cors_origins: str = "http://localhost:3000"
 

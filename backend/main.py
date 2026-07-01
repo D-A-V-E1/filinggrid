@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -40,6 +41,7 @@ from sec.xbrl_client import (
 )
 
 settings = get_settings()
+_heavy_semaphore = asyncio.Semaphore(max(1, settings.max_concurrent_heavy))
 
 
 class GZipExceptStreamMiddleware:
@@ -233,8 +235,9 @@ async def parse_stream_endpoint(
     await check_free_period_access(auth, request.tickers, request.fiscal_year, request.period)
 
     async def event_stream():
-        async for line in parse_filings_stream(request):
-            yield line
+        async with _heavy_semaphore:
+            async for line in parse_filings_stream(request):
+                yield line
 
     return StreamingResponse(
         event_stream(),
@@ -257,13 +260,14 @@ async def filing_financials_batch_endpoint(
     tickers = [t.upper().strip() for t in request.tickers if t.strip()]
 
     async def event_stream():
-        async for line in fetch_tickers_financials_stream(
-            tickers,
-            request.fiscal_year,
-            period=request.period,
-            headline_only=request.headline_only,
-        ):
-            yield line
+        async with _heavy_semaphore:
+            async for line in fetch_tickers_financials_stream(
+                tickers,
+                request.fiscal_year,
+                period=request.period,
+                headline_only=request.headline_only,
+            ):
+                yield line
 
     return StreamingResponse(
         event_stream(),
@@ -314,9 +318,10 @@ async def parse_section_endpoint(
     check_parse_access(auth, 1)
     await check_free_period_access(auth, [ticker], fiscal_year, period)
     try:
-        return await get_section_html(
-            ticker, section_id, fiscal_year, content_format=format, cache_key=cache_key
-        )
+        async with _heavy_semaphore:
+            return await get_section_html(
+                ticker, section_id, fiscal_year, content_format=format, cache_key=cache_key
+            )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except OSError as exc:

@@ -22,6 +22,9 @@ else:
     FISCAL_YEAR = int(_fy_raw)
 THROTTLE_S = float(os.environ.get("FILINGGRID_THROTTLE_S", "0"))
 REQUEST_TIMEOUT = float(os.environ.get("FILINGGRID_TIMEOUT", "300"))
+RETRYABLE_STATUS = frozenset({502, 503, 504})
+MAX_HTTP_RETRIES = int(os.environ.get("FILINGGRID_HTTP_RETRIES", "3"))
+RETRY_BACKOFF_S = float(os.environ.get("FILINGGRID_RETRY_BACKOFF_S", "8"))
 CATALOG_PATH = (
     Path(__file__).resolve().parents[2] / "data" / "popular-peer-groups.json"
 )
@@ -42,8 +45,61 @@ def load_popular_groups() -> list[dict]:
     return groups
 
 
+async def _request_with_retry(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    **kwargs,
+) -> httpx.Response:
+    last: httpx.Response | None = None
+    for attempt in range(MAX_HTTP_RETRIES):
+        if method == "post":
+            last = await client.post(url, **kwargs)
+        else:
+            last = await client.get(url, **kwargs)
+        if last.status_code not in RETRYABLE_STATUS or attempt >= MAX_HTTP_RETRIES - 1:
+            return last
+        await asyncio.sleep(RETRY_BACKOFF_S * (2**attempt))
+    assert last is not None
+    return last
+
+
+def _parse_financial_stream(text: str) -> dict[str, dict]:
+    loaded: dict[str, dict] = {}
+    for line in text.strip().splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        row_type = row.get("type")
+        if row_type == "error":
+            ticker = str(row.get("ticker", "")).upper()
+            loaded[ticker] = {"error": str(row.get("message", "unknown"))[:120]}
+            continue
+        if row_type != "financial":
+            continue
+        ticker = str(row.get("ticker", "")).upper()
+        if row.get("error"):
+            loaded[ticker] = {"error": str(row["error"])[:120]}
+            continue
+        fin = row.get("financials") or {}
+        notes = fin.get("notes_xbrl") or {}
+        loaded[ticker] = {
+            "headline_only": fin.get("headline_only"),
+            "annual_rows": len(fin.get("annual_summary") or []),
+            "notes_keys": len(notes),
+            "notes_with_data": sum(
+                1
+                for n in notes.values()
+                if (n.get("disclosures") or []) or (n.get("annual_summary") or [])
+            ),
+        }
+    return loaded
+
+
 async def smoke_parse(client: httpx.AsyncClient, tickers: list[str], fiscal_year: int | None) -> tuple[bool, str, dict[str, str]]:
-    r = await client.post(
+    r = await _request_with_retry(
+        client,
+        "post",
         f"{API}/parse/stream",
         json={k: v for k, v in {"tickers": tickers, "fiscal_year": fiscal_year}.items() if v is not None},
         headers=HEADERS_PRO,
@@ -83,49 +139,43 @@ async def smoke_financials_batch(
     *,
     headline_only: bool,
 ) -> tuple[bool, str, dict[str, dict]]:
-    r = await client.post(
-        f"{API}/filings/financials/batch",
-        json={
-            k: v
-            for k, v in {
-                "tickers": tickers,
-                "fiscal_year": fiscal_year,
-                "headline_only": headline_only,
-            }.items()
-            if v is not None
-        },
-        headers=HEADERS_PRO,
-    )
-    if r.status_code != 200:
-        return False, f"financials HTTP {r.status_code}: {r.text[:200]}", {}
-
+    body = {
+        k: v
+        for k, v in {
+            "tickers": tickers,
+            "fiscal_year": fiscal_year,
+            "headline_only": headline_only,
+        }.items()
+        if v is not None
+    }
     loaded: dict[str, dict] = {}
-    for line in r.text.strip().splitlines():
-        if not line.strip():
-            continue
-        row = json.loads(line)
-        if row.get("type") != "financial":
-            continue
-        ticker = str(row.get("ticker", "")).upper()
-        if row.get("error"):
-            loaded[ticker] = {"error": str(row["error"])[:120]}
-            continue
-        fin = row.get("financials") or {}
-        notes = fin.get("notes_xbrl") or {}
-        loaded[ticker] = {
-            "headline_only": fin.get("headline_only"),
-            "annual_rows": len(fin.get("annual_summary") or []),
-            "notes_keys": len(notes),
-            "notes_with_data": sum(
-                1
-                for n in notes.values()
-                if (n.get("disclosures") or []) or (n.get("annual_summary") or [])
-            ),
-        }
+    last_msg = ""
+    for attempt in range(MAX_HTTP_RETRIES):
+        r = await _request_with_retry(
+            client,
+            "post",
+            f"{API}/filings/financials/batch",
+            json=body,
+            headers=HEADERS_PRO,
+        )
+        if r.status_code != 200:
+            last_msg = f"financials HTTP {r.status_code}: {r.text[:200]}"
+            if attempt < MAX_HTTP_RETRIES - 1:
+                await asyncio.sleep(RETRY_BACKOFF_S * (2**attempt))
+                continue
+            return False, last_msg, {}
+
+        loaded = _parse_financial_stream(r.text)
+        missing = [t for t in tickers if t not in loaded]
+        if not missing:
+            break
+        last_msg = f"financials missing tickers: {missing}"
+        if attempt < MAX_HTTP_RETRIES - 1:
+            await asyncio.sleep(RETRY_BACKOFF_S * (2**attempt))
 
     missing = [t for t in tickers if t not in loaded]
     if missing:
-        return False, f"financials missing tickers: {missing}", loaded
+        return False, last_msg or f"financials missing tickers: {missing}", loaded
     empty = [t for t, info in loaded.items() if info.get("annual_rows", 0) == 0 and "error" not in info]
     errors = {t: info["error"] for t, info in loaded.items() if "error" in info}
     if errors:
@@ -150,10 +200,12 @@ async def smoke_full_upgrade(
         if head.get("notes_keys", 0) > 0 and head.get("headline_only") is not True:
             full_info[ticker] = head
             continue
-        params = {"headline_only": "false"}
+        params: dict[str, object] = {"headline_only": False}
         if fiscal_year is not None:
             params["fiscal_year"] = fiscal_year
-        r = await client.get(
+        r = await _request_with_retry(
+            client,
+            "get",
             f"{API}/filings/{ticker}/financials",
             params=params,
             headers=HEADERS_PRO,
