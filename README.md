@@ -2,7 +2,7 @@
 
 **Multi-column SEC filing and disclosure comparison workspace.**
 
-PeerDisclosures streams 10-K and 10-Q filings from SEC EDGAR, parses them into standard disclosure sections, and renders a synchronized side-by-side comparison workspace. Public filings are cached on the server for faster repeat access. Account, billing, and preference metadata are stored in PostgreSQL — filing content is not stored in your account database.
+PeerDisclosures streams 10-K and 10-Q filings from SEC EDGAR, parses them into standard disclosure sections, and renders a synchronized side-by-side comparison workspace. A section delta map highlights disclosure topics that differ across peers, with a full delta report at `/compare/[slug]/deltas`. Public filings are cached on the server for faster repeat access. Account, billing, and preference metadata are stored in PostgreSQL — filing content is not stored in your account database.
 
 ---
 

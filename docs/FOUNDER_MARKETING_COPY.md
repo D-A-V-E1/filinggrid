@@ -1,6 +1,6 @@
 # Founder Marketing Copy — Peer Disclosures
 
-**Last revised:** 2026-06-28  
+**Last revised:** 2026-06-30  
 **Scope:** Founder bios, LinkedIn, PR, and marketing content only — **not** in-app UI copy.
 
 **Source notes:** Resume-grounded. Product: [peerdisclosures.com](https://peerdisclosures.com) — multi-column SEC filing comparison workspace. Free for 3 tickers; Professional $29/mo.
@@ -83,11 +83,15 @@ So we built the first-pass tool I wished existed.
 **Try it free (no login):**  
 https://peerdisclosures.com/compare/aapl-vs-msft
 
+**Section delta map (Phase 1 shipped 2026-06-30):**  
+https://peerdisclosures.com/compare/aapl-vs-msft/deltas
+
 **Free tier**
 - 3 ticker columns
 - Current-year filings
 - Synchronized section navigation
 - Headline XBRL metrics
+- Section delta map and delta report — spot disclosure differences and outliers across peers
 
 **Professional — $29/month**
 - 8 columns
@@ -249,3 +253,4 @@ Built by a reporting veteran who filed the documents — and an entrepreneur who
 |------|--------|
 | 2026-06-28 | Revised per user feedback: McAfé → M Cafe; first-person voice in bios/LinkedIn/marketing; outlier-identification speed as core pain; introduced "delta diving" branded term throughout. |
 | 2026-06-28 | Wove in preparer-side pain: ~90-day reporting cycle, quarterly close-to-file pressure, XBRL tagging overload, information overload; post-filing delta review for next-cycle planning; clarified PD as read/compare layer, not close/tagging tool. |
+| 2026-06-30 | Launch post free tier: section delta map and delta report bullets; `/deltas` link example; Phase 1 shipped note. |

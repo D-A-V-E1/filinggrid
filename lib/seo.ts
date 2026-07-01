@@ -5,7 +5,7 @@ export const SITE_TAGLINE = "SEC Filing Comparison Workspace";
 export const SUPPORT_EMAIL = "support@peerdisclosures.com";
 
 export const DEFAULT_DESCRIPTION =
-  "Compare SEC 10-K, 10-Q, 20-F, and 6-K filings side by side with synchronized sections and XBRL financials. Free for current-year peer review; Professional adds history, full GAAP statements, and saved peer groups.";
+  "Compare SEC 10-K, 10-Q, 20-F, and 6-K filings side by side with synchronized sections, automated delta discovery, and XBRL financials. Free for current-year peer review; Professional adds history, full GAAP statements, and saved peer groups.";
 
 export const DEFAULT_KEYWORDS = [
   "SEC filing",
@@ -18,6 +18,8 @@ export const DEFAULT_KEYWORDS = [
   "ADR filers",
   "equity research",
   "disclosure analysis",
+  "disclosure deltas",
+  "section delta map",
 ];
 
 /** Popular compare presets surfaced on home and in sitemap. */

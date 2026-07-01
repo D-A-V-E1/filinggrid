@@ -8,7 +8,7 @@
 
 ## Executive summary
 
-Core product value is communicated clearly: synchronized multi-column SEC disclosure comparison, XBRL alongside narrative, ADR + domestic filers, free 3-column tier without login, and Professional at $29/mo for depth. Privacy and research-only disclaimers are strong and consistent.
+Core product value is communicated clearly: synchronized multi-column SEC disclosure comparison, XBRL alongside narrative, ADR + domestic filers, free 3-column tier without login, section delta map and delta report (Phase 1 shipped 2026-06-30), and Professional at $29/mo for depth. Privacy and research-only disclaimers are strong and consistent.
 
 The largest gaps are **competitive positioning** (vs EDGAR tabs, Excel, paid terminals), **conversion friction reducers** (no credit card), **workflow affordances** (shareable compare URLs, period picker, structured footnote taxonomy), and **audience-specific hooks** for equity research, corp dev, and accounting advisory. Several strong phrases exist only in social/OG metadata (`opengraph-image.tsx`, `lib/seo.ts`) and never appear on the visible landing page.
 
@@ -25,7 +25,27 @@ The largest gaps are **competitive positioning** (vs EDGAR tabs, Excel, paid ter
 - **Privacy posture** — “Not stored in account database,” no AI training, research-only disclaimer (PrivacyStrip, footer, privacy policy).
 - **SEO foundation** — `layout.tsx` description, compare-page metadata, sitemap presets, JSON-LD offers, equity-research keywords in `lib/seo.ts`.
 - **Low-friction entry** — Ticker search on hero, popular compare links, header “Try demo” CTA.
-- **Pro onboarding** — AccountWelcome walks new subscribers through 8-column workspace, saved groups, and GAAP expansion.
+- **Pro onboarding** — AccountWelcome walks new subscribers through 8-column workspace, saved groups, GAAP expansion, and delta report with CSV export.
+
+---
+
+## Post delta-phase-1 (shipped 2026-06-30)
+
+Phase 1 adds automated disclosure delta discovery across the compare workspace:
+
+| Surface | Copy angle | Where surfaced |
+|---------|------------|----------------|
+| **Section delta map (L1)** | See which disclosure topics differ across peers; click a flag to jump to the section in the grid | Home feature card, free pricing bullet, AccountWelcome onboarding |
+| **Delta report page** | Full section-level delta map at `/compare/[slug]/deltas`; CSV export on Pro | AccountWelcome (Pro), founder launch post link example |
+| **Key deltas strip (L0)** | Top differences surfaced inline on the compare grid | Product UI only (no dedicated marketing card yet) |
+| **8-column delta coverage** | Delta map scales with Professional column count | ProCallout bullet, Pro onboarding |
+
+**Voice guardrails (from DELTA_ROADMAP):** Use "deltas," "differences," "outliers" in marketing delta copy — not "XBRL." Research-tool disclaimer tone; no AI claims.
+
+**Remaining gaps after Phase 1 marketing pass:**
+- Key deltas strip (L0) not yet called out on landing or pricing
+- Competitive frame still underemphasized vs EDGAR tabs / Excel
+- Shareable `/deltas` URLs not yet in hero or pricing feature list
 
 ---
 
@@ -141,6 +161,7 @@ The largest gaps are **competitive positioning** (vs EDGAR tabs, Excel, paid ter
 | Date | Change |
 |------|--------|
 | 2026-06-27 | Created this review. Minimal hero copy tweak in `app/page.tsx` (no credit card + EDGAR/Excel hook). |
+| 2026-06-30 | Post delta-phase-1 section; executive summary updated for section delta map; implementation log entry. |
 
 ---
 

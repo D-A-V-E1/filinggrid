@@ -5,7 +5,7 @@ import { SITE_NAME, sharedSocialMetadata } from "@/lib/seo";
 
 const title = "Pricing";
 const description =
-  "Free SEC filing comparison for up to three tickers. Professional at $29/month unlocks eight columns, full filing history, GAAP statements, and saved peer groups.";
+  "Free SEC filing comparison for up to three tickers with section delta spotting. Professional at $29/month unlocks eight columns, full filing history, GAAP statements, and saved peer groups.";
 
 export const metadata: Metadata = {
   title,
@@ -25,7 +25,7 @@ export default function PricingPage() {
       <div className="text-center">
         <h1 className="text-3xl font-semibold text-slate-900">Simple, transparent pricing</h1>
         <p className="mt-3 text-slate-600">
-          Free for quick comparisons. Professional unlocks more columns, full statements, and complete filing history.
+          Free for quick comparisons with section delta spotting. Professional unlocks more columns, full statements, and complete filing history.
         </p>
       </div>
 

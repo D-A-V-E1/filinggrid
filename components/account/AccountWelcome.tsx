@@ -34,6 +34,17 @@ export default function AccountWelcome({ isPro, onDismiss }: AccountWelcomeProps
             Expand GAAP statement sections in the compare view for full line-item detail across
             tickers.
           </li>
+          <li>
+            Open the{" "}
+            <Link
+              href="/compare/aapl-vs-msft-vs-nvda-vs-googl/deltas"
+              className="font-medium text-brand-700 underline-offset-2 hover:underline"
+            >
+              delta report
+            </Link>{" "}
+            to scan section-level differences across all eight columns — export CSV from the
+            report page when you need a shareable summary.
+          </li>
         </ol>
         <button
           type="button"
@@ -50,7 +61,7 @@ export default function AccountWelcome({ isPro, onDismiss }: AccountWelcomeProps
     <section className="rounded-xl border border-brand-200 bg-brand-50 p-6">
       <h2 className="text-lg font-semibold text-brand-900">Welcome to Peer Disclosures</h2>
       <p className="mt-2 text-sm text-brand-800">
-        You are signed in on the free plan. Here are three quick steps to get started:
+        You are signed in on the free plan. Here are four quick steps to get started:
       </p>
       <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm text-brand-900">
         <li>
@@ -66,6 +77,17 @@ export default function AccountWelcome({ isPro, onDismiss }: AccountWelcomeProps
         <li>
           Use the period picker in compare to switch between the latest filing and the last
           completed fiscal year.
+        </li>
+        <li>
+          Open the{" "}
+          <Link
+            href="/compare/aapl-vs-msft/deltas"
+            className="font-medium text-brand-700 underline-offset-2 hover:underline"
+          >
+            delta report
+          </Link>{" "}
+          to see which disclosure sections differ across your peer set — click a flag to jump
+          to that section in the grid.
         </li>
         <li>
           Upgrade to Professional for 8 columns, saved peer groups, and full GAAP statements.

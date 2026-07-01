@@ -24,6 +24,11 @@ const FEATURES = [
     description:
       "Filings parse into standard sections as columns load. Repeat views hit the server cache instead of re-fetching from EDGAR.",
   },
+  {
+    title: "Section delta map",
+    description:
+      "See which disclosure topics differ across peers. Open the delta report or click a flag to jump to the section in the grid.",
+  },
 ];
 
 export default function HomePage() {
@@ -48,7 +53,8 @@ export default function HomePage() {
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-slate-600">
             Peer Disclosures pulls 10-K, 10-Q, 20-F, and 6-K filings from EDGAR, maps them to
             comparable sections, and lines up XBRL financials — so you can review MD&amp;A,
-            risk factors, and footnotes side by side without juggling browser tabs.
+            risk factors, and footnotes side by side and spot what diverges across peers with
+            section-level deltas.
           </p>
           <p className="mx-auto mt-3 max-w-xl text-sm text-slate-500">
             Start free with three tickers and current-year filings — no login, no credit card.

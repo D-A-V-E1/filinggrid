@@ -7,6 +7,7 @@ import { hasRealProfessionalSubscription } from "@/lib/dev-tier";
 
 const PRO_HIGHLIGHTS = [
   "Up to 8 ticker columns",
+  "Section delta map across 8 columns",
   "Historical filing periods",
   "Full GAAP statement tables",
   "Saved peer groups",
@@ -34,8 +35,9 @@ export default function ProCallout() {
           Go deeper when the compare gets serious
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-600">
-          Unlock historical filing periods, detailed GAAP statement tables, and saved peer
-          groups — built for analysts who live in footnotes and financials.
+          Unlock delta coverage across eight columns, historical filing periods, detailed GAAP
+          statement tables, and saved peer groups — built for analysts who live in footnotes
+          and financials.
         </p>
         <ul className="mx-auto mt-6 flex max-w-lg flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-700">
           {PRO_HIGHLIGHTS.map((item) => (
